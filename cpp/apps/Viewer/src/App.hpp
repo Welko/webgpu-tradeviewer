@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Graphics/Renderer.hpp"
-#include "Graphics/Type.hpp"
+#include "Gpu/Market/Engine.hpp"
+#include "Gpu/Type.hpp"
 
 #include <cstdint>
 #include <expected>
@@ -23,9 +23,9 @@ public:
     using Callback = std::function<void(Result)>;
 
     /** Calls `onDone` exactly once, possibly before returning. */
-    static void create(const Graphics::Type::Target::Any& target, Graphics::Type::PowerPreference powerPreference, Callback onDone);
+    static void create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone);
 
-    explicit App(std::unique_ptr<Graphics::Renderer> renderer);
+    explicit App(std::unique_ptr<Gpu::Market::Engine> engine);
 
     /** A one-line description of the GPU in use, for display. */
     [[nodiscard]] std::string describe() const;
@@ -40,7 +40,7 @@ public:
     void render();
 
 private:
-    std::unique_ptr<Graphics::Renderer> mRenderer;
+    std::unique_ptr<Gpu::Market::Engine> mEngine;
     double mNowMs = 0.0;
 };
 

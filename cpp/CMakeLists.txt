@@ -12,6 +12,6 @@ enable_testing()
 include(cmake/testing.cmake)
 
 add_subdirectory(modules/Core)
-add_subdirectory(modules/Graphics)
+add_subdirectory(modules/Gpu)
 
 add_subdirectory(apps/Viewer)

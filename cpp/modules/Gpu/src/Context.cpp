@@ -1,6 +1,6 @@
-#include "Graphics/Context.hpp"
+#include "Gpu/Context.hpp"
 
-#include "Graphics/Convert.hpp"
+#include "Gpu/Convert.hpp"
 
 #include "Core/Log.hpp"
 
@@ -15,10 +15,10 @@
 
 #include <cstdlib>
 
-EM_JS_DEPS(GraphicsContext, "$stringToNewUTF8");
+EM_JS_DEPS(GpuContext, "$stringToNewUTF8");
 
 /* Returns a malloc'd UTF-8 string, or 0. Chrome masks gl.RENDERER as "WebKit WebGL". */
-EM_JS(char*, graphicsQueryWebglRenderer, (), {
+EM_JS(char*, gpuQueryWebglRenderer, (), {
     const gl = document.createElement("canvas").getContext("webgl");
     if (!gl) {
         return 0;
@@ -39,7 +39,7 @@ EM_JS(char*, graphicsQueryWebglRenderer, (), {
 });
 #endif
 
-namespace Graphics {
+namespace Gpu {
 
 namespace {
 
@@ -95,7 +95,7 @@ WGPUSurface createSurface(WGPUInstance instance, const Type::Target::Any& target
 std::string readWebglRenderer()
 {
 #ifdef __EMSCRIPTEN__
-    char* renderer = graphicsQueryWebglRenderer();
+    char* renderer = gpuQueryWebglRenderer();
     if (!renderer) {
         return {};
     }
@@ -259,4 +259,4 @@ void Context::configure()
     wgpuSurfaceConfigure(surface, &configuration);
 }
 
-} // namespace Graphics
+} // namespace Gpu

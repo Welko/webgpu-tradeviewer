@@ -4,9 +4,9 @@
 
 namespace Viewer {
 
-void App::create(const Graphics::Type::Target::Any& target, Graphics::Type::PowerPreference powerPreference, Callback onDone)
+void App::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone)
 {
-    Graphics::Renderer::create(target, powerPreference, [onDone = std::move(onDone)](Graphics::Renderer::Result result) {
+    Gpu::Market::Engine::create(target, powerPreference, [onDone = std::move(onDone)](Gpu::Market::Engine::Result result) {
         if (!result) {
             onDone(std::unexpected(std::move(result.error())));
             return;
@@ -15,13 +15,13 @@ void App::create(const Graphics::Type::Target::Any& target, Graphics::Type::Powe
     });
 }
 
-App::App(std::unique_ptr<Graphics::Renderer> renderer)
-    : mRenderer(std::move(renderer))
+App::App(std::unique_ptr<Gpu::Market::Engine> engine)
+    : mEngine(std::move(engine))
 {}
 
 std::string App::describe() const
 {
-    const auto& info = mRenderer->getInfo();
+    const auto& info = mEngine->getInfo();
 
     // Browsers usually hide `device`, but expose `vendor` and `architecture`.
     std::string name = info.device;
@@ -47,7 +47,7 @@ std::string App::describe() const
 
 void App::resize(std::uint32_t width, std::uint32_t height)
 {
-    mRenderer->resize(width, height);
+    mEngine->resize(width, height);
 }
 
 void App::update(double nowMs)
@@ -57,7 +57,7 @@ void App::update(double nowMs)
 
 void App::render()
 {
-    mRenderer->render();
+    mEngine->render();
 }
 
 } // namespace Viewer

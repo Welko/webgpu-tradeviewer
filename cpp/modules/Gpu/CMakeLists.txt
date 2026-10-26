@@ -8,15 +8,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(webgpu)
 
-add_library(Graphics STATIC
+add_library(Gpu STATIC
     src/Context.cpp
-    src/Renderer.cpp
+    src/Market/Engine.cpp
 )
-viewer_setup_target(Graphics)
+viewer_setup_target(Gpu)
 
-target_include_directories(Graphics PUBLIC include)
-target_include_directories(Graphics PRIVATE src/include)
-target_link_libraries(Graphics PRIVATE
+target_include_directories(Gpu PUBLIC include)
+target_include_directories(Gpu PRIVATE src/include)
+target_link_libraries(Gpu PRIVATE
     Core
     webgpu
 )

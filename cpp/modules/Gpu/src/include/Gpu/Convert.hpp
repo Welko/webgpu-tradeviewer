@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Graphics/Type.hpp"
+#include "Gpu/Type.hpp"
 
 #include "Core/Log.hpp"
 
@@ -8,7 +8,7 @@
 
 #include <string_view>
 
-namespace Graphics::Convert {
+namespace Gpu::Convert {
 
 namespace FromWgpu {
 
@@ -96,4 +96,4 @@ inline WGPUPowerPreference powerPreference(Type::PowerPreference preference) noe
 
 } // namespace ToWgpu
 
-} // namespace Graphics::Convert
+} // namespace Gpu::Convert

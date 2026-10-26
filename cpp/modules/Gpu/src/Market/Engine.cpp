@@ -1,6 +1,6 @@
-#include "Graphics/Renderer.hpp"
+#include "Gpu/Market/Engine.hpp"
 
-#include "Graphics/Context.hpp"
+#include "Gpu/Context.hpp"
 
 #include "Core/Log.hpp"
 
@@ -8,7 +8,7 @@
 
 #include <utility>
 
-namespace Graphics {
+namespace Gpu::Market {
 
 namespace {
 
@@ -16,39 +16,39 @@ constexpr WGPUColor ClearColor{ 0.07, 0.08, 0.10, 1.0 };
 
 } // namespace
 
-struct Renderer::Impl
+struct Engine::Impl
 {
     std::unique_ptr<Context> context;
 };
 
-void Renderer::create(const Type::Target::Any& target, Type::PowerPreference powerPreference, Callback onDone)
+void Engine::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone)
 {
     Context::create(target, powerPreference, [onDone = std::move(onDone)](Context::Result result) {
         if (!result) {
             onDone(std::unexpected(std::move(result.error())));
             return;
         }
-        onDone(std::unique_ptr<Renderer>(new Renderer(std::make_unique<Impl>(std::move(*result)))));
+        onDone(std::unique_ptr<Engine>(new Engine(std::make_unique<Impl>(std::move(*result)))));
     });
 }
 
-Renderer::Renderer(std::unique_ptr<Impl> impl)
+Engine::Engine(std::unique_ptr<Impl> impl)
     : mImpl(std::move(impl))
 {}
 
-Renderer::~Renderer() = default;
+Engine::~Engine() = default;
 
-const Type::Info& Renderer::getInfo() const
+const Gpu::Type::Info& Engine::getInfo() const
 {
     return mImpl->context->info;
 }
 
-void Renderer::resize(std::uint32_t width, std::uint32_t height)
+void Engine::resize(std::uint32_t width, std::uint32_t height)
 {
     mImpl->context->resize(width, height);
 }
 
-void Renderer::render()
+void Engine::render()
 {
     auto& ctx = *mImpl->context;
     if (ctx.width == 0 || ctx.height == 0) {
@@ -109,4 +109,4 @@ void Renderer::render()
     wgpuTextureRelease(surfaceTexture.texture);
 }
 
-} // namespace Graphics
+} // namespace Gpu::Market

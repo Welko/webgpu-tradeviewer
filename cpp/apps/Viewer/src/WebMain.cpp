@@ -12,15 +12,15 @@ namespace {
 using emscripten::val;
 
 /** Accepts the WebGPU spelling: "low-power", "high-performance", anything else is the default. */
-Graphics::Type::PowerPreference parsePowerPreference(const std::string& value)
+Gpu::Type::PowerPreference parsePowerPreference(const std::string& value)
 {
     if (value == "low-power") {
-        return Graphics::Type::PowerPreference::LowPower;
+        return Gpu::Type::PowerPreference::LowPower;
     }
     if (value == "high-performance") {
-        return Graphics::Type::PowerPreference::HighPerformance;
+        return Gpu::Type::PowerPreference::HighPerformance;
     }
-    return Graphics::Type::PowerPreference::Default;
+    return Gpu::Type::PowerPreference::Default;
 }
 
 /**
@@ -34,7 +34,7 @@ public:
     void init(std::string selector, std::string powerPreference, val onDone)
     {
         std::weak_ptr<std::unique_ptr<Viewer::App>> slot = mApp;
-        Viewer::App::create(Graphics::Type::Target::Canvas{ std::move(selector) }, parsePowerPreference(powerPreference),
+        Viewer::App::create(Gpu::Type::Target::Canvas{ std::move(selector) }, parsePowerPreference(powerPreference),
             [slot, onDone](Viewer::App::Result result) {
                 auto app = slot.lock();
                 if (!app) {

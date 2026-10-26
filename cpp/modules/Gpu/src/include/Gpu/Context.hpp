@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Graphics/Type.hpp"
+#include "Gpu/Type.hpp"
 
 #include <webgpu/webgpu.h>
 
@@ -10,11 +10,11 @@
 #include <memory>
 #include <string>
 
-namespace Graphics {
+namespace Gpu {
 
 /**
- * Internal to Graphics: the WebGPU instance, surface, adapter, device and
- * queue, released on destruction. Other Graphics classes use the handles
+ * Internal to Gpu: the WebGPU instance, surface, adapter, device and
+ * queue, released on destruction. Other Gpu classes use the handles
  * directly.
  */
 struct Context
@@ -53,4 +53,4 @@ struct Context
     void configure();
 };
 
-} // namespace Graphics
+} // namespace Gpu

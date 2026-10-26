@@ -11,8 +11,9 @@ cpp/
   modules/Core       no WebGPU dependency, header-only (INTERFACE) for now:
                        Core/Log.hpp   logging
                        Core/Data/     market data (parsing, book reconstruction) — coming
-  modules/Graphics   WebGPU. Public API is only Renderer (a facade with no WebGPU types).
-                     Context (device, surface...) and future draw layers are internal (src/include).
+  modules/Gpu        WebGPU rendering and compute. Public API is only Gpu::Market::Engine
+                     (a facade with no WebGPU types). Context (device, surface...) and future
+                     passes are internal (src/include). Design: design/gpu.md
   apps/Viewer        App (resize/update/render) + entry points:
                        NativeMain.cpp  GLFW window and loop
                        WebMain.cpp     embind `Viewer` class, loop driven by JS

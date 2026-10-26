@@ -12,16 +12,16 @@
 
 namespace {
 
-std::optional<Graphics::Type::Target::Any> surfaceTarget(GLFWwindow* window)
+std::optional<Gpu::Type::Target::Any> surfaceTarget(GLFWwindow* window)
 {
     switch (glfwGetPlatform()) {
 #ifdef GLFW_EXPOSE_NATIVE_WAYLAND
     case GLFW_PLATFORM_WAYLAND:
-        return Graphics::Type::Target::Wayland{ glfwGetWaylandDisplay(), glfwGetWaylandWindow(window) };
+        return Gpu::Type::Target::Wayland{ glfwGetWaylandDisplay(), glfwGetWaylandWindow(window) };
 #endif
 #ifdef GLFW_EXPOSE_NATIVE_X11
     case GLFW_PLATFORM_X11:
-        return Graphics::Type::Target::Xlib{ glfwGetX11Display(), glfwGetX11Window(window) };
+        return Gpu::Type::Target::Xlib{ glfwGetX11Display(), glfwGetX11Window(window) };
 #endif
     default:
         return std::nullopt;
@@ -29,18 +29,18 @@ std::optional<Graphics::Type::Target::Any> surfaceTarget(GLFWwindow* window)
 }
 
 /** Reads `--gpu=low-power` or `--gpu=high-performance`. */
-Graphics::Type::PowerPreference powerPreference(int argc, char** argv)
+Gpu::Type::PowerPreference powerPreference(int argc, char** argv)
 {
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg = argv[i];
         if (arg == "--gpu=low-power") {
-            return Graphics::Type::PowerPreference::LowPower;
+            return Gpu::Type::PowerPreference::LowPower;
         }
         if (arg == "--gpu=high-performance") {
-            return Graphics::Type::PowerPreference::HighPerformance;
+            return Gpu::Type::PowerPreference::HighPerformance;
         }
     }
-    return Graphics::Type::PowerPreference::Default;
+    return Gpu::Type::PowerPreference::Default;
 }
 
 } // namespace

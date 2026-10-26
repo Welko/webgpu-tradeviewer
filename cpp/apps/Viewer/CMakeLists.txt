@@ -5,7 +5,7 @@ viewer_setup_target(Viewer)
 
 target_link_libraries(Viewer PRIVATE
     Core
-    Graphics
+    Gpu
 )
 
 if (EMSCRIPTEN)

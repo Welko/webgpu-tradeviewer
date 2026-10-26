@@ -4,7 +4,7 @@
 #include <string>
 #include <variant>
 
-namespace Graphics::Type {
+namespace Gpu::Type {
 
 struct Info
 {
@@ -59,4 +59,4 @@ using Any = std::variant<Canvas, Wayland, Xlib>;
 
 } // namespace Target
 
-} // namespace Graphics::Type
+} // namespace Gpu::Type
