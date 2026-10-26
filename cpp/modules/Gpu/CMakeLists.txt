@@ -20,3 +20,5 @@ target_link_libraries(Gpu PRIVATE
     Core
     webgpu
 )
+
+add_subdirectory(tests)

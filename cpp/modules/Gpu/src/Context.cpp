@@ -139,11 +139,11 @@ void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView 
     }
 
     auto& context = *pending->context;
-    context.device = device;
-    context.queue = wgpuDeviceGetQueue(device);
+    context.device = Handle(device);
+    context.queue = Handle(wgpuDeviceGetQueue(device));
 
     WGPUSurfaceCapabilities capabilities{};
-    if (wgpuSurfaceGetCapabilities(context.surface, context.adapter, &capabilities) != WGPUStatus_Success
+    if (wgpuSurfaceGetCapabilities(context.surface.get(), context.adapter.get(), &capabilities) != WGPUStatus_Success
         || capabilities.formatCount == 0) {
         fail(std::move(pending), "The WebGPU surface reports no supported formats");
         return;
@@ -151,7 +151,7 @@ void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView 
     context.format = capabilities.formats[0];
     wgpuSurfaceCapabilitiesFreeMembers(capabilities);
 
-    context.info = readInfo(context.adapter);
+    context.info = readInfo(context.adapter.get());
 
     auto result = std::move(pending->context);
     auto onDone = std::move(pending->onDone);
@@ -166,7 +166,7 @@ void onAdapter(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringV
         fail(std::move(pending), "No WebGPU adapter is available", message);
         return;
     }
-    pending->context->adapter = adapter;
+    pending->context->adapter = Handle(adapter);
 
     WGPUDeviceDescriptor descriptor{};
     descriptor.uncapturedErrorCallbackInfo.callback =
@@ -189,13 +189,13 @@ void Context::create(const Type::Target::Any& target, Type::PowerPreference powe
     auto pending = std::make_unique<Pending>(std::make_unique<Context>(), std::move(onDone));
     auto& context = *pending->context;
 
-    context.instance = wgpuCreateInstance(nullptr);
+    context.instance = Handle(wgpuCreateInstance(nullptr));
     if (!context.instance) {
         fail(std::move(pending), "Failed to create a WebGPU instance");
         return;
     }
 
-    context.surface = createSurface(context.instance, target);
+    context.surface = Handle(createSurface(context.instance.get(), target));
     if (!context.surface) {
         fail(std::move(pending), "Failed to create a WebGPU surface");
         return;
@@ -203,9 +203,9 @@ void Context::create(const Type::Target::Any& target, Type::PowerPreference powe
 
     WGPURequestAdapterOptions options{};
     options.powerPreference = Convert::ToWgpu::powerPreference(powerPreference);
-    options.compatibleSurface = context.surface;
+    options.compatibleSurface = context.surface.get();
 
-    wgpuInstanceRequestAdapter(context.instance, &options, WGPURequestAdapterCallbackInfo {
+    wgpuInstanceRequestAdapter(context.instance.get(), &options, WGPURequestAdapterCallbackInfo {
         .nextInChain = nullptr,
         .mode = WGPUCallbackMode_AllowSpontaneous,
         .callback = onAdapter,
@@ -216,23 +216,10 @@ void Context::create(const Type::Target::Any& target, Type::PowerPreference powe
 
 Context::~Context()
 {
-    if (surface && device) {
-        wgpuSurfaceUnconfigure(surface);
-    }
-    if (queue) {
-        wgpuQueueRelease(queue);
-    }
-    if (device) {
-        wgpuDeviceRelease(device);
-    }
-    if (adapter) {
-        wgpuAdapterRelease(adapter);
-    }
-    if (surface) {
-        wgpuSurfaceRelease(surface);
-    }
-    if (instance) {
-        wgpuInstanceRelease(instance);
+    // The handles release themselves afterwards; only the surface
+    // configuration needs undoing first.
+    if (surface && width > 0) {
+        wgpuSurfaceUnconfigure(surface.get());
     }
 }
 
@@ -249,14 +236,14 @@ void Context::resize(std::uint32_t newWidth, std::uint32_t newHeight)
 void Context::configure()
 {
     WGPUSurfaceConfiguration configuration{};
-    configuration.device = device;
+    configuration.device = device.get();
     configuration.format = format;
     configuration.usage = WGPUTextureUsage_RenderAttachment;
     configuration.width = width;
     configuration.height = height;
     configuration.alphaMode = WGPUCompositeAlphaMode_Auto;
     configuration.presentMode = WGPUPresentMode_Fifo;
-    wgpuSurfaceConfigure(surface, &configuration);
+    wgpuSurfaceConfigure(surface.get(), &configuration);
 }
 
 } // namespace Gpu

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Gpu/Handles.hpp"
+#include "Gpu/Resource.hpp"
 #include "Gpu/Type.hpp"
 
 #include <webgpu/webgpu.h>
@@ -16,6 +18,9 @@ namespace Gpu {
  * Internal to Gpu: the WebGPU instance, surface, adapter, device and
  * queue, released on destruction. Other Gpu classes use the handles
  * directly.
+ *
+ * Everything that holds a tracked handle reporting to `resources` must be
+ * destroyed before the Context.
  */
 struct Context
 {
@@ -29,11 +34,16 @@ struct Context
      */
     static void create(const Type::Target::Any& target, Type::PowerPreference powerPreference, Callback onDone);
 
-    WGPUInstance instance = nullptr;
-    WGPUSurface surface = nullptr;
-    WGPUAdapter adapter = nullptr;
-    WGPUDevice device = nullptr;
-    WGPUQueue queue = nullptr;
+    // Declared first so it is destroyed last, after every handle below.
+    Resource::Stats resources;
+
+    // Members are destroyed in reverse order: queue, device, adapter,
+    // surface, instance.
+    Handle<WGPUInstance> instance;
+    Handle<WGPUSurface> surface;
+    Handle<WGPUAdapter> adapter;
+    Handle<WGPUDevice> device;
+    Handle<WGPUQueue> queue;
 
     WGPUTextureFormat format = WGPUTextureFormat_Undefined;
     std::uint32_t width = 0;

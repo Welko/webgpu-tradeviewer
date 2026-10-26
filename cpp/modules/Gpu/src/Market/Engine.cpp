@@ -56,7 +56,9 @@ void Engine::render()
     }
 
     WGPUSurfaceTexture surfaceTexture{};
-    wgpuSurfaceGetCurrentTexture(ctx.surface, &surfaceTexture);
+    wgpuSurfaceGetCurrentTexture(ctx.surface.get(), &surfaceTexture);
+    // The surface owns the texture's memory, so it isn't tracked.
+    const Handle<WGPUTexture> texture(surfaceTexture.texture);
 
     switch (surfaceTexture.status) {
     case WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal:
@@ -64,24 +66,18 @@ void Engine::render()
         break;
     case WGPUSurfaceGetCurrentTextureStatus_Outdated:
     case WGPUSurfaceGetCurrentTextureStatus_Lost:
-        if (surfaceTexture.texture) {
-            wgpuTextureRelease(surfaceTexture.texture);
-        }
         ctx.configure();
         return;
     default:
         Core::Log::error("Failed to acquire the surface texture (status {})", static_cast<int>(surfaceTexture.status));
-        if (surfaceTexture.texture) {
-            wgpuTextureRelease(surfaceTexture.texture);
-        }
         return;
     }
 
-    WGPUTextureView view = wgpuTextureCreateView(surfaceTexture.texture, nullptr);
-    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(ctx.device, nullptr);
+    const Handle<WGPUTextureView> view(wgpuTextureCreateView(texture.get(), nullptr));
+    const Handle<WGPUCommandEncoder> encoder(wgpuDeviceCreateCommandEncoder(ctx.device.get(), nullptr));
 
     WGPURenderPassColorAttachment color{};
-    color.view = view;
+    color.view = view.get();
     color.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
     color.loadOp = WGPULoadOp_Clear;
     color.storeOp = WGPUStoreOp_Store;
@@ -91,22 +87,19 @@ void Engine::render()
     passDescriptor.colorAttachmentCount = 1;
     passDescriptor.colorAttachments = &color;
 
-    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDescriptor);
-    wgpuRenderPassEncoderEnd(pass);
-    wgpuRenderPassEncoderRelease(pass);
+    {
+        const Handle<WGPURenderPassEncoder> pass(wgpuCommandEncoderBeginRenderPass(encoder.get(), &passDescriptor));
+        wgpuRenderPassEncoderEnd(pass.get());
+    }
 
-    WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, nullptr);
-    wgpuQueueSubmit(ctx.queue, 1, &commands);
-    wgpuCommandBufferRelease(commands);
-    wgpuCommandEncoderRelease(encoder);
+    const Handle<WGPUCommandBuffer> commands(wgpuCommandEncoderFinish(encoder.get(), nullptr));
+    const WGPUCommandBuffer submitted = commands.get();
+    wgpuQueueSubmit(ctx.queue.get(), 1, &submitted);
 
 #ifndef __EMSCRIPTEN__
     // The browser presents the canvas on its own.
-    wgpuSurfacePresent(ctx.surface);
+    wgpuSurfacePresent(ctx.surface.get());
 #endif
-
-    wgpuTextureViewRelease(view);
-    wgpuTextureRelease(surfaceTexture.texture);
 }
 
 } // namespace Gpu::Market
