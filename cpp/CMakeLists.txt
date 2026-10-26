@@ -7,6 +7,10 @@ project(
 
 include(cmake/common.cmake)
 
+# Lets `ctest` find tests registered with viewer_add_test() in any subdirectory.
+enable_testing()
+include(cmake/testing.cmake)
+
 add_subdirectory(modules/Core)
 add_subdirectory(modules/Graphics)
 

@@ -8,6 +8,9 @@ web/src/wasm/
 web/node_modules/
 web/dist/
 
+# Web build output, published to GitHub Pages by CI (npm run build)
+docs/
+
 # Large source data (see README for download commands)
 data/*.csv.gz
 

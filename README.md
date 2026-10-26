@@ -44,6 +44,18 @@ npm run dev        # builds the wasm, then starts Vite on http://localhost:5173
 
 `npm run build:wasm` rebuilds only the C++ part. Vite reloads when `src/wasm/` changes.
 
+`npm run build` creates the production site in `docs/`, which is gitignored. Use `npm run preview` to serve it.
+
+## CI and GitHub Pages
+
+`.github/workflows/ci.yml` runs on every push to `main` (and manually from the Actions tab):
+
+1. **Native:** builds with the `native` preset and runs the tests with `ctest`.
+2. **Web:** installs Emscripten, runs `npm ci` and `npm run build`, which builds the wasm module, type-checks and writes `docs/`. It then runs the same tests compiled to wasm, in Node.
+3. **Deploy:** if both jobs pass, publishes `docs/` to GitHub Pages. If anything fails, the site keeps its previous version.
+
+One-time setup: in the repository on GitHub, open **Settings → Pages** and set **Source** to **GitHub Actions**.
+
 ## Native
 
 ```bash
@@ -52,6 +64,18 @@ cmake --preset native
 cmake --build --preset native
 ./build/native/apps/Viewer/Viewer                          # or --gpu=low-power / --gpu=high-performance
 ```
+
+## Tests
+
+Tests use [doctest](https://github.com/doctest/doctest) and live next to their module (e.g. `cpp/modules/Core/tests/`). Register a test executable with `viewer_add_test(Name sources...)` from `cmake/testing.cmake`. It is then built in both presets.
+
+```bash
+cd cpp
+ctest --test-dir build/native --output-on-failure   # native
+ctest --test-dir build/web --output-on-failure      # wasm, run in Node (after building the web preset)
+```
+
+The wasm run matters: wasm32 has a 32-bit `size_t` and `long`, uses libc++, and has no exception support. A `throw` aborts the program. Tests run in Node without a GPU, so keep them to GPU-free code in `Core`.
 
 ## Choosing the GPU
 
