@@ -11,8 +11,7 @@ namespace Core::Log {
  * Writes "<level>: <message>" and flushes.
  *
  * The format string is checked at compile time, so a mismatch is a build
- * error rather than a runtime exception: the web build has no exception
- * support, and a throw there aborts the program.
+ * error rather than a runtime exception.
  */
 template<typename... Args>
 void log(std::ostream& os, std::string_view level, std::format_string<Args...> fmt, Args&&... args)
