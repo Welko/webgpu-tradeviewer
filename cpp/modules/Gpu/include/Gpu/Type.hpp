@@ -31,31 +31,51 @@ enum class PowerPreference
     HighPerformance,
 };
 
+/** Each platform compiles only its own targets. */
 namespace Target
 {
 
-/** An HTML canvas, found with `document.querySelector(selector)`. Web only. */
+#ifdef __EMSCRIPTEN__
+
+/** An HTML canvas, found with `document.querySelector(selector)`. */
 struct Canvas
 {
     std::string selector;
 };
 
-/** A Wayland `wl_display*` and `wl_surface*`. Native only. */
+/** Where a Surface draws. Add alternatives here for new platforms. */
+using Any = std::variant<Canvas>;
+
+#else
+
+/** A Wayland `wl_display*` and `wl_surface*`. */
 struct Wayland
 {
     void* display;
     void* surface;
 };
 
-/** An X11 `Display*` and `Window`. Native only. */
+/** An X11 `Display*` and `Window`. */
 struct Xlib
 {
     void* display;
     std::uint64_t window;
 };
 
-/** Where the Context presents. Add alternatives here for new platforms. */
-using Any = std::variant<Canvas, Wayland, Xlib>;
+/**
+ * A texture of this size instead of a window, so nothing is presented. For
+ * headless tests: needs no display.
+ */
+struct Offscreen
+{
+    std::uint32_t width;
+    std::uint32_t height;
+};
+
+/** Where a Surface draws. Add alternatives here for new platforms. */
+using Any = std::variant<Wayland, Xlib, Offscreen>;
+
+#endif
 
 } // namespace Target
 

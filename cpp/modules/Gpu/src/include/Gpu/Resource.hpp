@@ -3,15 +3,19 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <format>
+#include <string>
+#include <string_view>
 
 namespace Gpu::Resource {
 
-/** What a tracked handle counts as in Stats. */
+/** What a GPU object counts as in Stats. */
 enum class Kind : std::uint8_t
 {
     Buffer,
     Texture,
     QuerySet,
+    Surface,
     Count,
 };
 
@@ -24,13 +28,13 @@ enum class Kind : std::uint8_t
 class Stats
 {
 public:
-    void add(Kind kind, std::uint64_t bytes)
+    void add(Kind kind, std::uint64_t bytes) noexcept
     {
         ++mCounts[index(kind)];
         mBytes[index(kind)] += bytes;
     }
 
-    void remove(Kind kind, std::uint64_t bytes)
+    void remove(Kind kind, std::uint64_t bytes) noexcept
     {
         --mCounts[index(kind)];
         mBytes[index(kind)] -= bytes;
@@ -46,6 +50,47 @@ public:
             total += bytes;
         }
         return total;
+    }
+
+    /** Whether nothing is alive. */
+    [[nodiscard]] bool empty() const
+    {
+        for (const auto count : mCounts) {
+            if (count > 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** What is alive, e.g. "surfaces: 1, textures: 2 (2048 bytes)". */
+    [[nodiscard]] std::string describe() const
+    {
+        auto name = [](Kind kind) {
+            switch (kind) {
+            case Kind::Buffer: return "buffers";
+            case Kind::Texture: return "textures";
+            case Kind::QuerySet: return "query sets";
+            case Kind::Surface: return "surfaces";
+            case Kind::Count: break;
+            }
+            return "unknown";
+        };
+
+        std::string result;
+        for (std::size_t i = 0; i < KindCount; ++i) {
+            if (mCounts[i] == 0) {
+                continue;
+            }
+            if (!result.empty()) {
+                result += ", ";
+            }
+            result += std::format("{}: {}", name(static_cast<Kind>(i)), mCounts[i]);
+            if (mBytes[i] > 0) {
+                result += std::format(" ({} bytes)", mBytes[i]);
+            }
+        }
+        return result.empty() ? "nothing" : result;
     }
 
 private:

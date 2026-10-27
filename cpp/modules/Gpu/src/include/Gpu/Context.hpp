@@ -6,7 +6,6 @@
 
 #include <webgpu/webgpu.h>
 
-#include <cstdint>
 #include <expected>
 #include <functional>
 #include <memory>
@@ -15,12 +14,14 @@
 namespace Gpu {
 
 /**
- * Internal to Gpu: the WebGPU instance, surface, adapter, device and
- * queue, released on destruction. Other Gpu classes use the handles
- * directly.
+ * Internal to Gpu: the WebGPU instance, adapter, device and queue,
+ * released on destruction. Other Gpu classes use the handles directly.
+ * Where frames go is up to Surface, which is created from a Context.
  *
- * Everything that holds a tracked handle reporting to `resources` must be
- * destroyed before the Context.
+ * Everything that holds a tracked handle reporting to `resources`, and
+ * every Surface, must be destroyed before the Context. The destructor
+ * checks: if anything is left, it logs what and aborts, since those objects
+ * would otherwise use the Context after it is gone.
  */
 struct Context
 {
@@ -28,39 +29,38 @@ struct Context
     using Callback = std::function<void(Result)>;
 
     /**
-     * Requests an adapter and a device for `target`, then calls `onDone`
-     * exactly once. Depending on the backend, `onDone` runs before this
-     * function returns (wgpu-native) or later from the event loop (web).
+     * Optional device features. Each is requested only when the adapter
+     * offers it, so code must check before relying on one.
      */
-    static void create(const Type::Target::Any& target, Type::PowerPreference powerPreference, Callback onDone);
+    struct Features
+    {
+        bool timestampQuery = false;  // GPU timing
+    };
+
+    /**
+     * Requests an adapter and a device, then calls `onDone` exactly once.
+     * Depending on the backend, `onDone` runs before this function returns
+     * (wgpu-native) or later from the event loop (web).
+     */
+    static void create(Type::PowerPreference powerPreference, Callback onDone);
 
     // Declared first so it is destroyed last, after every handle below.
     Resource::Stats resources;
 
-    // Members are destroyed in reverse order: queue, device, adapter,
-    // surface, instance.
+    // Members are destroyed in reverse order.
     Handle<WGPUInstance> instance;
-    Handle<WGPUSurface> surface;
     Handle<WGPUAdapter> adapter;
     Handle<WGPUDevice> device;
     Handle<WGPUQueue> queue;
 
-    WGPUTextureFormat format = WGPUTextureFormat_Undefined;
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
+    Features features;
 
     Type::Info info;
 
-    Context() = default;
+    Context() noexcept = default;
     Context(const Context&) = delete;
     Context& operator=(const Context&) = delete;
     ~Context();
-
-    /** Reconfigures the surface if the size changed. Zero sizes are ignored. */
-    void resize(std::uint32_t newWidth, std::uint32_t newHeight);
-
-    /** Applies format, width and height to the surface. */
-    void configure();
 };
 
 } // namespace Gpu

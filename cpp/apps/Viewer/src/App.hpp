@@ -25,7 +25,7 @@ public:
     /** Calls `onDone` exactly once, possibly before returning. */
     static void create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone);
 
-    explicit App(std::unique_ptr<Gpu::Market::Engine> engine);
+    explicit App(std::unique_ptr<Gpu::Market::Engine> engine) noexcept;
 
     /** A one-line description of the GPU in use, for display. */
     [[nodiscard]] std::string describe() const;

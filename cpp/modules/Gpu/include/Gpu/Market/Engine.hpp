@@ -43,7 +43,7 @@ public:
 private:
     struct Impl;
 
-    explicit Engine(std::unique_ptr<Impl> impl);
+    explicit Engine(std::unique_ptr<Impl> impl) noexcept;
 
     std::unique_ptr<Impl> mImpl;
 };

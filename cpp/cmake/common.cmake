@@ -13,4 +13,9 @@ function(viewer_setup_target target)
     )
 
     target_compile_options(${target} PRIVATE -Wall -Wextra -pedantic)
+
+    # No exceptions on any platform, as under Emscripten: nothing can throw,
+    # and failures that would (e.g. out of memory) abort instead. Errors are
+    # returned as std::expected.
+    target_compile_options(${target} PRIVATE -fno-exceptions)
 endfunction()

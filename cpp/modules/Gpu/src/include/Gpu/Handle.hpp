@@ -38,12 +38,12 @@ public:
     Handle() = default;
 
     /** Takes ownership of `raw`, which may be null. Not tracked. */
-    explicit Handle(T raw)
+    explicit Handle(T raw) noexcept
         : mRaw(raw)
     {}
 
     /** Takes ownership of `raw` and reports `bytes` to `stats` while alive. */
-    Handle(T raw, Resource::Stats& stats, std::uint64_t bytes)
+    Handle(T raw, Resource::Stats& stats, std::uint64_t bytes) noexcept
         requires(tracked())
         : mRaw(raw),
           mStats(raw ? &stats : nullptr),
@@ -84,7 +84,7 @@ public:
     explicit operator bool() const { return mRaw != nullptr; }
 
     /** Releases the object now, if there is one, and becomes empty. */
-    void reset()
+    void reset() noexcept
     {
         if (!mRaw) {
             return;

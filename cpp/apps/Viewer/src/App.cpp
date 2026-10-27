@@ -15,7 +15,7 @@ void App::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreferenc
     });
 }
 
-App::App(std::unique_ptr<Gpu::Market::Engine> engine)
+App::App(std::unique_ptr<Gpu::Market::Engine> engine) noexcept
     : mEngine(std::move(engine))
 {}
 

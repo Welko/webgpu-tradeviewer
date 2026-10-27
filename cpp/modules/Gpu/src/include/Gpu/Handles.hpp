@@ -7,21 +7,21 @@
 namespace Gpu {
 
 // Objects that hold no significant GPU memory of their own: never tracked.
-#define GPU_HANDLE_TRAITS(Type, Release)                     \
-    template <>                                              \
-    struct Handle<Type>::Traits                              \
-    {                                                        \
-        static void release(Type raw) { Release(raw); }      \
+#define GPU_HANDLE_TRAITS(Type, Release)                          \
+    template <>                                                   \
+    struct Handle<Type>::Traits                                   \
+    {                                                             \
+        static void release(Type raw) noexcept { Release(raw); }  \
     };
 
 // Objects whose memory Resource::Stats can track. Tracking is opt-in per
 // handle.
-#define GPU_TRACKED_HANDLE_TRAITS(Type, Release, KindValue)  \
-    template <>                                              \
-    struct Handle<Type>::Traits                              \
-    {                                                        \
-        static constexpr Resource::Kind Kind = KindValue;    \
-        static void release(Type raw) { Release(raw); }      \
+#define GPU_TRACKED_HANDLE_TRAITS(Type, Release, KindValue)       \
+    template <>                                                   \
+    struct Handle<Type>::Traits                                   \
+    {                                                             \
+        static constexpr Resource::Kind Kind = KindValue;         \
+        static void release(Type raw) noexcept { Release(raw); }  \
     };
 
 GPU_HANDLE_TRAITS(WGPUInstance, wgpuInstanceRelease)

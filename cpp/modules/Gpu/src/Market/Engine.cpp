@@ -1,8 +1,7 @@
 #include "Gpu/Market/Engine.hpp"
 
 #include "Gpu/Context.hpp"
-
-#include "Core/Log.hpp"
+#include "Gpu/Surface.hpp"
 
 #include <webgpu/webgpu.h>
 
@@ -19,20 +18,29 @@ constexpr WGPUColor ClearColor{ 0.07, 0.08, 0.10, 1.0 };
 struct Engine::Impl
 {
     std::unique_ptr<Context> context;
+    
+    // Declared after the context, so it is destroyed first.
+    std::unique_ptr<Surface> surface;
 };
 
 void Engine::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone)
 {
-    Context::create(target, powerPreference, [onDone = std::move(onDone)](Context::Result result) {
-        if (!result) {
-            onDone(std::unexpected(std::move(result.error())));
+    Context::create(powerPreference, [target, onDone = std::move(onDone)](Context::Result context) {
+        if (!context) {
+            onDone(std::unexpected(std::move(context.error())));
             return;
         }
-        onDone(std::unique_ptr<Engine>(new Engine(std::make_unique<Impl>(std::move(*result)))));
+        auto surface = Surface::create(**context, target);
+        if (!surface) {
+            onDone(std::unexpected(std::move(surface.error())));
+            return;
+        }
+        auto impl = std::make_unique<Impl>(std::move(*context), std::move(*surface));
+        onDone(std::unique_ptr<Engine>(new Engine(std::move(impl))));
     });
 }
 
-Engine::Engine(std::unique_ptr<Impl> impl)
+Engine::Engine(std::unique_ptr<Impl> impl) noexcept
     : mImpl(std::move(impl))
 {}
 
@@ -45,39 +53,22 @@ const Gpu::Type::Info& Engine::getInfo() const
 
 void Engine::resize(std::uint32_t width, std::uint32_t height)
 {
-    mImpl->context->resize(width, height);
+    mImpl->surface->resize(width, height);
 }
 
 void Engine::render()
 {
     auto& ctx = *mImpl->context;
-    if (ctx.width == 0 || ctx.height == 0) {
+    auto& surface = *mImpl->surface;
+    const auto image = surface.acquire();
+    if (!image) {
         return;
     }
 
-    WGPUSurfaceTexture surfaceTexture{};
-    wgpuSurfaceGetCurrentTexture(ctx.surface.get(), &surfaceTexture);
-    // The surface owns the texture's memory, so it isn't tracked.
-    const Handle<WGPUTexture> texture(surfaceTexture.texture);
-
-    switch (surfaceTexture.status) {
-    case WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal:
-    case WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal:
-        break;
-    case WGPUSurfaceGetCurrentTextureStatus_Outdated:
-    case WGPUSurfaceGetCurrentTextureStatus_Lost:
-        ctx.configure();
-        return;
-    default:
-        Core::Log::error("Failed to acquire the surface texture (status {})", static_cast<int>(surfaceTexture.status));
-        return;
-    }
-
-    const Handle<WGPUTextureView> view(wgpuTextureCreateView(texture.get(), nullptr));
     const Handle<WGPUCommandEncoder> encoder(wgpuDeviceCreateCommandEncoder(ctx.device.get(), nullptr));
 
     WGPURenderPassColorAttachment color{};
-    color.view = view.get();
+    color.view = image->view.get();
     color.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
     color.loadOp = WGPULoadOp_Clear;
     color.storeOp = WGPUStoreOp_Store;
@@ -96,10 +87,7 @@ void Engine::render()
     const WGPUCommandBuffer submitted = commands.get();
     wgpuQueueSubmit(ctx.queue.get(), 1, &submitted);
 
-#ifndef __EMSCRIPTEN__
-    // The browser presents the canvas on its own.
-    wgpuSurfacePresent(ctx.surface.get());
-#endif
+    surface.present();
 }
 
 } // namespace Gpu::Market
