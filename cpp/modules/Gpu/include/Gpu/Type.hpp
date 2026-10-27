@@ -71,7 +71,7 @@ struct Canvas
     std::string selector;
 };
 
-/** Where a Surface draws. Add alternatives here for new platforms. */
+/** Where the Engine draws. Add alternatives here for new platforms. */
 using Any = std::variant<Canvas>;
 
 #else
@@ -100,7 +100,7 @@ struct Offscreen
     std::uint32_t height;
 };
 
-/** Where a Surface draws. Add alternatives here for new platforms. */
+/** Where the Engine draws. Add alternatives here for new platforms. */
 using Any = std::variant<Wayland, Xlib, Offscreen>;
 
 #endif

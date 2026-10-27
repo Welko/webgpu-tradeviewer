@@ -12,7 +12,6 @@ enum class Kind : std::uint8_t
     Buffer,
     Texture,
     QuerySet,
-    Surface,
     Count,
 };
 
