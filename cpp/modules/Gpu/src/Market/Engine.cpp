@@ -1,7 +1,7 @@
 #include "Gpu/Market/Engine.hpp"
 
-#include "Gpu/Context.hpp"
-#include "Gpu/Surface.hpp"
+#include "Gpu/Engine.hpp"
+#include "Gpu/Pass/Clear.hpp"
 
 #include <webgpu/webgpu.h>
 
@@ -17,26 +17,20 @@ constexpr WGPUColor ClearColor{ 0.07, 0.08, 0.10, 1.0 };
 
 struct Engine::Impl
 {
-    std::unique_ptr<Context> context;
-    
-    // Declared after the context, so it is destroyed first.
-    std::unique_ptr<Surface> surface;
+    // The generic core. Market data the passes share will be declared after
+    // it, so that data is destroyed first.
+    Gpu::Engine engine;
 };
 
 void Engine::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone)
 {
-    Context::create(powerPreference, [target, onDone = std::move(onDone)](Context::Result context) {
-        if (!context) {
-            onDone(std::unexpected(std::move(context.error())));
+    Gpu::Engine::create(target, powerPreference, [onDone = std::move(onDone)](Gpu::Engine::Result engine) {
+        if (!engine) {
+            onDone(std::unexpected(std::move(engine.error())));
             return;
         }
-        auto surface = Surface::create(**context, target);
-        if (!surface) {
-            onDone(std::unexpected(std::move(surface.error())));
-            return;
-        }
-        auto impl = std::make_unique<Impl>(std::move(*context), std::move(*surface));
-        onDone(std::unique_ptr<Engine>(new Engine(std::move(impl))));
+        engine->addPass(std::make_unique<Pass::Clear>(ClearColor));
+        onDone(std::unique_ptr<Engine>(new Engine(std::make_unique<Impl>(std::move(*engine)))));
     });
 }
 
@@ -48,46 +42,17 @@ Engine::~Engine() = default;
 
 const Gpu::Type::Info& Engine::getInfo() const
 {
-    return mImpl->context->info;
+    return mImpl->engine.info();
 }
 
 void Engine::resize(std::uint32_t width, std::uint32_t height)
 {
-    mImpl->surface->resize(width, height);
+    mImpl->engine.resize(width, height);
 }
 
 void Engine::render()
 {
-    auto& ctx = *mImpl->context;
-    auto& surface = *mImpl->surface;
-    const auto image = surface.acquire();
-    if (!image) {
-        return;
-    }
-
-    const Handle<WGPUCommandEncoder> encoder(wgpuDeviceCreateCommandEncoder(ctx.device.get(), nullptr));
-
-    WGPURenderPassColorAttachment color{};
-    color.view = image->view.get();
-    color.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
-    color.loadOp = WGPULoadOp_Clear;
-    color.storeOp = WGPUStoreOp_Store;
-    color.clearValue = ClearColor;
-
-    WGPURenderPassDescriptor passDescriptor{};
-    passDescriptor.colorAttachmentCount = 1;
-    passDescriptor.colorAttachments = &color;
-
-    {
-        const Handle<WGPURenderPassEncoder> pass(wgpuCommandEncoderBeginRenderPass(encoder.get(), &passDescriptor));
-        wgpuRenderPassEncoderEnd(pass.get());
-    }
-
-    const Handle<WGPUCommandBuffer> commands(wgpuCommandEncoderFinish(encoder.get(), nullptr));
-    const WGPUCommandBuffer submitted = commands.get();
-    wgpuQueueSubmit(ctx.queue.get(), 1, &submitted);
-
-    surface.present();
+    mImpl->engine.render();
 }
 
 } // namespace Gpu::Market

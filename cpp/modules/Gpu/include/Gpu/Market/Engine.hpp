@@ -11,8 +11,9 @@
 namespace Gpu::Market {
 
 /**
- * The public face of the Gpu module for market data: owns the WebGPU context
- * and everything computed and drawn with it. No WebGPU types appear here.
+ * The public face of the Gpu module for market data. No WebGPU types appear
+ * here. Builds on the generic Gpu::Engine, adding the market passes and the
+ * data they draw.
  *
  * For now it only clears the surface. Trade and order-book passes will live
  * behind it.
