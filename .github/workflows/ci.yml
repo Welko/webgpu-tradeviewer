@@ -101,6 +101,16 @@ jobs:
           source ~/emsdk/emsdk_env.sh
           ctest --test-dir build/web --output-on-failure --no-tests=error
 
+      # Smoke-tests the built site in Chromium, with WebGPU on SwiftShader
+      # (bundled with Chromium), since the runner has no GPU.
+      - name: Install Playwright's Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Test (site in Chromium)
+        working-directory: web
+        run: npm run test:e2e
+
       - uses: actions/upload-pages-artifact@v5
         with:
           path: docs

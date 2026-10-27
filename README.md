@@ -76,7 +76,18 @@ ctest --test-dir build/native --output-on-failure   # native
 ctest --test-dir build/web --output-on-failure      # wasm, run in Node (after building the web preset)
 ```
 
-The wasm run matters: wasm32 has a 32-bit `size_t` and `long`, uses libc++, and has no exception support. A `throw` aborts the program. Tests run in Node without a GPU, so keep them to GPU-free code in `Core`.
+The wasm run matters: wasm32 has a 32-bit `size_t` and `long`, uses libc++, and has no exception support. A `throw` aborts the program. Node has no GPU, so only GPU-free tests run there.
+
+`GpuDeviceTests` drive a real GPU and are native only: they render offscreen and read the pixels back. CI runs them on Mesa's software Vulkan driver (lavapipe, package `mesa-vulkan-drivers`); without a GPU they fail rather than skip.
+
+The built site has smoke tests in a real browser ([Playwright](https://playwright.dev), Chromium with WebGPU on its software renderer, SwiftShader). They need Node 20 or newer:
+
+```bash
+cd web
+npm run build                      # writes the site to docs/
+npx playwright install chromium    # once
+npm run test:e2e
+```
 
 ## Choosing the GPU
 
