@@ -65,4 +65,14 @@ void Engine::render()
     mImpl->engine.render();
 }
 
+void Engine::setProfiling(bool enabled)
+{
+    mImpl->engine.setProfiling(enabled);
+}
+
+const Gpu::Type::FrameStats& Engine::stats() const
+{
+    return mImpl->engine.stats();
+}
+
 } // namespace Gpu::Market

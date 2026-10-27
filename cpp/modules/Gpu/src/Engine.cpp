@@ -2,6 +2,8 @@
 
 #include "Gpu/Frame.hpp"
 
+#include "Core/Profile.hpp"
+
 #include <utility>
 
 namespace Gpu {
@@ -46,14 +48,33 @@ void Engine::addPass(std::unique_ptr<Pass> pass)
 
 void Engine::render()
 {
-    auto frame = Frame::begin(*mContext, *mSurface, mNowMs);
+    Type::FrameStats stats;
+    stats.timed = Core::Profile::Compiled && mProfiling;
+
+    auto frame = [&] {
+        const Core::Profile::Scope acquire(stats.cpuAcquireMs, stats.timed);
+        return Frame::begin(*mContext, *mSurface, mNowMs);
+    }();
     if (!frame) {
         return;
     }
-    for (const auto& pass : mPasses) {
-        pass->encode(*frame);
+    {
+        const Core::Profile::Scope encode(stats.cpuEncodeMs, stats.timed);
+        for (const auto& pass : mPasses) {
+            pass->encode(*frame);
+        }
     }
-    frame->submit();
+    {
+        const Core::Profile::Scope submit(stats.cpuSubmitMs, stats.timed);
+        frame->submit();
+    }
+
+    const auto& resources = mContext->resources;
+    stats.frame = mStats.frame + 1;
+    stats.buffers = resources.count(Resource::Kind::Buffer);
+    stats.textures = resources.count(Resource::Kind::Texture);
+    stats.gpuBytes = resources.totalBytes();
+    mStats = stats;
     mDirty = false;
 }
 

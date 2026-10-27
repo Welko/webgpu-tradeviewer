@@ -44,4 +44,14 @@ void App::render()
     mEngine->render();
 }
 
+void App::setProfiling(bool enabled)
+{
+    mEngine->setProfiling(enabled);
+}
+
+const Gpu::Type::FrameStats& App::stats() const
+{
+    return mEngine->stats();
+}
+
 } // namespace Viewer

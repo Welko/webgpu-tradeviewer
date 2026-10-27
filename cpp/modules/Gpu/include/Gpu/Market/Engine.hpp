@@ -55,6 +55,12 @@ public:
     /** Draws a frame, needed or not. */
     void render();
 
+    /** Turns frame timing on or off. Off by default. */
+    void setProfiling(bool enabled);
+
+    /** Stats of the last drawn frame. */
+    [[nodiscard]] const Gpu::Type::FrameStats& stats() const;
+
 private:
     struct Impl;
 

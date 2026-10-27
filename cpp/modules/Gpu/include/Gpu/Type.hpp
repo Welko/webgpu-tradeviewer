@@ -23,6 +23,34 @@ struct Info
     std::string webglRenderer;
 };
 
+/**
+ * What the last drawn frame cost, and what the GPU holds. Plain data, so
+ * each platform's UI can show it however it likes.
+ */
+struct FrameStats
+{
+    /** Frames drawn so far, counting this one. */
+    std::uint64_t frame = 0;
+
+    /**
+     * Whether the CPU times below were measured: profiling is compiled in
+     * and switched on. Otherwise they are 0.
+     */
+    bool timed = false;
+
+    /** Waiting for and getting the surface image; includes vsync waits. */
+    double cpuAcquireMs = 0.0;
+    /** Recording every pass. */
+    double cpuEncodeMs = 0.0;
+    /** Finishing, submitting and presenting. */
+    double cpuSubmitMs = 0.0;
+
+    // Live GPU objects, from our own bookkeeping (WebGPU can't be asked).
+    std::uint32_t buffers = 0;
+    std::uint32_t textures = 0;
+    std::uint64_t gpuBytes = 0;
+};
+
 /** A hint for choosing between GPUs. Browsers and drivers may ignore it. */
 enum class PowerPreference
 {

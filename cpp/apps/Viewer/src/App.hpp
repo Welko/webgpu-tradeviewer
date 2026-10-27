@@ -43,6 +43,12 @@ public:
     /** Draws the current state. Does not change it. */
     void render();
 
+    /** Turns frame timing on or off. Off by default. */
+    void setProfiling(bool enabled);
+
+    /** Stats of the last drawn frame. */
+    [[nodiscard]] const Gpu::Type::FrameStats& stats() const;
+
 private:
     std::unique_ptr<Gpu::Market::Engine> mEngine;
 };

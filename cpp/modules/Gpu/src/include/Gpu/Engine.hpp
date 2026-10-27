@@ -54,6 +54,16 @@ public:
     /** Whether something changed since the last drawn frame. */
     [[nodiscard]] bool needsRender() const { return mDirty; }
 
+    /**
+     * Turns timing on or off at runtime. Off by default; when off, a frame
+     * reads no clocks. Has no effect if profiling is compiled out.
+     */
+    void setProfiling(bool enabled) { mProfiling = enabled; }
+    [[nodiscard]] bool profiling() const { return mProfiling; }
+
+    /** Stats of the last drawn frame. */
+    [[nodiscard]] const Type::FrameStats& stats() const { return mStats; }
+
     /** Appends a pass; passes run in the order they were added. */
     void addPass(std::unique_ptr<Pass> pass);
 
@@ -75,6 +85,8 @@ private:
     std::uint32_t mHeight = 0;
     double mNowMs = 0.0;
     bool mDirty = true;
+    bool mProfiling = false;
+    Type::FrameStats mStats;
 };
 
 } // namespace Gpu

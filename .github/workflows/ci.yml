@@ -44,6 +44,14 @@ jobs:
         working-directory: cpp
         run: ctest --test-dir build/native --output-on-failure --no-tests=error
 
+      # Keeps the compiled-out stubs building and passing.
+      - name: Build and test with profiling compiled out
+        working-directory: cpp
+        run: |
+          cmake --preset native -B build/native-noprofiling -DTRADEVIEWER_PROFILING=OFF
+          cmake --build build/native-noprofiling -j "$(nproc)"
+          ctest --test-dir build/native-noprofiling --output-on-failure --no-tests=error
+
   web:
     name: Web build
     runs-on: ubuntu-24.04
