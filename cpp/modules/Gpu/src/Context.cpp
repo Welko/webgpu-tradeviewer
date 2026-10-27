@@ -4,11 +4,13 @@
 
 #include "Core/Log.hpp"
 
+#include <chrono>
 #include <cstdlib>
 #include <format>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -157,6 +159,26 @@ void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView 
 void Context::create(Handle<WGPUInstance> instance, WGPUSurface compatible, Type::PowerPreference powerPreference,
                      Callback onDone)
 {
+#ifndef __EMSCRIPTEN__
+    // Natively, pump WebGPU events below until creation finishes, so onDone
+    // has run before create() returns, whether or not WebGPU calls back
+    // immediately. The flag also keeps onDone from running twice after a
+    // timeout.
+    constexpr auto Timeout = std::chrono::seconds(10);
+    const auto finished = std::make_shared<bool>(false);
+    onDone = [finished, onDone = std::move(onDone)](Result result) {
+        if (!*finished) {
+            *finished = true;
+            onDone(std::move(result));
+        }
+    };
+    // Our own reference: a failed creation releases the instance from inside
+    // the pumping loop, which must not be the last reference.
+    wgpuInstanceAddRef(instance.get());
+    const Handle<WGPUInstance> pumped(instance.get());
+    const Callback finish = onDone;
+#endif
+
     auto pending = std::make_unique<Pending>(Context{}, std::move(onDone));
     pending->context.instance = std::move(instance);
 
@@ -174,6 +196,19 @@ void Context::create(Handle<WGPUInstance> instance, WGPUSurface compatible, Type
         .userdata1 = pending.release(),
         .userdata2 = nullptr,
     });
+
+#ifndef __EMSCRIPTEN__
+    const auto deadline = std::chrono::steady_clock::now() + Timeout;
+    while (!*finished && std::chrono::steady_clock::now() < deadline) {
+        wgpuInstanceProcessEvents(pumped.get());
+        if (!*finished) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    if (!*finished) {
+        finish(std::unexpected("Timed out waiting for the GPU to become ready"));
+    }
+#endif
 }
 
 } // namespace Gpu

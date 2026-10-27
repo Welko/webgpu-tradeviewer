@@ -49,6 +49,11 @@ public:
     /** Stats of the last drawn frame. */
     [[nodiscard]] const Gpu::Type::FrameStats& stats() const;
 
+#ifndef __EMSCRIPTEN__
+    /** Delivers finished asynchronous GPU work. Call every loop iteration. */
+    void processEvents();
+#endif
+
 private:
     std::unique_ptr<Gpu::Market::Engine> mEngine;
 };

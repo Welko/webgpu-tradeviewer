@@ -30,8 +30,8 @@ public:
     using PixelsCallback = std::function<void(std::expected<Pixels, std::string>)>;
 
     /**
-     * Calls `onDone` exactly once: before returning (wgpu-native) or later
-     * from the event loop (web).
+     * Calls `onDone` exactly once: natively before returning, on the web
+     * later from the browser's event loop.
      */
     static void create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone);
 

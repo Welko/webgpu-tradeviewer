@@ -68,18 +68,22 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    // Natively, creation finishes before create() returns.
     std::unique_ptr<Viewer::App> app;
-    bool failed = false;
     Viewer::App::create(*target, parsePowerPreference(argc, argv), [&](Viewer::App::Result result) {
         if (!result) {
             Core::Log::error("{}", result.error());
-            failed = true;
             return;
         }
         app = std::move(*result);
         const auto& info = app->info();
         Core::Log::info("Using {} · {} · {}", info.device, info.backend, info.adapter);
     });
+    if (!app) {
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return 1;
+    }
 
     // Set when the window system asks for a repaint, e.g. after the window
     // was uncovered without a compositor keeping its contents.
@@ -89,17 +93,15 @@ int main(int argc, char** argv)
         *static_cast<bool*>(glfwGetWindowUserPointer(refreshed)) = true;
     });
 
-    while (!failed && !glfwWindowShouldClose(window)) {
+    while (!glfwWindowShouldClose(window)) {
         // Sleep until the next event (input, resize, close) when there is
         // nothing to draw; keep going while frames are needed.
-        if (app && !app->needsRender() && !repaint) {
+        if (!app->needsRender() && !repaint) {
             glfwWaitEvents();
         } else {
             glfwPollEvents();
         }
-        if (!app) {
-            continue;
-        }
+        app->processEvents();
 
         int width = 0;
         int height = 0;
@@ -115,5 +117,5 @@ int main(int argc, char** argv)
     app.reset();
     glfwDestroyWindow(window);
     glfwTerminate();
-    return failed ? 1 : 0;
+    return 0;
 }

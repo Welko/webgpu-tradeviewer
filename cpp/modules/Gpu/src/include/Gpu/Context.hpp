@@ -32,9 +32,10 @@ struct Context
 
     /**
      * Requests an adapter on `instance`, able to draw to `compatible` if it
-     * isn't null, then a device, and calls `onDone` exactly once. Depending
-     * on the backend, `onDone` runs before this function returns
-     * (wgpu-native) or later from the event loop (web).
+     * isn't null, then a device, and calls `onDone` exactly once: natively
+     * before this function returns (it pumps WebGPU events until done, or
+     * fails after a timeout), on the web later from the browser's event
+     * loop.
      */
     static void create(Handle<WGPUInstance> instance, WGPUSurface compatible, Type::PowerPreference powerPreference,
                        Callback onDone);

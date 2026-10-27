@@ -54,4 +54,11 @@ const Gpu::Type::FrameStats& App::stats() const
     return mEngine->stats();
 }
 
+#ifndef __EMSCRIPTEN__
+void App::processEvents()
+{
+    mEngine->processEvents();
+}
+#endif
+
 } // namespace Viewer

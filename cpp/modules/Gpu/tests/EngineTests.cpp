@@ -30,8 +30,8 @@ std::unique_ptr<Engine> createOffscreen(std::uint32_t width, std::uint32_t heigh
                 engine = std::move(*result);
             }
         });
-    // wgpu-native completes creation before create() returns.
-    CHECK_MESSAGE(done, "Engine creation didn't complete before create() returned");
+    // Natively, creation always finishes before create() returns.
+    CHECK_MESSAGE(done, "Engine creation didn't finish before create() returned");
     return engine;
 }
 
