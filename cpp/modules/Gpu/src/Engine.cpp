@@ -29,17 +29,24 @@ Engine::Engine(std::unique_ptr<Context> context, std::unique_ptr<Surface> surfac
 
 void Engine::resize(std::uint32_t width, std::uint32_t height)
 {
+    if (width == 0 || height == 0 || (width == mWidth && height == mHeight)) {
+        return;
+    }
+    mWidth = width;
+    mHeight = height;
     mSurface->resize(width, height);
+    mDirty = true;
 }
 
 void Engine::addPass(std::unique_ptr<Pass> pass)
 {
     mPasses.push_back(std::move(pass));
+    mDirty = true;
 }
 
 void Engine::render()
 {
-    auto frame = Frame::begin(*mContext, *mSurface);
+    auto frame = Frame::begin(*mContext, *mSurface, mNowMs);
     if (!frame) {
         return;
     }
@@ -47,6 +54,7 @@ void Engine::render()
         pass->encode(*frame);
     }
     frame->submit();
+    mDirty = false;
 }
 
 } // namespace Gpu

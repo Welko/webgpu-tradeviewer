@@ -4,21 +4,23 @@
 
 namespace Gpu {
 
-std::optional<Frame> Frame::begin(Context& context, Surface& surface)
+std::optional<Frame> Frame::begin(Context& context, Surface& surface, double timeMs)
 {
     auto image = surface.acquire();
     if (!image) {
         return std::nullopt;
     }
     Handle encoder(wgpuDeviceCreateCommandEncoder(context.device.get(), nullptr));
-    return Frame(context, surface, std::move(*image), std::move(encoder));
+    return Frame(context, surface, std::move(*image), std::move(encoder), timeMs);
 }
 
-Frame::Frame(Context& context, Surface& surface, Surface::Image image, Handle<WGPUCommandEncoder> encoder) noexcept
+Frame::Frame(Context& context, Surface& surface, Surface::Image image, Handle<WGPUCommandEncoder> encoder,
+             double timeMs) noexcept
     : mContext(context),
       mSurface(surface),
       mImage(std::move(image)),
-      mEncoder(std::move(encoder))
+      mEncoder(std::move(encoder)),
+      mTimeMs(timeMs)
 {}
 
 void Frame::submit()

@@ -40,7 +40,7 @@ Engine::Engine(std::unique_ptr<Impl> impl) noexcept
 
 Engine::~Engine() = default;
 
-const Gpu::Type::Info& Engine::getInfo() const
+const Gpu::Type::Info& Engine::info() const
 {
     return mImpl->engine.info();
 }
@@ -48,6 +48,16 @@ const Gpu::Type::Info& Engine::getInfo() const
 void Engine::resize(std::uint32_t width, std::uint32_t height)
 {
     mImpl->engine.resize(width, height);
+}
+
+void Engine::update(double nowMs)
+{
+    mImpl->engine.update(nowMs);
+}
+
+bool Engine::needsRender() const
+{
+    return mImpl->engine.needsRender();
 }
 
 void Engine::render()

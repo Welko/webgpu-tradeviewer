@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { describeGpu } from './viewer/gpuInfo';
 import { ViewerCanvas, type ViewerStatus } from './viewer/ViewerCanvas';
 import type { PowerPreference } from './viewer/viewerModule';
 
@@ -7,7 +8,7 @@ function describe(status: ViewerStatus): string {
     case 'loading':
       return 'Starting WebGPU…';
     case 'ready':
-      return status.adapter;
+      return describeGpu(status.gpu);
     case 'error':
       return status.message;
   }

@@ -19,6 +19,9 @@ namespace Gpu {
  * Gpu::Market::Engine build on. Owns the context, the surface and the
  * passes, and draws frames by running the passes in order. Knows nothing
  * about what the passes draw.
+ *
+ * Renders on demand: anything that changes what a frame would show marks
+ * the engine dirty, and the app's loop draws only while needsRender().
  */
 class Engine
 {
@@ -42,10 +45,22 @@ public:
     /** Surface size in physical pixels. Zero sizes are ignored. */
     void resize(std::uint32_t width, std::uint32_t height);
 
+    /** Sets the time frames are drawn at; passes read it as Frame::timeMs(). */
+    void update(double nowMs) { mNowMs = nowMs; }
+
+    /** Marks the next frame as needed, e.g. after the data or view changed. */
+    void requestRender() { mDirty = true; }
+
+    /** Whether something changed since the last drawn frame. */
+    [[nodiscard]] bool needsRender() const { return mDirty; }
+
     /** Appends a pass; passes run in the order they were added. */
     void addPass(std::unique_ptr<Pass> pass);
 
-    /** Draws one frame, unless the surface skips it. */
+    /**
+     * Draws one frame, whether or not it is needed, unless the surface skips
+     * it. A skipped frame stays needed.
+     */
     void render();
 
 private:
@@ -55,6 +70,11 @@ private:
     std::unique_ptr<Context> mContext;
     std::unique_ptr<Surface> mSurface;
     std::vector<std::unique_ptr<Pass>> mPasses;
+
+    std::uint32_t mWidth = 0;
+    std::uint32_t mHeight = 0;
+    double mNowMs = 0.0;
+    bool mDirty = true;
 };
 
 } // namespace Gpu

@@ -13,8 +13,9 @@ namespace Viewer {
 
 /**
  * The platform-independent application. The platform entry point
- * (NativeMain.cpp or WebMain.cpp) owns the loop and calls
- * resize/update/render.
+ * (NativeMain.cpp or WebMain.cpp) owns the loop: each iteration it calls
+ * update(), then render() only if needsRender(), and otherwise sleeps until
+ * something happens.
  */
 class App
 {
@@ -27,21 +28,23 @@ public:
 
     explicit App(std::unique_ptr<Gpu::Market::Engine> engine) noexcept;
 
-    /** A one-line description of the GPU in use, for display. */
-    [[nodiscard]] std::string describe() const;
+    /** The GPU in use. Each platform's UI decides how to show it. */
+    [[nodiscard]] const Gpu::Type::Info& info() const;
 
     /** Surface size in physical pixels. */
     void resize(std::uint32_t width, std::uint32_t height);
 
-    /** Advances application state. CPU only. */
+    /** Advances application state to `nowMs`. */
     void update(double nowMs);
+
+    /** Whether the current state differs from the last drawn frame. */
+    [[nodiscard]] bool needsRender() const;
 
     /** Draws the current state. Does not change it. */
     void render();
 
 private:
     std::unique_ptr<Gpu::Market::Engine> mEngine;
-    double mNowMs = 0.0;
 };
 
 } // namespace Viewer

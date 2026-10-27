@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef } from 'react';
+import type { GpuInfo } from './gpuInfo';
 import { createViewer, type PowerPreference, type Viewer } from './viewerModule';
 
 export type ViewerStatus =
   | { kind: 'loading' }
-  | { kind: 'ready'; adapter: string }
+  | { kind: 'ready'; gpu: GpuInfo }
   | { kind: 'error'; message: string };
 
 interface ViewerCanvasProps {
@@ -15,6 +16,11 @@ interface ViewerCanvasProps {
 /**
  * Hosts the C++ viewer. React owns the frame loop and the canvas size;
  * the viewer only reacts to resize/update/render calls.
+ *
+ * Frames are drawn on demand: an animation frame is requested only when
+ * something changed (e.g. a resize) and keeps being requested while the
+ * viewer still needs frames (e.g. during an animation). An idle page
+ * schedules nothing.
  */
 export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -27,6 +33,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
     let disposed = false;
     let viewer: Viewer | null = null;
     let frame = 0;
+    let scheduled = false;
     let observer: ResizeObserver | null = null;
 
     onStatusRef.current?.({ kind: 'loading' });
@@ -39,24 +46,41 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
         }
         viewer = created;
 
+        const tick = (now: number) => {
+          scheduled = false;
+          created.update(now);
+          if (created.needsRender()) {
+            created.render();
+          }
+          // Still needed after drawing: an animation is running, or the
+          // surface skipped this frame.
+          if (created.needsRender()) {
+            requestFrame();
+          }
+        };
+        const requestFrame = () => {
+          if (!scheduled) {
+            scheduled = true;
+            frame = requestAnimationFrame(tick);
+          }
+        };
+
         observer = new ResizeObserver(([entry]) => {
           const box = entry.devicePixelContentBoxSize?.[0];
           const width = box ? box.inlineSize : Math.round(entry.contentRect.width * devicePixelRatio);
           const height = box ? box.blockSize : Math.round(entry.contentRect.height * devicePixelRatio);
-          canvas.width = width;
-          canvas.height = height;
+          // Assigning the size clears the canvas, so only do it on a real change.
+          if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width;
+            canvas.height = height;
+          }
           created.resize(width, height);
+          requestFrame();
         });
         observer.observe(canvas);
+        requestFrame();
 
-        const tick = (now: number) => {
-          created.update(now);
-          created.render();
-          frame = requestAnimationFrame(tick);
-        };
-        frame = requestAnimationFrame(tick);
-
-        onStatusRef.current?.({ kind: 'ready', adapter: created.describe() });
+        onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo });
       })
       .catch((error: unknown) => {
         if (!disposed) {

@@ -29,7 +29,7 @@ std::optional<Gpu::Type::Target::Any> surfaceTarget(GLFWwindow* window)
 }
 
 /** Reads `--gpu=low-power` or `--gpu=high-performance`. */
-Gpu::Type::PowerPreference powerPreference(int argc, char** argv)
+Gpu::Type::PowerPreference parsePowerPreference(int argc, char** argv)
 {
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg = argv[i];
@@ -70,18 +70,33 @@ int main(int argc, char** argv)
 
     std::unique_ptr<Viewer::App> app;
     bool failed = false;
-    Viewer::App::create(*target, powerPreference(argc, argv), [&](Viewer::App::Result result) {
+    Viewer::App::create(*target, parsePowerPreference(argc, argv), [&](Viewer::App::Result result) {
         if (!result) {
             Core::Log::error("{}", result.error());
             failed = true;
             return;
         }
         app = std::move(*result);
-        Core::Log::info("Using {}", app->describe());
+        const auto& info = app->info();
+        Core::Log::info("Using {} · {} · {}", info.device, info.backend, info.adapter);
+    });
+
+    // Set when the window system asks for a repaint, e.g. after the window
+    // was uncovered without a compositor keeping its contents.
+    bool repaint = false;
+    glfwSetWindowUserPointer(window, &repaint);
+    glfwSetWindowRefreshCallback(window, [](GLFWwindow* refreshed) {
+        *static_cast<bool*>(glfwGetWindowUserPointer(refreshed)) = true;
     });
 
     while (!failed && !glfwWindowShouldClose(window)) {
-        glfwPollEvents();
+        // Sleep until the next event (input, resize, close) when there is
+        // nothing to draw; keep going while frames are needed.
+        if (app && !app->needsRender() && !repaint) {
+            glfwWaitEvents();
+        } else {
+            glfwPollEvents();
+        }
         if (!app) {
             continue;
         }
@@ -91,7 +106,10 @@ int main(int argc, char** argv)
         glfwGetFramebufferSize(window, &width, &height);
         app->resize(static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height));
         app->update(glfwGetTime() * 1000.0);
-        app->render();
+        if (app->needsRender() || repaint) {
+            app->render();
+            repaint = false;
+        }
     }
 
     app.reset();

@@ -34,11 +34,25 @@ public:
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
-    [[nodiscard]] const Gpu::Type::Info& getInfo() const;
+    [[nodiscard]] const Gpu::Type::Info& info() const;
 
     /** Surface size in physical pixels. Zero sizes are ignored. */
     void resize(std::uint32_t width, std::uint32_t height);
 
+    /**
+     * Advances time-based state (animations, later the replay clock) to
+     * `nowMs`. Call before deciding whether to render.
+     */
+    void update(double nowMs);
+
+    /**
+     * Whether a frame should be drawn: something changed since the last one,
+     * or an animation is running. When false, the app can sleep until the
+     * next input or resize.
+     */
+    [[nodiscard]] bool needsRender() const;
+
+    /** Draws a frame, needed or not. */
     void render();
 
 private:

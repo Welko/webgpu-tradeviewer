@@ -50,9 +50,10 @@ public:
             });
     }
 
-    std::string describe() const
+    /** The GPU in use, as a plain JavaScript object. Empty until init() succeeds. */
+    Gpu::Type::Info info() const
     {
-        return *mApp ? (*mApp)->describe() : std::string{};
+        return *mApp ? (*mApp)->info() : Gpu::Type::Info{};
     }
 
     void resize(std::uint32_t width, std::uint32_t height)
@@ -67,6 +68,11 @@ public:
         if (*mApp) {
             (*mApp)->update(nowMs);
         }
+    }
+
+    bool needsRender() const
+    {
+        return *mApp && (*mApp)->needsRender();
     }
 
     void render()
@@ -84,11 +90,21 @@ private:
 
 EMSCRIPTEN_BINDINGS(Viewer)
 {
+    emscripten::value_object<Gpu::Type::Info>("GpuInfo")
+        .field("vendor", &Gpu::Type::Info::vendor)
+        .field("device", &Gpu::Type::Info::device)
+        .field("architecture", &Gpu::Type::Info::architecture)
+        .field("description", &Gpu::Type::Info::description)
+        .field("backend", &Gpu::Type::Info::backend)
+        .field("adapter", &Gpu::Type::Info::adapter)
+        .field("webglRenderer", &Gpu::Type::Info::webglRenderer);
+
     emscripten::class_<WebViewer>("Viewer")
         .constructor<>()
         .function("init", &WebViewer::init)
-        .function("describe", &WebViewer::describe)
+        .function("info", &WebViewer::info)
         .function("resize", &WebViewer::resize)
         .function("update", &WebViewer::update)
+        .function("needsRender", &WebViewer::needsRender)
         .function("render", &WebViewer::render);
 }

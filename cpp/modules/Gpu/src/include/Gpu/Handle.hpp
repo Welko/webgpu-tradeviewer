@@ -32,7 +32,7 @@ private:
      * is only evaluated once Traits is defined. Declared before the
      * constructors: Clang needs it before the requires-clause that uses it.
      */
-    static constexpr bool tracked() { return requires { Traits::Kind; }; }
+    static constexpr bool trackable() { return requires { Traits::Kind; }; }
 
 public:
     Handle() = default;
@@ -44,7 +44,7 @@ public:
 
     /** Takes ownership of `raw` and reports `bytes` to `stats` while alive. */
     Handle(T raw, Resource::Stats& stats, std::uint64_t bytes) noexcept
-        requires(tracked())
+        requires(trackable())
         : mRaw(raw),
           mStats(raw ? &stats : nullptr),
           mBytes(raw ? bytes : 0)
@@ -89,7 +89,7 @@ public:
         if (!mRaw) {
             return;
         }
-        if constexpr (tracked()) {
+        if constexpr (trackable()) {
             if (mStats) {
                 mStats->remove(Traits::Kind, mBytes);
             }

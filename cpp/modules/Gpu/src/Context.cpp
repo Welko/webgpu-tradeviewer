@@ -6,8 +6,10 @@
 
 #include <webgpu/webgpu.h>
 
+#include <cstddef>
 #include <cstdlib>
 #include <format>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -42,6 +44,39 @@ EM_JS(char*, gpuQueryWebglRenderer, (), {
 namespace Gpu {
 
 namespace {
+
+/** Plural, lowercase: "buffers". */
+std::string_view kindName(Resource::Kind kind)
+{
+    switch (kind) {
+    case Resource::Kind::Buffer: return "buffers";
+    case Resource::Kind::Texture: return "textures";
+    case Resource::Kind::QuerySet: return "query sets";
+    case Resource::Kind::Surface: return "surfaces";
+    case Resource::Kind::Count: break;
+    }
+    return "unknown";
+}
+
+/** What is still alive, e.g. "surfaces: 1, textures: 2 (2048 bytes)". */
+std::string describeAlive(const Resource::Stats& stats)
+{
+    std::string result;
+    for (std::size_t i = 0; i < static_cast<std::size_t>(Resource::Kind::Count); ++i) {
+        const auto kind = static_cast<Resource::Kind>(i);
+        if (stats.count(kind) == 0) {
+            continue;
+        }
+        if (!result.empty()) {
+            result += ", ";
+        }
+        result += std::format("{}: {}", kindName(kind), stats.count(kind));
+        if (stats.bytes(kind) > 0) {
+            result += std::format(" ({} bytes)", stats.bytes(kind));
+        }
+    }
+    return result;
+}
 
 /** Carried through the adapter and device callbacks as userdata. */
 struct Pending {
@@ -180,7 +215,7 @@ Context::~Context()
 {
     if (!resources.empty()) {
         Core::Log::error("Gpu::Context destroyed while these still use it: {}. Destroy them before the Context.",
-                         resources.describe());
+                         describeAlive(resources));
         std::abort();
     }
 }

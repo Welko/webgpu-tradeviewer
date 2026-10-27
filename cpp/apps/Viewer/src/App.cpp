@@ -19,30 +19,9 @@ App::App(std::unique_ptr<Gpu::Market::Engine> engine) noexcept
     : mEngine(std::move(engine))
 {}
 
-std::string App::describe() const
+const Gpu::Type::Info& App::info() const
 {
-    const auto& info = mEngine->getInfo();
-
-    // Browsers usually hide `device`, but expose `vendor` and `architecture`.
-    std::string name = info.device;
-    if (name.empty()) {
-        name = info.vendor;
-        if (!info.architecture.empty()) {
-            name += (name.empty() ? "" : " ") + info.architecture;
-        }
-    }
-    if (name.empty() && !info.webglRenderer.empty()) {
-        name = info.webglRenderer + " (via WebGL)";
-    }
-    if (name.empty()) {
-        name = "Unknown GPU (details hidden)";
-    }
-
-    name += " · " + info.backend;
-    if (info.adapter != "Unknown") {
-        name += " · " + info.adapter;
-    }
-    return name;
+    return mEngine->info();
 }
 
 void App::resize(std::uint32_t width, std::uint32_t height)
@@ -52,7 +31,12 @@ void App::resize(std::uint32_t width, std::uint32_t height)
 
 void App::update(double nowMs)
 {
-    mNowMs = nowMs;
+    mEngine->update(nowMs);
+}
+
+bool App::needsRender() const
+{
+    return mEngine->needsRender();
 }
 
 void App::render()

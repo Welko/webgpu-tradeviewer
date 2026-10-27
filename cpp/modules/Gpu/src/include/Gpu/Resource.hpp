@@ -3,9 +3,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <format>
-#include <string>
-#include <string_view>
 
 namespace Gpu::Resource {
 
@@ -61,36 +58,6 @@ public:
             }
         }
         return true;
-    }
-
-    /** What is alive, e.g. "surfaces: 1, textures: 2 (2048 bytes)". */
-    [[nodiscard]] std::string describe() const
-    {
-        auto name = [](Kind kind) {
-            switch (kind) {
-            case Kind::Buffer: return "buffers";
-            case Kind::Texture: return "textures";
-            case Kind::QuerySet: return "query sets";
-            case Kind::Surface: return "surfaces";
-            case Kind::Count: break;
-            }
-            return "unknown";
-        };
-
-        std::string result;
-        for (std::size_t i = 0; i < KindCount; ++i) {
-            if (mCounts[i] == 0) {
-                continue;
-            }
-            if (!result.empty()) {
-                result += ", ";
-            }
-            result += std::format("{}: {}", name(static_cast<Kind>(i)), mCounts[i]);
-            if (mBytes[i] > 0) {
-                result += std::format(" ({} bytes)", mBytes[i]);
-            }
-        }
-        return result.empty() ? "nothing" : result;
     }
 
 private:
