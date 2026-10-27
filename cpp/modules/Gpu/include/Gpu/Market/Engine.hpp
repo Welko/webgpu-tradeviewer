@@ -7,6 +7,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace Gpu::Market {
 
@@ -23,6 +24,10 @@ class Engine
 public:
     using Result = std::expected<std::unique_ptr<Engine>, std::string>;
     using Callback = std::function<void(Result)>;
+
+    /** Tightly packed RGBA8 rows, top row first. */
+    using Pixels = std::vector<std::uint8_t>;
+    using PixelsCallback = std::function<void(std::expected<Pixels, std::string>)>;
 
     /**
      * Calls `onDone` exactly once: before returning (wgpu-native) or later
@@ -60,6 +65,22 @@ public:
 
     /** Stats of the last drawn frame. */
     [[nodiscard]] const Gpu::Type::FrameStats& stats() const;
+
+#ifndef __EMSCRIPTEN__
+    /**
+     * Delivers finished asynchronous WebGPU work, such as readPixels()
+     * results. The native app calls it regularly; the browser does this on
+     * its own.
+     */
+    void processEvents();
+
+    /**
+     * Copies the last drawn frame of an offscreen target back to the CPU,
+     * e.g. for tests. Calls `onDone` exactly once, later, usually from
+     * processEvents(). Fails for windows.
+     */
+    void readPixels(PixelsCallback onDone);
+#endif
 
 private:
     struct Impl;

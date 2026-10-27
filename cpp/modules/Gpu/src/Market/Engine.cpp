@@ -3,6 +3,7 @@
 #include "Gpu/Context.hpp"
 #include "Gpu/Convert.hpp"
 #include "Gpu/Handles.hpp"
+#include "Gpu/Readback.hpp"
 #include "Gpu/Resource.hpp"
 
 #include "Core/Log.hpp"
@@ -392,5 +393,21 @@ const Gpu::Type::FrameStats& Engine::stats() const
 {
     return mImpl->stats;
 }
+
+#ifndef __EMSCRIPTEN__
+void Engine::processEvents()
+{
+    wgpuInstanceProcessEvents(mImpl->context.instance.get());
+}
+
+void Engine::readPixels(PixelsCallback onDone)
+{
+    if (!mImpl->offscreen) {
+        onDone(std::unexpected("Only offscreen targets can be read back"));
+        return;
+    }
+    Readback::texture(mImpl->context, mImpl->offscreen.get(), mImpl->width, mImpl->height, std::move(onDone));
+}
+#endif
 
 } // namespace Gpu::Market
