@@ -1,5 +1,6 @@
 #include "Gpu/Market/Engine.hpp"
 
+#include "Gpu/Context.hpp"
 #include "Gpu/Convert.hpp"
 #include "Gpu/Handles.hpp"
 #include "Gpu/Resource.hpp"
@@ -9,41 +10,11 @@
 
 #include <webgpu/webgpu.h>
 
-#include <cstdlib>
-#include <format>
+#include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <variant>
-#include <vector>
-
-#ifdef __EMSCRIPTEN__
-#include <emscripten/em_js.h>
-
-EM_JS_DEPS(GpuEngine, "$stringToNewUTF8");
-
-/* Returns a malloc'd UTF-8 string, or 0. Chrome masks gl.RENDERER as "WebKit WebGL". */
-EM_JS(char*, gpuQueryWebglRenderer, (), {
-    const gl = document.createElement("canvas").getContext("webgl");
-    if (!gl) {
-        return 0;
-    }
-    try {
-        let renderer = gl.getParameter(gl.RENDERER);
-        if (renderer === "WebKit WebGL") {
-            const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
-            renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : null;
-        }
-        return (typeof renderer === "string" && renderer !== "") ? stringToNewUTF8(renderer) : 0;
-    } finally {
-        const loseContext = gl.getExtension("WEBGL_lose_context");
-        if (loseContext) {
-            loseContext.loseContext();
-        }
-    }
-});
-#endif
 
 namespace Gpu::Market {
 
@@ -54,44 +25,6 @@ constexpr WGPUColor ClearColor{ 0.07, 0.08, 0.10, 1.0 };
 // Readable back to the CPU without swizzling, for image tests.
 constexpr WGPUTextureFormat OffscreenFormat = WGPUTextureFormat_RGBA8Unorm;
 constexpr std::uint64_t OffscreenBytesPerPixel = 4;
-
-std::string readWebglRenderer()
-{
-#ifdef __EMSCRIPTEN__
-    char* renderer = gpuQueryWebglRenderer();
-    if (!renderer) {
-        return {};
-    }
-    std::string result(renderer);
-    std::free(renderer);
-    return result;
-#else
-    return {};
-#endif
-}
-
-Type::Info readInfo(WGPUAdapter adapter)
-{
-    WGPUAdapterInfo info{};
-    if (wgpuAdapterGetInfo(adapter, &info) != WGPUStatus_Success) {
-        Core::Log::warn("Failed to get WebGPU adapter info");
-        Type::Info result;
-        result.webglRenderer = readWebglRenderer();
-        return result;
-    }
-
-    Type::Info result {
-        .vendor = std::string(Convert::FromWgpu::stringView(info.vendor)),
-        .device = std::string(Convert::FromWgpu::stringView(info.device)),
-        .architecture = std::string(Convert::FromWgpu::stringView(info.architecture)),
-        .description = std::string(Convert::FromWgpu::stringView(info.description)),
-        .backend = std::string(Convert::FromWgpu::backend(info.backendType)),
-        .adapter = std::string(Convert::FromWgpu::adapter(info.adapterType)),
-        .webglRenderer = readWebglRenderer(),
-    };
-    wgpuAdapterInfoFreeMembers(info);
-    return result;
-}
 
 /** The WebGPU surface for a window or canvas; null if it can't be created. */
 WGPUSurface createSurface(WGPUInstance instance, const Type::Target::Any& target)
@@ -129,8 +62,8 @@ WGPUSurface createSurface(WGPUInstance instance, const Type::Target::Any& target
 } // namespace
 
 /**
- * Everything behind the public Engine: the WebGPU objects, where frames go,
- * and the passes. Frames go either to a surface (window or canvas) or, for
+ * Everything behind the public Engine: the Context, where frames go, and
+ * the passes. Frames go either to a surface (window or canvas) or, for
  * Type::Target::Offscreen, to a texture the engine owns; acquire() and
  * present() hide the difference.
  */
@@ -145,23 +78,10 @@ struct Engine::Impl
         Handle<WGPUTextureView> view;
     };
 
-    /** Carried through the adapter and device callbacks as userdata. */
-    struct Pending
-    {
-        std::unique_ptr<Impl> impl;
-        Callback onDone;
-    };
-
-    static void fail(std::unique_ptr<Pending> pending, std::string_view what, WGPUStringView message = {});
-    static void onAdapter(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message,
-                          void* userdata1, void*);
-    static void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message,
-                         void* userdata1, void*);
-
     ~Impl();
 
     /** Creates the surface for a window or canvas, or records an offscreen size. */
-    [[nodiscard]] std::expected<void, std::string> prepare(const Type::Target::Any& target);
+    [[nodiscard]] std::expected<void, std::string> prepare(WGPUInstance instance, const Type::Target::Any& target);
 
     /** Picks the format and makes the output ready, once the device exists. */
     [[nodiscard]] std::expected<void, std::string> finishOutput();
@@ -188,21 +108,14 @@ struct Engine::Impl
     // Declared first so it is destroyed last, after every tracked handle.
     Resource::Stats resources;
 
-    // Destroyed in reverse order.
-    Handle<WGPUInstance> instance;
+    // Destroyed in reverse order: the output, then the context it uses.
+    Context context;
     Handle<WGPUSurface> surface;  // set for a window or canvas
-    Handle<WGPUAdapter> adapter;
-    Handle<WGPUDevice> device;
-    Handle<WGPUQueue> queue;
     Handle<WGPUTexture> offscreen;  // set for an offscreen target
 
     WGPUTextureFormat format = WGPUTextureFormat_Undefined;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
-
-    /** Requested only when the adapter offers it, so GPU timing is optional. */
-    bool hasTimestampQuery = false;
-    Type::Info info;
 
     double nowMs = 0.0;  // the time frames show, for time-based effects
     bool dirty = true;
@@ -214,101 +127,43 @@ struct Engine::Impl
 
 void Engine::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone)
 {
-    auto pending = std::make_unique<Impl::Pending>(std::make_unique<Impl>(), std::move(onDone));
-    auto& impl = *pending->impl;
-
-    impl.instance = Handle(wgpuCreateInstance(nullptr));
-    if (!impl.instance) {
-        Impl::fail(std::move(pending), "Failed to create a WebGPU instance");
+    auto impl = std::make_unique<Impl>();
+    Handle instance(wgpuCreateInstance(nullptr));
+    if (!instance) {
+        onDone(std::unexpected("Failed to create a WebGPU instance"));
         return;
     }
-    if (auto prepared = impl.prepare(target); !prepared) {
-        Impl::fail(std::move(pending), prepared.error());
+    if (auto prepared = impl->prepare(instance.get(), target); !prepared) {
+        onDone(std::unexpected(std::move(prepared.error())));
         return;
     }
 
-    WGPURequestAdapterOptions options{};
-    options.powerPreference = Convert::ToWgpu::powerPreference(powerPreference);
-    options.compatibleSurface = impl.surface.get();  // null offscreen: any adapter
+    // Shared, because the callback must be copyable; freed even if it never runs.
+    struct Pending
+    {
+        std::unique_ptr<Impl> impl;
+        Callback onDone;
+    };
+    const WGPUSurface compatible = impl->surface.get();  // null offscreen: any adapter
+    auto pending = std::make_shared<Pending>(std::move(impl), std::move(onDone));
 
-    wgpuInstanceRequestAdapter(impl.instance.get(), &options, WGPURequestAdapterCallbackInfo {
-        .nextInChain = nullptr,
-        .mode = WGPUCallbackMode_AllowSpontaneous,
-        .callback = Impl::onAdapter,
-        .userdata1 = pending.release(),
-        .userdata2 = nullptr,
+    Context::create(std::move(instance), compatible, powerPreference, [pending](Context::Result context) {
+        auto impl = std::move(pending->impl);
+        auto onDone = std::move(pending->onDone);
+        if (!context) {
+            onDone(std::unexpected(std::move(context.error())));
+            return;
+        }
+        impl->context = std::move(*context);
+        if (auto finished = impl->finishOutput(); !finished) {
+            onDone(std::unexpected(std::move(finished.error())));
+            return;
+        }
+        onDone(std::unique_ptr<Engine>(new Engine(std::move(impl))));
     });
 }
 
-void Engine::Impl::fail(std::unique_ptr<Pending> pending, std::string_view what, WGPUStringView message)
-{
-    const auto detail = Convert::FromWgpu::stringView(message);
-    auto onDone = std::move(pending->onDone);
-    pending.reset();
-    onDone(std::unexpected(detail.empty() ? std::string(what) : std::format("{}: {}", what, detail)));
-}
-
-void Engine::Impl::onAdapter(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message,
-                             void* userdata1, void*)
-{
-    std::unique_ptr<Pending> pending(static_cast<Pending*>(userdata1));
-    if (status != WGPURequestAdapterStatus_Success) {
-        fail(std::move(pending), "No WebGPU adapter is available", message);
-        return;
-    }
-    pending->impl->adapter = Handle(adapter);
-
-    // Optional features are requested only when the adapter has them;
-    // requesting a missing one fails the whole device request.
-    std::vector<WGPUFeatureName> features;
-    if (wgpuAdapterHasFeature(adapter, WGPUFeatureName_TimestampQuery)) {
-        features.push_back(WGPUFeatureName_TimestampQuery);
-    }
-
-    WGPUDeviceDescriptor descriptor{};
-    descriptor.requiredFeatureCount = features.size();
-    descriptor.requiredFeatures = features.data();
-    descriptor.uncapturedErrorCallbackInfo.callback =
-        [](WGPUDevice const*, WGPUErrorType type, WGPUStringView message, void*, void*) {
-            Core::Log::error("WebGPU error ({}): {}", static_cast<int>(type), Convert::FromWgpu::stringView(message));
-        };
-
-    wgpuAdapterRequestDevice(adapter, &descriptor, WGPURequestDeviceCallbackInfo {
-        .nextInChain = nullptr,
-        .mode = WGPUCallbackMode_AllowSpontaneous,
-        .callback = onDevice,
-        .userdata1 = pending.release(),
-        .userdata2 = nullptr,
-    });
-}
-
-void Engine::Impl::onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message,
-                            void* userdata1, void*)
-{
-    std::unique_ptr<Pending> pending(static_cast<Pending*>(userdata1));
-    if (status != WGPURequestDeviceStatus_Success) {
-        fail(std::move(pending), "Failed to get a WebGPU device", message);
-        return;
-    }
-
-    auto& impl = *pending->impl;
-    impl.device = Handle(device);
-    impl.queue = Handle(wgpuDeviceGetQueue(device));
-    impl.hasTimestampQuery = wgpuDeviceHasFeature(device, WGPUFeatureName_TimestampQuery);
-    if (auto finished = impl.finishOutput(); !finished) {
-        fail(std::move(pending), finished.error());
-        return;
-    }
-    impl.info = readInfo(impl.adapter.get());
-    Core::Log::info("GPU timestamps: {}", impl.hasTimestampQuery ? "available" : "not available");
-
-    auto engine = std::unique_ptr<Engine>(new Engine(std::move(pending->impl)));
-    auto onDone = std::move(pending->onDone);
-    pending.reset();
-    onDone(std::move(engine));
-}
-
-std::expected<void, std::string> Engine::Impl::prepare(const Type::Target::Any& target)
+std::expected<void, std::string> Engine::Impl::prepare(WGPUInstance instance, const Type::Target::Any& target)
 {
 #ifndef __EMSCRIPTEN__
     if (const auto* size = std::get_if<Type::Target::Offscreen>(&target)) {
@@ -321,7 +176,7 @@ std::expected<void, std::string> Engine::Impl::prepare(const Type::Target::Any& 
     }
 #endif
     // Created before the adapter, so the adapter can be chosen to match it.
-    surface = Handle(createSurface(instance.get(), target));
+    surface = Handle(createSurface(instance, target));
     if (!surface) {
         return std::unexpected("Failed to create a WebGPU surface");
     }
@@ -339,7 +194,7 @@ std::expected<void, std::string> Engine::Impl::finishOutput()
 
     // An empty list means this adapter can't draw to the surface at all.
     WGPUSurfaceCapabilities capabilities{};
-    if (wgpuSurfaceGetCapabilities(surface.get(), adapter.get(), &capabilities) != WGPUStatus_Success
+    if (wgpuSurfaceGetCapabilities(surface.get(), context.adapter.get(), &capabilities) != WGPUStatus_Success
         || capabilities.formatCount == 0) {
         return std::unexpected("The WebGPU surface reports no supported formats");
     }
@@ -371,12 +226,12 @@ void Engine::Impl::configure()
         descriptor.mipLevelCount = 1;
         descriptor.sampleCount = 1;
         const std::uint64_t bytes = std::uint64_t{ width } * height * OffscreenBytesPerPixel;
-        offscreen = Handle<WGPUTexture>(wgpuDeviceCreateTexture(device.get(), &descriptor), resources, bytes);
+        offscreen = Handle<WGPUTexture>(wgpuDeviceCreateTexture(context.device.get(), &descriptor), resources, bytes);
         return;
     }
 
     WGPUSurfaceConfiguration configuration{};
-    configuration.device = device.get();
+    configuration.device = context.device.get();
     configuration.format = format;
     configuration.usage = WGPUTextureUsage_RenderAttachment;
     configuration.width = width;
@@ -458,14 +313,14 @@ void Engine::Impl::render()
     Handle<WGPUCommandEncoder> encoder;
     {
         const Core::Profile::Scope scope(next.cpuEncodeMs, next.timed);
-        encoder = Handle(wgpuDeviceCreateCommandEncoder(device.get(), nullptr));
+        encoder = Handle(wgpuDeviceCreateCommandEncoder(context.device.get(), nullptr));
         encodeClear(encoder.get(), image->view.get());
     }
     {
         const Core::Profile::Scope scope(next.cpuSubmitMs, next.timed);
         const Handle commands(wgpuCommandEncoderFinish(encoder.get(), nullptr));
         const WGPUCommandBuffer submitted = commands.get();
-        wgpuQueueSubmit(queue.get(), 1, &submitted);
+        wgpuQueueSubmit(context.queue.get(), 1, &submitted);
         present();
     }
 
@@ -505,7 +360,7 @@ Engine::~Engine() = default;
 
 const Gpu::Type::Info& Engine::info() const
 {
-    return mImpl->info;
+    return mImpl->context.info;
 }
 
 void Engine::resize(std::uint32_t width, std::uint32_t height)

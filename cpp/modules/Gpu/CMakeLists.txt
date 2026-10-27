@@ -9,6 +9,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(webgpu)
 
 add_library(Gpu STATIC
+    src/Context.cpp
     src/Market/Engine.cpp
 )
 viewer_setup_target(Gpu)
