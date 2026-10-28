@@ -34,7 +34,7 @@ public:
     void init(std::string selector, std::string powerPreference, val onDone)
     {
         std::weak_ptr<std::unique_ptr<Viewer::App>> slot = mApp;
-        Viewer::App::create(Gpu::Type::Target::Canvas{ std::move(selector) }, parsePowerPreference(powerPreference),
+        Viewer::App::create(Gpu::Type::Target::Canvas{ .selector = std::move(selector) }, parsePowerPreference(powerPreference),
             [slot, onDone](Viewer::App::Result result) {
                 auto app = slot.lock();
                 if (!app) {

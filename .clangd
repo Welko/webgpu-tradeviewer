@@ -1,0 +1,17 @@
+# clangd: indexing and linting (the checks are in .clang-tidy). Run it with
+# --query-driver for /usr/bin/c++ and em++ (see .vscode/settings.json), so it
+# uses the compilers' own standard library headers.
+
+# Everything native comes from the native build.
+CompileFlags:
+  CompilationDatabase: cpp/build/native
+  # Clang warns about things GCC doesn't; keep those as warnings here.
+  Remove: [-Werror]
+Diagnostics:
+  UnusedIncludes: Strict
+---
+# The web entry point is only built by Emscripten.
+If:
+  PathMatch: cpp/apps/Viewer/src/WebMain\.cpp
+CompileFlags:
+  CompilationDatabase: cpp/build/web

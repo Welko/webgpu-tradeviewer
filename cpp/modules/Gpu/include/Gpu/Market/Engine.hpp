@@ -22,18 +22,19 @@ namespace Gpu::Market {
 class Engine
 {
 public:
-    using Result = std::expected<std::unique_ptr<Engine>, std::string>;
-    using Callback = std::function<void(Result)>;
+    using CreatedResult = std::expected<std::unique_ptr<Engine>, std::string>;
+    using CreatedCallback = std::function<void(CreatedResult)>;
 
-    /** Tightly packed RGBA8 rows, top row first. */
     using Pixels = std::vector<std::uint8_t>;
     using PixelsCallback = std::function<void(std::expected<Pixels, std::string>)>;
 
+    using StatsCallback = std::function<void(const Gpu::Type::FrameStats&)>;
+
     /**
-     * Calls `onDone` exactly once: natively before returning, on the web
+     * Calls `onCreated` exactly once: natively before returning, on the web
      * later from the browser's event loop.
      */
-    static void create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone);
+    static void create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, CreatedCallback onCreated);
 
     ~Engine();
     Engine(const Engine&) = delete;
@@ -63,14 +64,20 @@ public:
     /** Turns frame timing on or off. Off by default. */
     void setProfiling(bool enabled);
 
-    /** Stats of the last drawn frame. */
-    [[nodiscard]] const Gpu::Type::FrameStats& stats() const;
+    /**
+     * Calls `onStats` once for each frame, in order, once its stats are
+     * complete; frames completed earlier are not reported. GPU times arrive
+     * a few frames late, so a timed
+     * frame is reported then; an untimed one right away from render(),
+     * unless earlier frames are still waiting. Mustn't call render().
+     */
+    void setStatsCallback(const StatsCallback& onStats);
 
 #ifndef __EMSCRIPTEN__
     /**
      * Delivers finished asynchronous WebGPU work, such as readPixels()
-     * results. The native app calls it regularly; the browser does this on
-     * its own.
+     * results and GPU times. The native app calls it regularly; the browser
+     * does this on its own.
      */
     void processEvents();
 

@@ -1,3 +1,15 @@
 {
-    "cmake.sourceDirectory": "/home/lucas/Things/2026/jumptrading/preptask1/cpp"
+    "cmake.sourceDirectory": "${workspaceFolder}/cpp",
+
+    // clangd does the indexing and linting (see .clangd and .clang-tidy);
+    // the Microsoft C++ extension stays for debugging only.
+    "C_Cpp.intelliSenseEngine": "disabled",
+    // emsdk's clangd: the project needs emsdk anyway.
+    "clangd.path": "${env:HOME}/emsdk/upstream/bin/clangd",
+    "clangd.arguments": [
+        "--background-index",
+        "--clang-tidy",
+        "--header-insertion=never",
+        "--query-driver=/usr/bin/c++,/usr/bin/g++,${env:HOME}/emsdk/upstream/emscripten/em++"
+    ]
 }

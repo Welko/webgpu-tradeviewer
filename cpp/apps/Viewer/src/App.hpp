@@ -46,8 +46,8 @@ public:
     /** Turns frame timing on or off. Off by default. */
     void setProfiling(bool enabled);
 
-    /** Stats of the last drawn frame. */
-    [[nodiscard]] const Gpu::Type::FrameStats& stats() const;
+    /** Calls `onStats` once per drawn frame, in order, once its GPU times are in. */
+    void setStatsCallback(Gpu::Market::Engine::StatsCallback onStats);
 
 #ifndef __EMSCRIPTEN__
     /** Delivers finished asynchronous GPU work. Call every loop iteration. */

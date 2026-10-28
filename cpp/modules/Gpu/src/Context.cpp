@@ -72,9 +72,15 @@ Type::Info readInfo(WGPUAdapter adapter)
     WGPUAdapterInfo info{};
     if (wgpuAdapterGetInfo(adapter, &info) != WGPUStatus_Success) {
         Core::Log::warn("Failed to get WebGPU adapter info");
-        Type::Info result;
-        result.webglRenderer = readWebglRenderer();
-        return result;
+        return Type::Info{
+            .vendor = {},
+            .device = {},
+            .architecture = {},
+            .description = {},
+            .backend = {},
+            .adapter = {},
+            .webglRenderer = readWebglRenderer(),
+        };
     }
 
     Type::Info result {
@@ -144,7 +150,7 @@ void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView 
     auto& context = pending->context;
     context.device = Handle(device);
     context.queue = Handle(wgpuDeviceGetQueue(device));
-    context.features.timestampQuery = wgpuDeviceHasFeature(device, WGPUFeatureName_TimestampQuery);
+    context.features = Context::Features{ .timestampQuery = wgpuDeviceHasFeature(device, WGPUFeatureName_TimestampQuery) != 0 };
     context.info = readInfo(context.adapter.get());
     Core::Log::info("GPU timestamps: {}", context.features.timestampQuery ? "available" : "not available");
 

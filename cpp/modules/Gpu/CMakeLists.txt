@@ -11,6 +11,7 @@ FetchContent_MakeAvailable(webgpu)
 add_library(Gpu STATIC
     src/Context.cpp
     src/Market/Engine.cpp
+    src/Profiler.cpp
     src/Readback.cpp
 )
 viewer_setup_target(Gpu)

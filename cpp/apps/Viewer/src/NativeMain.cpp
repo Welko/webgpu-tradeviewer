@@ -17,11 +17,11 @@ std::optional<Gpu::Type::Target::Any> surfaceTarget(GLFWwindow* window)
     switch (glfwGetPlatform()) {
 #ifdef GLFW_EXPOSE_NATIVE_WAYLAND
     case GLFW_PLATFORM_WAYLAND:
-        return Gpu::Type::Target::Wayland{ glfwGetWaylandDisplay(), glfwGetWaylandWindow(window) };
+        return Gpu::Type::Target::Wayland{ .display = glfwGetWaylandDisplay(), .surface = glfwGetWaylandWindow(window) };
 #endif
 #ifdef GLFW_EXPOSE_NATIVE_X11
     case GLFW_PLATFORM_X11:
-        return Gpu::Type::Target::Xlib{ glfwGetX11Display(), glfwGetX11Window(window) };
+        return Gpu::Type::Target::Xlib{ .display = glfwGetX11Display(), .window = glfwGetX11Window(window) };
 #endif
     default:
         return std::nullopt;
@@ -95,7 +95,9 @@ int main(int argc, char** argv)
 
     while (!glfwWindowShouldClose(window)) {
         // Sleep until the next event (input, resize, close) when there is
-        // nothing to draw; keep going while frames are needed.
+        // nothing to draw; keep going while frames are needed. GPU results
+        // that arrive meanwhile (e.g. the last frame's timings) wait for the
+        // next event; nothing shows them natively yet.
         if (!app->needsRender() && !repaint) {
             glfwWaitEvents();
         } else {

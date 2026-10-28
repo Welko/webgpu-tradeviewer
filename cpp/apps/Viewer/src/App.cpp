@@ -6,7 +6,7 @@ namespace Viewer {
 
 void App::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone)
 {
-    Gpu::Market::Engine::create(target, powerPreference, [onDone = std::move(onDone)](Gpu::Market::Engine::Result result) {
+    Gpu::Market::Engine::create(target, powerPreference, [onDone = std::move(onDone)](Gpu::Market::Engine::CreatedResult result) {
         if (!result) {
             onDone(std::unexpected(std::move(result.error())));
             return;
@@ -49,9 +49,9 @@ void App::setProfiling(bool enabled)
     mEngine->setProfiling(enabled);
 }
 
-const Gpu::Type::FrameStats& App::stats() const
+void App::setStatsCallback(Gpu::Market::Engine::StatsCallback onStats)
 {
-    return mEngine->stats();
+    mEngine->setStatsCallback(std::move(onStats));
 }
 
 #ifndef __EMSCRIPTEN__

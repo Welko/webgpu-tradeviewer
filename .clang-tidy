@@ -1,0 +1,64 @@
+# Lint checks, run by clangd in the editor. Noisy checks that fight the
+# project's style are turned off below, with the reason.
+Checks: >
+  -*,
+  bugprone-*,
+  clang-analyzer-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-invalid-enum-default-initialization,
+  -misc-include-cleaner,
+  -misc-misplaced-const,
+  -misc-non-private-member-variables-in-classes,
+  -misc-use-internal-linkage,
+  -modernize-use-nodiscard,
+  -modernize-use-trailing-return-type,
+  -performance-enum-size,
+  -readability-convert-member-functions-to-static,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -readability-math-missing-parentheses
+
+# Why each is off:
+# bugprone-invalid-enum-default-initialization: `WGPUSurfaceTexture texture{};` is the WebGPU idiom.
+# misc-include-cleaner: clangd's own unused-include check (see .clangd) does this.
+# misc-misplaced-const: `const WGPUBuffer buffer` (a const handle) is meant.
+# misc-non-private-member-variables-in-classes: plain data structs are public on purpose.
+# misc-use-internal-linkage, readability-convert-member-functions-to-static:
+#   false positives on functions declared in headers.
+# modernize-use-nodiscard: [[nodiscard]] is used where ignoring a result is a bug, not on every getter.
+# performance-enum-size: int-sized enums are fine here.
+# readability-magic-numbers, readability-math-missing-parentheses: colours,
+#   sizes and test values read better inline.
+
+CheckOptions:
+  # `if (pointer)` and `if (count)` are fine.
+  readability-implicit-bool-conversion.AllowPointerConditions: true
+  readability-implicit-bool-conversion.AllowIntegerConditions: true
+  # C callbacks must take `void* userdata`.
+  misc-const-correctness.AnalyzePointers: false
+  # doctest's CHECK macros inflate the score of every test.
+  readability-function-cognitive-complexity.IgnoreMacros: true
+
+  # The project's naming: PascalCase types and constants, camelCase
+  # functions and variables, private members prefixed with m.
+  readability-identifier-naming.NamespaceCase: CamelCase
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.EnumConstantCase: CamelCase
+  readability-identifier-naming.TypeAliasCase: CamelCase
+  readability-identifier-naming.TemplateParameterCase: CamelCase
+  readability-identifier-naming.FunctionCase: camelBack
+  readability-identifier-naming.MethodCase: camelBack
+  readability-identifier-naming.ParameterCase: camelBack
+  readability-identifier-naming.LocalVariableCase: camelBack
+  readability-identifier-naming.MemberCase: camelBack
+  readability-identifier-naming.PrivateMemberCase: CamelCase
+  readability-identifier-naming.PrivateMemberPrefix: m
+  readability-identifier-naming.ConstexprVariableCase: CamelCase
+  readability-identifier-naming.GlobalConstantCase: CamelCase
+  readability-identifier-naming.StaticConstantCase: CamelCase

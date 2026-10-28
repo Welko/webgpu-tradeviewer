@@ -23,11 +23,13 @@ struct Context
 
     /**
      * Optional device features. Each is requested only when the adapter
-     * offers it, so code must check before relying on one.
+     * offers it, so code must check before relying on one. No default
+     * values: built with a designated initializer, so a new feature can't
+     * be forgotten.
      */
     struct Features
     {
-        bool timestampQuery = false;  // GPU timing
+        bool timestampQuery;  // GPU timing
     };
 
     /**
@@ -46,7 +48,7 @@ struct Context
     Handle<WGPUDevice> device;
     Handle<WGPUQueue> queue;
 
-    Features features;
+    Features features{};
 
     Type::Info info;
 };
