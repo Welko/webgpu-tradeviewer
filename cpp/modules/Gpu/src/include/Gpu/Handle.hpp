@@ -2,24 +2,24 @@
 
 #include "Gpu/Resource.hpp"
 
+#include <webgpu/webgpu.h>
+
 #include <cstdint>
 #include <utility>
 
 namespace Gpu {
 
 /**
- * Owns one WebGPU object and releases it when destroyed (RAII).
- * Move-only: every object has exactly one owner.
- *
- * A tracked handle also reports its kind and size to a Resource::Stats until
- * it is released. That Resource::Stats must outlive the handle.
+ * Owns one WebGPU object and releases it when destroyed. Move-only. A
+ * tracked handle reports its kind and size to a Resource::Stats, which must
+ * outlive it.
  */
 template <typename T>
 class Handle
 {
 public:
     /**
-     * Specialized per WebGPU handle type (see Handles.hpp):
+     * Specialized per WebGPU handle type (see below):
      * - `static void release(T)` releases the object;
      * - `static constexpr Resource::Kind Kind`, only for types
      *   Resource::Stats tracks.
@@ -28,9 +28,8 @@ public:
 
 private:
     /**
-     * Whether handles of T can report to Resource::Stats. A function, so it
-     * is only evaluated once Traits is defined. Declared before the
-     * constructors: Clang needs it before the requires-clause that uses it.
+     * Whether T can be tracked. A function, so it's evaluated only once
+     * Traits is defined; declared before the requires-clause that uses it.
      */
     static constexpr bool trackable() { return requires { Traits::Kind; }; }
 
@@ -105,5 +104,39 @@ private:
     Resource::Stats* mStats = nullptr;
     std::uint64_t mBytes = 0;
 };
+
+// Objects that hold no significant GPU memory of their own: never tracked.
+#define GPU_HANDLE_TRAITS(Type, Release)                          \
+    template <>                                                   \
+    struct Handle<Type>::Traits                                   \
+    {                                                             \
+        static void release(Type raw) noexcept { Release(raw); }  \
+    };
+
+// Objects whose memory Resource::Stats can track, per handle.
+#define GPU_TRACKED_HANDLE_TRAITS(Type, Release, KindValue)       \
+    template <>                                                   \
+    struct Handle<Type>::Traits                                   \
+    {                                                             \
+        static constexpr Resource::Kind Kind = KindValue;         \
+        static void release(Type raw) noexcept { Release(raw); }  \
+    };
+
+GPU_HANDLE_TRAITS(WGPUInstance, wgpuInstanceRelease)
+GPU_HANDLE_TRAITS(WGPUSurface, wgpuSurfaceRelease)
+GPU_HANDLE_TRAITS(WGPUAdapter, wgpuAdapterRelease)
+GPU_HANDLE_TRAITS(WGPUDevice, wgpuDeviceRelease)
+GPU_HANDLE_TRAITS(WGPUQueue, wgpuQueueRelease)
+GPU_HANDLE_TRAITS(WGPUTextureView, wgpuTextureViewRelease)
+GPU_HANDLE_TRAITS(WGPUCommandEncoder, wgpuCommandEncoderRelease)
+GPU_HANDLE_TRAITS(WGPUCommandBuffer, wgpuCommandBufferRelease)
+GPU_HANDLE_TRAITS(WGPURenderPassEncoder, wgpuRenderPassEncoderRelease)
+
+GPU_TRACKED_HANDLE_TRAITS(WGPUBuffer, wgpuBufferRelease, Resource::Kind::Buffer)
+GPU_TRACKED_HANDLE_TRAITS(WGPUTexture, wgpuTextureRelease, Resource::Kind::Texture)
+GPU_TRACKED_HANDLE_TRAITS(WGPUQuerySet, wgpuQuerySetRelease, Resource::Kind::QuerySet)
+
+#undef GPU_HANDLE_TRAITS
+#undef GPU_TRACKED_HANDLE_TRAITS
 
 } // namespace Gpu

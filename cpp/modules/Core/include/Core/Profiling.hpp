@@ -2,26 +2,21 @@
 
 #include <chrono>
 
-// Set by CMake from the TRADEVIEWER_PROFILING option. Defaults to on when a
-// target is built without it.
+// Set by CMake from the TRADEVIEWER_PROFILING option; on without it.
 #ifndef TRADEVIEWER_PROFILING
 #define TRADEVIEWER_PROFILING 1
 #endif
 
-namespace Core::Profile {
+namespace Core::Profiling {
 
-/**
- * Whether timing is compiled in. When false, Scope is an empty stub and
- * call sites stay unchanged.
- */
+/** Whether timing is compiled in. When false, Scope is an empty stub. */
 inline constexpr bool Compiled = TRADEVIEWER_PROFILING != 0;
 
 #if TRADEVIEWER_PROFILING
 
 /**
- * Measures the CPU time from construction to destruction and writes it to
- * `targetMs`, in milliseconds. A disabled scope reads no clock and leaves
- * `targetMs` alone, so the runtime switch costs one branch.
+ * Writes the CPU time from construction to destruction to `targetMs`. A
+ * disabled scope reads no clock and leaves `targetMs` alone.
  */
 class Scope
 {
@@ -64,4 +59,4 @@ public:
 
 #endif
 
-} // namespace Core::Profile
+} // namespace Core::Profiling

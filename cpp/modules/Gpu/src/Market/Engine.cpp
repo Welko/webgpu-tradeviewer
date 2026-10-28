@@ -2,13 +2,13 @@
 
 #include "Gpu/Context.hpp"
 #include "Gpu/Convert.hpp"
-#include "Gpu/Handles.hpp"
+#include "Gpu/Handle.hpp"
 #include "Gpu/Profiler.hpp"
 #include "Gpu/Readback.hpp"
 #include "Gpu/Resource.hpp"
 
 #include "Core/Log.hpp"
-#include "Core/Profile.hpp"
+#include "Core/Profiling.hpp"
 
 #include <webgpu/webgpu.h>
 
@@ -27,6 +27,9 @@ constexpr WGPUColor ClearColor{ 0.07, 0.08, 0.10, 1.0 };
 // Readable back to the CPU without swizzling, for image tests.
 constexpr WGPUTextureFormat OffscreenFormat = WGPUTextureFormat_RGBA8Unorm;
 constexpr std::uint64_t OffscreenBytesPerPixel = 4;
+
+// Frames whose GPU times may be on their way at once.
+constexpr std::size_t MaxWaitingFrames = 16;
 
 /** The WebGPU surface for a window or canvas; null if it can't be created. */
 WGPUSurface createSurface(WGPUInstance instance, const Type::Target::Any& target)
@@ -64,18 +67,14 @@ WGPUSurface createSurface(WGPUInstance instance, const Type::Target::Any& target
 } // namespace
 
 /**
- * Everything behind the public Engine: the Context, where frames go, and
- * the passes. Frames go either to a surface (window or canvas) or, for
- * Type::Target::Offscreen, to a texture the engine owns; acquire() and
- * present() hide the difference.
+ * Everything behind Engine. Frames go to a surface (window or canvas) or an
+ * offscreen texture; acquire() and present() hide the difference.
  */
 struct Engine::Impl
 {
     /** The texture one frame draws into. */
     struct Image
     {
-        // The surface's current texture; empty when offscreen, since
-        // `offscreen` keeps that texture.
         Handle<WGPUTexture> texture;
         Handle<WGPUTextureView> view;
     };
@@ -93,10 +92,7 @@ struct Engine::Impl
 
     void resize(std::uint32_t newWidth, std::uint32_t newHeight);
 
-    /**
-     * The image to draw this frame into, or nothing if the frame should be
-     * skipped (zero size, or the surface had to be reconfigured).
-     */
+    /** This frame's image, or nothing to skip it (zero size, or the surface was reconfigured). */
     [[nodiscard]] std::optional<Image> acquire();
 
     /** Shows the frame. Only native windows need it. */
@@ -106,8 +102,7 @@ struct Engine::Impl
 
     struct Passes
     {
-        // Passes, in the order render() runs them. Each times itself with
-        // `profiler`.
+        // In the order render() runs them.
         static void encodeClear(WGPUCommandEncoder encoder, WGPUTextureView view, Profiler& profiler);
     };
 
@@ -116,8 +111,8 @@ struct Engine::Impl
 
     // Destroyed in reverse order: the output, then the context it uses.
     Context context;
+    Profiler::StatsQueue statsQueue{ MaxWaitingFrames };
     std::shared_ptr<Profiler> profiler;  // set once the device exists
-    StatsCallback onStats;
     Handle<WGPUSurface> surface;  // set for a window or canvas
     Handle<WGPUTexture> offscreen;  // set for an offscreen target
 
@@ -133,16 +128,16 @@ struct Engine::Impl
 
 // Creation
 
-void Engine::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, CreatedCallback onCreated)
+void Engine::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, CreatedCallback onDone)
 {
     auto impl = std::make_unique<Impl>();
     Handle instance(wgpuCreateInstance(nullptr));
     if (!instance) {
-        onCreated(std::unexpected("Failed to create a WebGPU instance"));
+        onDone(std::unexpected("Failed to create a WebGPU instance"));
         return;
     }
     if (auto prepared = impl->prepare(instance.get(), target); !prepared) {
-        onCreated(std::unexpected(std::move(prepared.error())));
+        onDone(std::unexpected(std::move(prepared.error())));
         return;
     }
 
@@ -150,25 +145,28 @@ void Engine::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPrefer
     struct Pending
     {
         std::unique_ptr<Impl> impl;
-        CreatedCallback onCreated;
+        CreatedCallback onDone;
     };
     const WGPUSurface compatible = impl->surface.get();  // null offscreen: any adapter
-    auto pending = std::make_shared<Pending>(std::move(impl), std::move(onCreated));
+    auto pending = std::make_shared<Pending>(std::move(impl), std::move(onDone));
 
     Context::create(std::move(instance), compatible, powerPreference, [pending](Context::Result context) {
         auto impl = std::move(pending->impl);
-        auto onCreated = std::move(pending->onCreated);
+        auto onDone = std::move(pending->onDone);
         if (!context) {
-            onCreated(std::unexpected(std::move(context.error())));
+            onDone(std::unexpected(std::move(context.error())));
             return;
         }
         impl->context = std::move(*context);
         if (auto finished = impl->finishOutput(); !finished) {
-            onCreated(std::unexpected(std::move(finished.error())));
+            onDone(std::unexpected(std::move(finished.error())));
             return;
         }
-        impl->profiler = Profiler::create(impl->context);
-        onCreated(std::unique_ptr<Engine>(new Engine(std::move(impl))));
+        impl->profiler = Profiler::create(impl->context,
+            [statsQueue = &impl->statsQueue](std::uint64_t frame, Profiler::Times times) {
+                statsQueue->setTimes(frame, std::move(times));
+            });
+        onDone(std::unique_ptr<Engine>(new Engine(std::move(impl))));
     });
 }
 
@@ -307,13 +305,13 @@ void Engine::Impl::present()
 
 void Engine::Impl::render()
 {
-    const bool timed = Core::Profile::Compiled && profiling;
+    const bool timed = Core::Profiling::Compiled && profiling;
     double acquireMs = 0.0;
     double encodeMs = 0.0;
     double submitMs = 0.0;
 
     auto image = [&] {
-        const Core::Profile::Scope scope(acquireMs, timed);
+        const Core::Profiling::Scope scope(acquireMs, timed);
         return acquire();
     }();
     if (!image) {
@@ -324,12 +322,12 @@ void Engine::Impl::render()
     profiler->beginFrame(timed);
     const Handle encoder(wgpuDeviceCreateCommandEncoder(context.device.get(), nullptr));
     {
-        const Core::Profile::Scope scope(encodeMs, timed);
+        const Core::Profiling::Scope scope(encodeMs, timed);
         Passes::encodeClear(encoder.get(), image->view.get(), *profiler);
         profiler->endPasses(encoder.get());
     }
     {
-        const Core::Profile::Scope scope(submitMs, timed);
+        const Core::Profiling::Scope scope(submitMs, timed);
         const Handle commands(wgpuCommandEncoderFinish(encoder.get(), nullptr));
         const WGPUCommandBuffer submitted = commands.get();
         wgpuQueueSubmit(context.queue.get(), 1, &submitted);
@@ -337,7 +335,7 @@ void Engine::Impl::render()
     }
     dirty = false;
 
-    auto stats = Type::FrameStats{
+    statsQueue.push({
         .frame = ++lastFrame,
         .cpu = timed ? std::optional(Type::FrameStats::Cpu{ .acquireMs = acquireMs, .encodeMs = encodeMs, .submitMs = submitMs })
                      : std::nullopt,
@@ -345,15 +343,8 @@ void Engine::Impl::render()
         .buffers = resources.count(Resource::Kind::Buffer),
         .textures = resources.count(Resource::Kind::Texture),
         .gpuBytes = resources.totalBytes(),
-    };
-
-    // The profiler is ours, so `this` outlives every call.
-    profiler->endFrame([this, stats = std::move(stats)](Profiler::Times times) mutable {
-        if (onStats) {
-            stats.gpu = std::move(times);
-            onStats(stats);
-        }
     });
+    profiler->endFrame(lastFrame);
 }
 
 void Engine::Impl::Passes::encodeClear(WGPUCommandEncoder encoder, WGPUTextureView view, Profiler& profiler)
@@ -415,7 +406,7 @@ void Engine::setProfiling(bool enabled)
 
 void Engine::setStatsCallback(const StatsCallback& onStats)
 {
-    mImpl->onStats = onStats;
+    mImpl->statsQueue.setCallback(onStats);
 }
 
 #ifndef __EMSCRIPTEN__

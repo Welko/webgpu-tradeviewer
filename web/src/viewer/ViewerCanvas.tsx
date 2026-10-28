@@ -14,12 +14,8 @@ interface ViewerCanvasProps {
 }
 
 /**
- * Hosts the C++ viewer. React owns the frame loop and the canvas size;
- * the viewer only reacts to resize/update/render calls.
- *
- * Frames are drawn on demand: an animation frame is requested only when
- * something changed (e.g. a resize) and keeps being requested while the
- * viewer still needs frames (e.g. during an animation). An idle page
+ * Hosts the C++ viewer. React owns the frame loop and the canvas size.
+ * Frames are requested only while the viewer needs them, so an idle page
  * schedules nothing.
  */
 export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {

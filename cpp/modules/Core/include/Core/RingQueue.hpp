@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cstddef>
 #include <optional>
 #include <utility>
@@ -35,27 +36,38 @@ public:
     /** Removes the oldest item and returns it. The queue mustn't be empty. */
     T popFront()
     {
+        assert(!empty());
         T item = std::move(mItems[mOldest]);
         mOldest = (mOldest + 1) % mItems.size();
         --mSize;
         return item;
     }
 
+    /** The item `index` places after the oldest. `index` must be less than size(). */
+    T& at(std::size_t index)
+    {
+        assert(index < size());
+        return mItems[(mOldest + index) % mItems.size()];
+    }
+    const T& at(std::size_t index) const
+    {
+        assert(index < size());
+        return mItems[(mOldest + index) % mItems.size()];
+    }
+
     /** The oldest item. The queue mustn't be empty. */
-    T& front() { return mItems[mOldest]; }
-    const T& front() const { return mItems[mOldest]; }
+    T& front() { return at(0); }
+    const T& front() const { return at(0); }
 
     /** The newest item. The queue mustn't be empty. */
-    T& back() { return mItems[newest()]; }
-    const T& back() const { return mItems[newest()]; }
+    T& back() { return at(size() - 1); }
+    const T& back() const { return at(size() - 1); }
 
     std::size_t size() const { return mSize; }
     std::size_t capacity() const { return mItems.size(); }
     bool empty() const { return mSize == 0; }
 
 private:
-    std::size_t newest() const { return (mOldest + mSize - 1) % mItems.size(); }
-
     std::vector<T> mItems;
     std::size_t mOldest = 0;  // where the oldest item is in mItems
     std::size_t mSize = 0;

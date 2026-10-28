@@ -1,4 +1,4 @@
-#include "Core/Profile.hpp"
+#include "Core/Profiling.hpp"
 
 #include <doctest/doctest.h>
 
@@ -20,10 +20,10 @@ TEST_CASE("An enabled scope writes the elapsed time when compiled in")
 {
     double elapsedMs = -1.0;
     {
-        const Core::Profile::Scope scope(elapsedMs, true);
+        const Core::Profiling::Scope scope(elapsedMs, true);
         spin(std::chrono::milliseconds(2));
     }
-    if constexpr (Core::Profile::Compiled) {
+    if constexpr (Core::Profiling::Compiled) {
         CHECK(elapsedMs >= 2.0);
     } else {
         CHECK(elapsedMs == -1.0);
@@ -34,7 +34,7 @@ TEST_CASE("A disabled scope leaves its target alone")
 {
     double elapsedMs = -1.0;
     {
-        const Core::Profile::Scope scope(elapsedMs, false);
+        const Core::Profiling::Scope scope(elapsedMs, false);
         spin(std::chrono::milliseconds(1));
     }
     CHECK(elapsedMs == -1.0);

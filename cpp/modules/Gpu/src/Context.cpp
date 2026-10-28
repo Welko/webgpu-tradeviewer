@@ -166,10 +166,8 @@ void Context::create(Handle<WGPUInstance> instance, WGPUSurface compatible, Type
                      Callback onDone)
 {
 #ifndef __EMSCRIPTEN__
-    // Natively, pump WebGPU events below until creation finishes, so onDone
-    // has run before create() returns, whether or not WebGPU calls back
-    // immediately. The flag also keeps onDone from running twice after a
-    // timeout.
+    // Natively, events are pumped below until creation finishes, so onDone
+    // runs before create() returns.
     constexpr auto Timeout = std::chrono::seconds(10);
     const auto finished = std::make_shared<bool>(false);
     onDone = [finished, onDone = std::move(onDone)](Result result) {

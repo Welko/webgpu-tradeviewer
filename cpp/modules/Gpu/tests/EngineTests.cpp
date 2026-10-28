@@ -1,6 +1,6 @@
 #include "Gpu/Market/Engine.hpp"
 
-#include "Core/Profile.hpp"
+#include "Core/Profiling.hpp"
 
 #include <doctest/doctest.h>
 
@@ -19,8 +19,7 @@ using Pixels = Engine::Pixels;
 using Gpu::Type::FrameStats;
 using UntimedReason = FrameStats::UntimedReason;
 
-// Tests are built without exceptions, so failures are reported with CHECK and
-// the test returns early, instead of REQUIRE (which throws).
+// Built without exceptions: CHECK and return early, instead of REQUIRE.
 
 /** Null, with a failed check, if no engine could be created. */
 std::unique_ptr<Engine> createOffscreen(std::uint32_t width, std::uint32_t height)
@@ -40,10 +39,7 @@ std::unique_ptr<Engine> createOffscreen(std::uint32_t width, std::uint32_t heigh
     return engine;
 }
 
-/**
- * Reads the offscreen pixels back, pumping events until they arrive or 5 s
- * pass. Nothing, with a failed check, if that fails.
- */
+/** The offscreen pixels, or nothing, with a failed check, if they don't arrive in 5 s. */
 std::optional<Pixels> readPixels(Engine& engine)
 {
     std::optional<Pixels> pixels;
@@ -168,7 +164,7 @@ TEST_CASE("Profiling reports CPU times and the GPU time of each pass")
     }
     const auto& stats = reported[0];
     CHECK(stats.frame == 1);
-    if constexpr (!Core::Profile::Compiled) {
+    if constexpr (!Core::Profiling::Compiled) {
         CHECK_FALSE(stats.cpu);
         CHECK(stats.gpu.error_or({}) == UntimedReason::ProfilingOff);
         return;
@@ -215,8 +211,8 @@ TEST_CASE("Each frame is reported once, in order, with times only if it was prof
     }
     CHECK_FALSE(reported[0].cpu);
     CHECK(reported[0].gpu.error_or({}) == UntimedReason::ProfilingOff);
-    CHECK(reported[1].cpu.has_value() == Core::Profile::Compiled);
-    CHECK(reported[1].gpu.has_value() == Core::Profile::Compiled);
+    CHECK(reported[1].cpu.has_value() == Core::Profiling::Compiled);
+    CHECK(reported[1].gpu.has_value() == Core::Profiling::Compiled);
     CHECK_FALSE(reported[2].cpu);
     CHECK(reported[2].gpu.error_or({}) == UntimedReason::ProfilingOff);
 }

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Gpu/Handles.hpp"
+#include "Gpu/Handle.hpp"
 #include "Gpu/Type.hpp"
 
 #include <webgpu/webgpu.h>
@@ -11,21 +11,15 @@
 
 namespace Gpu {
 
-/**
- * Internal to Gpu: the device-wide WebGPU objects and what we learned about
- * the GPU. Plain data with one creation function; it knows nothing about
- * where frames go.
- */
+/** The device-wide WebGPU objects, and what we learned about the GPU. */
 struct Context
 {
     using Result = std::expected<Context, std::string>;
     using Callback = std::function<void(Result)>;
 
     /**
-     * Optional device features. Each is requested only when the adapter
-     * offers it, so code must check before relying on one. No default
-     * values: built with a designated initializer, so a new feature can't
-     * be forgotten.
+     * Requested only when the adapter offers them, so check before relying
+     * on one. No defaults, so a new one can't be forgotten.
      */
     struct Features
     {
@@ -33,11 +27,9 @@ struct Context
     };
 
     /**
-     * Requests an adapter on `instance`, able to draw to `compatible` if it
-     * isn't null, then a device, and calls `onDone` exactly once: natively
-     * before this function returns (it pumps WebGPU events until done, or
-     * fails after a timeout), on the web later from the browser's event
-     * loop.
+     * Requests an adapter (able to draw to `compatible`, unless null) and a
+     * device, then calls `onDone` exactly once: natively before returning,
+     * on the web later.
      */
     static void create(Handle<WGPUInstance> instance, WGPUSurface compatible, Type::PowerPreference powerPreference,
                        Callback onDone);

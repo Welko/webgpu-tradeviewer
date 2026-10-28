@@ -94,10 +94,8 @@ int main(int argc, char** argv)
     });
 
     while (!glfwWindowShouldClose(window)) {
-        // Sleep until the next event (input, resize, close) when there is
-        // nothing to draw; keep going while frames are needed. GPU results
-        // that arrive meanwhile (e.g. the last frame's timings) wait for the
-        // next event; nothing shows them natively yet.
+        // Sleep until the next event when there's nothing to draw.
+        // GPU results that arrive meanwhile wait for that event.
         if (!app->needsRender() && !repaint) {
             glfwWaitEvents();
         } else {

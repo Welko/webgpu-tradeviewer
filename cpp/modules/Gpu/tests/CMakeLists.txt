@@ -3,14 +3,14 @@
 viewer_add_test(GpuTests
     HandleTests.cpp
     ResourceTests.cpp
+    StatsQueueTests.cpp
 )
 target_include_directories(GpuTests PRIVATE ../include ../src/include)
-target_link_libraries(GpuTests PRIVATE Core)
+target_link_libraries(GpuTests PRIVATE Gpu Core webgpu)
+target_copy_webgpu_binaries(GpuTests)
 
-# Tests that drive a real GPU, natively only (Node has no WebGPU): the
-# public API, and internals such as the profiler. In CI they run on Mesa's
-# software Vulkan driver (lavapipe); they fail rather than skip when no GPU
-# is available.
+# Tests that need a real GPU, natively only (Node has no WebGPU). CI runs
+# them on lavapipe; they fail rather than skip without a GPU.
 if(NOT EMSCRIPTEN)
     viewer_add_test(GpuDeviceTests
         EngineTests.cpp

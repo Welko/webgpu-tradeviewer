@@ -12,31 +12,25 @@ namespace Gpu::Convert {
 
 namespace FromWgpu {
 
-/**
- * Converts a WGPUStringView into a std::string_view safely, handling
- * null pointers, WGPU_STRLEN null-termination, and explicit lengths.
- */
+/** Handles null data, WGPU_STRLEN (null-terminated) and explicit lengths. */
 inline std::string_view stringView(WGPUStringView view) noexcept
 {
-    // Case 1: Handle explicit zero length or null data with zero length
     if (view.length == 0) {
         return std::string_view{};
     }
 
-    // Case 2: Handle WGPU_STRLEN (null-terminated string)
     if (view.length == WGPU_STRLEN) {
         if (view.data == nullptr) {
             return std::string_view{};
         }
-        return std::string_view(view.data);
+        return view.data;
     }
 
-    // Case 3: Handle null pointer with non-zero length (invalid per spec, fallback safely)
+    // Invalid per spec.
     if (view.data == nullptr) {
         return std::string_view{};
     }
 
-    // Case 4: Explicitly sized string view
     return std::string_view(view.data, view.length);
 }
 

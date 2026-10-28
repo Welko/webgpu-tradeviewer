@@ -16,10 +16,8 @@ enum class Kind : std::uint8_t
 };
 
 /**
- * Live GPU objects and their bytes, by kind. This is our own bookkeeping:
- * WebGPU has no way to query allocations. Tracked handles add themselves on
- * creation and remove themselves on destruction, so the numbers are always
- * current.
+ * Live GPU objects and their bytes, by kind: our own bookkeeping, since
+ * WebGPU can't be asked. Tracked handles add and remove themselves.
  */
 class Stats
 {

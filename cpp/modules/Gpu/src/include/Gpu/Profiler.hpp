@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Gpu/Context.hpp"
-#include "Gpu/Handles.hpp"
+#include "Gpu/Handle.hpp"
 #include "Gpu/Readback.hpp"
 #include "Gpu/Type.hpp"
 
@@ -21,6 +21,7 @@
 
 namespace Gpu {
 
+/** Times each frame's passes on the GPU with timestamp queries. */
 class Profiler : public std::enable_shared_from_this<Profiler>
 {
 public:
@@ -33,9 +34,13 @@ public:
 #endif
 
     using Times = std::expected<Type::FrameStats::Gpu, Type::FrameStats::UntimedReason>;
-    using StatsCallback = std::function<void(Times)>;
+    using TimesCallback = std::function<void(std::uint64_t frame, Times times)>;
 
-    static std::shared_ptr<Profiler> create(const Context& context);
+    /**
+     * Calls `onTimes` once for each ended frame: from endFrame() if it's
+     * untimed, otherwise once its timestamps are read back.
+     */
+    static std::shared_ptr<Profiler> create(const Context& context, TimesCallback onTimes);
 
     void beginFrame(bool timed);
 
@@ -43,10 +48,45 @@ public:
 
     void endPasses(WGPUCommandEncoder encoder);
 
-    void endFrame(StatsCallback onStats);
+    void endFrame(std::uint64_t frame);
+
+    /**
+     * Drawn frames' stats, waiting for their GPU times.
+     * Reports each frame once, in the order they were drawn.
+     */
+    class StatsQueue
+    {
+    public:
+        using Callback = std::function<void(const Type::FrameStats&)>;
+
+        explicit StatsQueue(std::size_t capacity);
+
+        void setCallback(Callback onStats);
+
+        /**
+         * Adds a drawn frame; frame numbers must go up by one. When full, the
+         * oldest frame is reported first, without GPU times (Overflow).
+         */
+        void push(Type::FrameStats stats);
+
+        /** Sets frame `frame`'s GPU times. Ignored if it was already reported. */
+        void setTimes(std::uint64_t frame, Times times);
+
+    private:
+        struct Frame
+        {
+            Type::FrameStats stats;
+            bool ready = false;  // once its GPU times are in
+        };
+
+        void reportReady();
+
+        Core::RingQueue<Frame> mFrames;
+        Callback mOnStats;
+    };
 
 private:
-    static constexpr std::size_t NumSlots = 3; /// how many frames can be timed at once
+    static constexpr std::size_t NumSlots = 3;  // frames timed at once
 
     /** Where one timed frame's timestamps are read back to the CPU. */
     struct Slot
@@ -69,30 +109,16 @@ private:
         TimestampWrites timestampWrites;
     };
 
-    struct QueuedFrame
-    {
-        bool ready;
-        Times times;
-        StatsCallback onStats;
-    };
-
     std::expected<Timestamps, Type::FrameStats::UntimedReason> mTimestamps;
     std::expected<CurrentFrame, Type::FrameStats::UntimedReason> mCurrentFrame;
-    // REVIEW: one heap allocation per frame, so the queue is no longer "allocated once". A
-    //   frame's push count, kept by the profiler, finds it by position instead
-    //   (index - (pushed - size())), and tells an evicted frame apart the same way.
-    Core::RingQueue<std::shared_ptr<QueuedFrame>> mReadQueue;
+    TimesCallback mOnTimes;
 
     struct Dropped
     {
-        size_t framesCount{0}; // TODO: Report this
-        std::vector<std::string> passes{};
+        std::vector<std::string> passes{};  // TODO: Report this
     } mDropped;
-        
-    explicit Profiler(const Context& context);
 
-    void processQueue();
-    std::weak_ptr<QueuedFrame> queueTimes(QueuedFrame frame);
+    Profiler(const Context& context, TimesCallback onTimes);
 };
 
 } // namespace Gpu

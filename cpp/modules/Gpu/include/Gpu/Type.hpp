@@ -19,22 +19,13 @@ struct Info
     std::string adapter;
 
     /**
-     * Web only: the renderer string WebGL reports, which browsers often
-     * reveal when they hide the fields above. On multi-GPU machines it may
-     * name a different GPU than the WebGPU adapter. Empty natively.
+     * Web only: WebGL's renderer string, which often names the GPU when the
+     * fields above are hidden. May name another GPU on multi-GPU machines.
      */
     std::string webglRenderer;
 };
 
-// The stats structs below have no default values on purpose: build them
-// with a designated initializer, and the compiler rejects any member left
-// out (-Wmissing-field-initializers, an error in our builds). Use `{}` for
-// an all-zero value.
-
-/**
- * What one drawn frame cost, and what the GPU held. Plain data, so each
- * platform's UI can show it however it likes.
- */
+/** What one drawn frame cost, and what the GPU held. */
 struct FrameStats
 {
     /** Where a frame's CPU time went. */
@@ -48,10 +39,9 @@ struct FrameStats
         double submitMs;
     };
 
-    /** How long a frame took on the GPU, measured with timestamp queries. */
+    /** How long a frame took on the GPU, from timestamp queries. */
     struct Gpu
     {
-        /** How long one pass took on the GPU. */
         struct PassTiming
         {
             std::string name;
@@ -65,13 +55,13 @@ struct FrameStats
     /** Why a frame has no GPU times. */
     enum class UntimedReason : std::uint8_t
     {
-        Undefined,      /// Uninitialized state - indicates an error.
-        ProfilingOff,   /// Profiling switched off at runtime or not compiled in.
-        Unsupported,    /// timestamp-query not supported on this device.
-        NoFreeSlot,     /// All slots are busy.
-        NotStarted,     /// beginFrame() was never called.
-        ReadbackFailed, /// The GPU readback failed.
-        Overflow,       /// The frame was dropped due to overflow.
+        Undefined,      ///< Not set yet.
+        ProfilingOff,   ///< Switched off at runtime, or not compiled in.
+        Unsupported,    ///< The device has no timestamp-query.
+        NoFreeSlot,     ///< Every readback slot was busy.
+        NotStarted,     ///< The profiler's beginFrame() wasn't called.
+        ReadbackFailed, ///< The timestamps couldn't be read back.
+        Overflow,       ///< Too many frames were waiting for their times.
     };
 
     /** Which frame this is, counting from 1. */
@@ -109,7 +99,7 @@ struct Canvas
     std::string selector;
 };
 
-/** Where the Engine draws. Add alternatives here for new platforms. */
+/** Where the Engine draws. */
 using Any = std::variant<Canvas>;
 
 #else
@@ -128,17 +118,14 @@ struct Xlib
     std::uint64_t window;
 };
 
-/**
- * A texture of this size instead of a window, so nothing is presented. For
- * headless tests: needs no display.
- */
+/** A texture instead of a window, for headless tests. */
 struct Offscreen
 {
     std::uint32_t width;
     std::uint32_t height;
 };
 
-/** Where the Engine draws. Add alternatives here for new platforms. */
+/** Where the Engine draws. */
 using Any = std::variant<Wayland, Xlib, Offscreen>;
 
 #endif

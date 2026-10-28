@@ -20,11 +20,9 @@ async function waitUntilReady(page: Page) {
 }
 
 /**
- * Instruments the page before it loads: counts requestAnimationFrame calls,
- * and right after each frame callback copies the canvas's centre pixel.
- * Reading in the same task as the drawing matters: once the frame has been
- * presented, reading a WebGPU canvas returns nothing. (Screenshots do still
- * show it.)
+ * Before the page loads: counts requestAnimationFrame calls, and copies the
+ * canvas's centre pixel right after each frame callback. Later, a presented
+ * WebGPU canvas reads back empty.
  */
 async function instrument(page: Page) {
   await page.addInitScript(() => {

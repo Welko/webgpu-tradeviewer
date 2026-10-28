@@ -12,12 +12,7 @@
 namespace Gpu::Market {
 
 /**
- * The public face of the Gpu module for market data: owns the WebGPU device,
- * where frames go, and the passes that draw them. No WebGPU types appear
- * here.
- *
- * For now it only clears the surface. Trade and order-book passes will live
- * behind it.
+ * Draws market data with WebGPU.
  */
 class Engine
 {
@@ -34,7 +29,7 @@ public:
      * Calls `onCreated` exactly once: natively before returning, on the web
      * later from the browser's event loop.
      */
-    static void create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, CreatedCallback onCreated);
+    static void create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, CreatedCallback onDone);
 
     ~Engine();
     Engine(const Engine&) = delete;
@@ -45,16 +40,12 @@ public:
     /** Surface size in physical pixels. Zero sizes are ignored. */
     void resize(std::uint32_t width, std::uint32_t height);
 
-    /**
-     * Advances time-based state (animations, later the replay clock) to
-     * `nowMs`. Call before deciding whether to render.
-     */
+    /** Advances the engine's state to `nowMs`. */
     void update(double nowMs);
 
     /**
-     * Whether a frame should be drawn: something changed since the last one,
-     * or an animation is running. When false, the app can sleep until the
-     * next input or resize.
+     * Whether something changed since the last frame, or an animation is
+     * running. When false, the app can sleep until the next input.
      */
     [[nodiscard]] bool needsRender() const;
 
@@ -65,26 +56,18 @@ public:
     void setProfiling(bool enabled);
 
     /**
-     * Calls `onStats` once for each frame, in order, once its stats are
-     * complete; frames completed earlier are not reported. GPU times arrive
-     * a few frames late, so a timed
-     * frame is reported then; an untimed one right away from render(),
-     * unless earlier frames are still waiting. Mustn't call render().
+     * Calls `onStats` once for each frame, in order, once its GPU times are
+     * in (usually a few frames later). Mustn't call render().
      */
     void setStatsCallback(const StatsCallback& onStats);
 
 #ifndef __EMSCRIPTEN__
-    /**
-     * Delivers finished asynchronous WebGPU work, such as readPixels()
-     * results and GPU times. The native app calls it regularly; the browser
-     * does this on its own.
-     */
+    /** Delivers finished asynchronous work, such as readPixels() results and GPU times. */
     void processEvents();
 
     /**
-     * Copies the last drawn frame of an offscreen target back to the CPU,
-     * e.g. for tests. Calls `onDone` exactly once, later, usually from
-     * processEvents(). Fails for windows.
+     * Copies the last frame of an offscreen target back to the CPU. Calls
+     * `onDone` exactly once, usually from processEvents().
      */
     void readPixels(PixelsCallback onDone);
 #endif

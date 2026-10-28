@@ -7,11 +7,11 @@
 namespace {
 
 /** The queue's items, oldest first. */
-std::vector<int> items(Core::RingQueue<int> ring)
+std::vector<int> items(const Core::RingQueue<int>& ring)
 {
     std::vector<int> all;
-    while (!ring.empty()) {
-        all.push_back(ring.popFront());
+    for (std::size_t index = 0; index < ring.size(); ++index) {
+        all.push_back(ring.at(index));
     }
     return all;
 }
