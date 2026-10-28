@@ -1,8 +1,24 @@
 #include "App.hpp"
 
+#include "Core/Data/Synthetic.hpp"
+
+#include <cstdint>
 #include <utility>
 
 namespace Viewer {
+
+namespace {
+
+constexpr std::int64_t DayStartUs = 1'575'158'400'000'000;
+constexpr std::int64_t DayUs = 86'400'000'000;
+constexpr std::uint64_t SyntheticSeed = 1;
+
+} // namespace
+
+Core::Data::Trades syntheticDay()
+{
+    return Core::Data::syntheticTrades(DayStartUs, DayStartUs + DayUs, SyntheticSeed);
+}
 
 void App::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone)
 {
@@ -18,6 +34,16 @@ void App::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreferenc
 App::App(std::unique_ptr<Gpu::Market::Engine> engine) noexcept
     : mEngine(std::move(engine))
 {}
+
+const Core::Data::Trades& App::trades() const
+{
+    return mTrades;
+}
+
+void App::setTrades(Core::Data::Trades trades)
+{
+    mTrades = std::move(trades);
+}
 
 const Gpu::Type::Info& App::info() const
 {

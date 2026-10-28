@@ -4,7 +4,7 @@ import { createViewer, type PowerPreference, type Viewer } from './viewerModule'
 
 export type ViewerStatus =
   | { kind: 'loading' }
-  | { kind: 'ready'; gpu: GpuInfo }
+  | { kind: 'ready'; gpu: GpuInfo; viewer: Viewer }
   | { kind: 'error'; message: string };
 
 interface ViewerCanvasProps {
@@ -76,7 +76,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
         observer.observe(canvas);
         requestFrame();
 
-        onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo });
+        onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created });
       })
       .catch((error: unknown) => {
         if (!disposed) {

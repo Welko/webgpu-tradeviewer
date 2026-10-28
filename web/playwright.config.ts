@@ -24,7 +24,9 @@ export default defineConfig({
       args: [
         '--enable-unsafe-webgpu',
         '--enable-features=Vulkan',
-        '--use-angle=vulkan',
+        // SwiftShader for ANGLE too, not the machine's Vulkan driver: CI has
+        // none, and without one the canvas reads back blank.
+        '--use-angle=swiftshader',
         '--use-vulkan=swiftshader',
         '--use-webgpu-adapter=swiftshader',
         // Not --disable-vulkan-surface, which some guides add: with it,

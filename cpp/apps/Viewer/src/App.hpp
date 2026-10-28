@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Data/Trades.hpp"
 #include "Gpu/Market/Engine.hpp"
 #include "Gpu/Type.hpp"
 
@@ -10,6 +11,9 @@
 #include <string>
 
 namespace Viewer {
+
+/** Synthetic trades for 2019-12-01 UTC, the brief's day, to show until real ones are loaded. */
+[[nodiscard]] Core::Data::Trades syntheticDay();
 
 /**
  * The platform-independent app. Each platform's main owns the loop: update(),
@@ -25,6 +29,11 @@ public:
     static void create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone);
 
     explicit App(std::unique_ptr<Gpu::Market::Engine> engine) noexcept;
+
+    /** The trades on show: none until setTrades(). */
+    [[nodiscard]] const Core::Data::Trades& trades() const;
+
+    void setTrades(Core::Data::Trades trades);
 
     /** The GPU in use. */
     [[nodiscard]] const Gpu::Type::Info& info() const;
@@ -54,6 +63,7 @@ public:
 
 private:
     std::unique_ptr<Gpu::Market::Engine> mEngine;
+    Core::Data::Trades mTrades;
 };
 
 } // namespace Viewer

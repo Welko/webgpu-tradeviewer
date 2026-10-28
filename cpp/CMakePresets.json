@@ -11,6 +11,15 @@
             }
         },
         {
+            "name": "native-release",
+            "displayName": "Native release: one self-contained binary",
+            "binaryDir": "${sourceDir}/build/native-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "WEBGPU_LINK_TYPE": "STATIC"
+            }
+        },
+        {
             "name": "web",
             "displayName": "Web (Emscripten + emdawnwebgpu)",
             "binaryDir": "${sourceDir}/build/web",
@@ -23,6 +32,7 @@
     ],
     "buildPresets": [
         { "name": "native", "configurePreset": "native" },
+        { "name": "native-release", "configurePreset": "native-release" },
         { "name": "web", "configurePreset": "web" }
     ]
 }

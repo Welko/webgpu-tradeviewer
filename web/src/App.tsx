@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { DataPanel } from './data/DataPanel';
 import { describeGpu } from './viewer/gpuInfo';
 import { ViewerCanvas, type ViewerStatus } from './viewer/ViewerCanvas';
 import type { PowerPreference } from './viewer/viewerModule';
@@ -35,7 +36,10 @@ export function App() {
           </select>
         </label>
       </header>
-      <ViewerCanvas powerPreference={powerPreference} onStatus={setStatus} />
+      <main className="app-main">
+        <ViewerCanvas powerPreference={powerPreference} onStatus={setStatus} />
+        {status.kind === 'ready' && <DataPanel viewer={status.viewer} />}
+      </main>
     </div>
   );
 }

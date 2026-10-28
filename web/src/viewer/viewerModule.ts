@@ -1,6 +1,6 @@
-import createViewerModule, { type MainModule, type Viewer } from '../wasm/Viewer.js';
+import createViewerModule, { type MainModule, type TradeSummary, type Viewer } from '../wasm/Viewer.js';
 
-export type { Viewer };
+export type { TradeSummary, Viewer };
 
 /** Same values as WebGPU's GPUPowerPreference, plus 'default' for no hint. */
 export type PowerPreference = 'default' | 'low-power' | 'high-performance';

@@ -1,18 +1,20 @@
 name: CI
 
-# On every push to main: build and test natively, build the web app, then
-# publish the web build (docs/) to GitHub Pages if everything passed.
+# On every push to dev or main: build and test natively and for the web.
+# On main, if everything passed, also publish the site (docs/) to GitHub
+# Pages and the native binary to the "latest" release.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Never run two Pages deployments at once, but let a running one finish.
+# One run per branch at a time, so main never publishes twice at once; a
+# running one finishes.
 concurrency:
-  group: pages
+  group: ci-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -28,16 +30,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # GLFW's build dependencies, plus the Vulkan loader and Mesa's software
-      # Vulkan driver (lavapipe): the runner has no GPU, and the GPU tests
-      # need one.
+      # GLFW's build dependencies, zlib, and the Vulkan loader with Mesa's
+      # software Vulkan driver (lavapipe): the runner has no GPU, and the GPU
+      # tests need one.
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libwayland-dev libxkbcommon-dev \
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
-            libvulkan1 mesa-vulkan-drivers
+            zlib1g-dev libvulkan1 mesa-vulkan-drivers
 
       - name: Configure
         working-directory: cpp
@@ -58,6 +60,33 @@ jobs:
           cmake --preset native -B build/native-noprofiling -DTRADEVIEWER_PROFILING=OFF
           cmake --build build/native-noprofiling -j "$(nproc)"
           ctest --test-dir build/native-noprofiling --output-on-failure --no-tests=error
+
+      # One self-contained binary, with wgpu-native linked in statically.
+      - name: Build and test the release binary
+        working-directory: cpp
+        run: |
+          cmake --preset native-release
+          cmake --build --preset native-release -j "$(nproc)"
+          ctest --test-dir build/native-release --output-on-failure --no-tests=error
+
+      # The stripped binary, with the licenses of what's linked into it.
+      - name: Package the release binary
+        run: |
+          build=cpp/build/native-release
+          package=dist/trade-viewer
+          mkdir -p "$package"
+          cp "$build/apps/Viewer/Viewer" "$package/"
+          strip "$package/Viewer"
+          cp "$build/_deps/glfw-src/LICENSE.md" "$package/LICENSE-glfw.md"
+          wgpu_tag=$(cat "$build/_deps/wgpu-linux-x86_64-release-src/wgpu-native-meta/wgpu-native-git-tag")
+          curl -fsSL "https://raw.githubusercontent.com/gfx-rs/wgpu-native/$wgpu_tag/LICENSE.MIT" -o "$package/LICENSE-wgpu-native.txt"
+          tar -czf dist/trade-viewer-linux-x86_64.tar.gz -C dist trade-viewer
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native-release
+          path: dist/trade-viewer-linux-x86_64.tar.gz
+          if-no-files-found: error
 
       - name: Upload test results
         if: always()
@@ -131,6 +160,7 @@ jobs:
           if-no-files-found: ignore
 
       - uses: actions/upload-pages-artifact@v5
+        if: github.ref == 'refs/heads/main'
         with:
           path: docs
 
@@ -156,6 +186,7 @@ jobs:
   deploy:
     name: Publish to GitHub Pages
     needs: [native, web]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       pages: write
@@ -168,3 +199,29 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  release:
+    name: Publish the native binary
+    needs: [native, web]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: native-release
+
+      # One rolling release, replaced on every push to main, so the download
+      # link stays the same.
+      - name: Replace the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view latest > /dev/null 2>&1; then
+            gh release delete latest --yes --cleanup-tag
+          fi
+          gh release create latest trade-viewer-linux-x86_64.tar.gz \
+            --target "$GITHUB_SHA" --latest --title "Latest build" \
+            --notes "Built from $GITHUB_SHA on Ubuntu 24.04, for Linux x86_64 with Wayland or X11 and a Vulkan driver. Run \`./Viewer\` for synthetic data, or \`./Viewer BTCUSDT.csv.gz\` for a trades file."

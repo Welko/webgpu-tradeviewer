@@ -40,8 +40,11 @@ else()
     )
     FetchContent_MakeAvailable(glfw)
 
+    # Reads .csv.gz trade files natively; the browser has DecompressionStream.
+    find_package(ZLIB REQUIRED)
+
     target_sources(Viewer PRIVATE src/NativeMain.cpp)
-    target_link_libraries(Viewer PRIVATE glfw)
+    target_link_libraries(Viewer PRIVATE glfw ZLIB::ZLIB)
 
     # Expose the native handles of the platforms GLFW was built with.
     if (GLFW_BUILD_WAYLAND)

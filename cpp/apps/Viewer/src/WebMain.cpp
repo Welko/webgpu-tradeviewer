@@ -1,11 +1,16 @@
 #include "App.hpp"
 
+#include "Core/Data/TradeParser.hpp"
+
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -22,6 +27,15 @@ Gpu::Type::PowerPreference parsePowerPreference(const std::string& value)
     }
     return Gpu::Type::PowerPreference::Default;
 }
+
+/** Core::Data::TradeSummary in numbers JavaScript reads exactly, with times in milliseconds for Date. */
+struct WebTradeSummary
+{
+    double count;
+    double firstMs;
+    double lastMs;
+    double totalAmount;
+};
 
 /**
  * The object JavaScript holds. JavaScript owns the frame loop and must
@@ -46,6 +60,7 @@ public:
                     return;
                 }
                 *app = std::move(*result);
+                (*app)->setTrades(Viewer::syntheticDay());
                 onDone(val::null());
             });
     }
@@ -82,8 +97,62 @@ public:
         }
     }
 
+    /** The trades on show. Empty until init() succeeds. */
+    WebTradeSummary tradeSummary() const
+    {
+        if (!*mApp) {
+            return {};
+        }
+        const auto summary = Core::Data::summarize((*mApp)->trades());
+        return {
+            .count = static_cast<double>(summary.count),
+            .firstMs = static_cast<double>(summary.firstUs) / 1000.0,
+            .lastMs = static_cast<double>(summary.lastUs) / 1000.0,
+            .totalAmount = summary.totalAmount,
+        };
+    }
+
+    /** Starts reading a trades file, which appendChunk() then receives piece by piece. */
+    void beginLoad()
+    {
+        mParser.emplace();
+    }
+
+    /** Parses a Uint8Array of the file. An error message, or "" if all is well. */
+    std::string appendChunk(const val& bytes)
+    {
+        if (!mParser) {
+            return "beginLoad() wasn't called";
+        }
+        mChunk.resize(bytes["length"].as<std::size_t>());
+        val(emscripten::typed_memory_view(mChunk.size(), mChunk.data())).call<void>("set", bytes);
+        auto appended = mParser->append(std::string_view(mChunk.data(), mChunk.size()));
+        if (!appended) {
+            mParser.reset();
+            return appended.error();
+        }
+        return {};
+    }
+
+    /** Shows the file's trades in place of the current ones. An error message, or "" if all is well. */
+    std::string finishLoad()
+    {
+        if (!mParser || !*mApp) {
+            return "beginLoad() wasn't called";
+        }
+        auto trades = mParser->finish();
+        mParser.reset();
+        if (!trades) {
+            return trades.error();
+        }
+        (*mApp)->setTrades(std::move(*trades));
+        return {};
+    }
+
 private:
     std::shared_ptr<std::unique_ptr<Viewer::App>> mApp = std::make_shared<std::unique_ptr<Viewer::App>>();
+    std::optional<Core::Data::TradeParser> mParser;  // while a file loads
+    std::vector<char> mChunk;  // the last chunk, copied out of JavaScript
 };
 
 } // namespace
@@ -99,6 +168,12 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .field("adapter", &Gpu::Type::Info::adapter)
         .field("webglRenderer", &Gpu::Type::Info::webglRenderer);
 
+    emscripten::value_object<WebTradeSummary>("TradeSummary")
+        .field("count", &WebTradeSummary::count)
+        .field("firstMs", &WebTradeSummary::firstMs)
+        .field("lastMs", &WebTradeSummary::lastMs)
+        .field("totalAmount", &WebTradeSummary::totalAmount);
+
     emscripten::class_<WebViewer>("Viewer")
         .constructor<>()
         .function("init", &WebViewer::init)
@@ -106,5 +181,9 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("resize", &WebViewer::resize)
         .function("update", &WebViewer::update)
         .function("needsRender", &WebViewer::needsRender)
-        .function("render", &WebViewer::render);
+        .function("render", &WebViewer::render)
+        .function("tradeSummary", &WebViewer::tradeSummary)
+        .function("beginLoad", &WebViewer::beginLoad)
+        .function("appendChunk", &WebViewer::appendChunk)
+        .function("finishLoad", &WebViewer::finishLoad);
 }

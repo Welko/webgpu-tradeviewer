@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { gzipSync } from 'node:zlib';
 
 /** Collects console errors and uncaught exceptions from the page. */
 function collectErrors(page: Page): string[] {
@@ -94,4 +95,29 @@ test('an idle page requests no frames, and a resize draws again', async ({ page 
 
   await page.setViewportSize({ width: 900, height: 600 });
   await expect.poll(() => frameRequests(page)).toBeGreaterThan(settled);
+});
+
+test('shows synthetic trades until a file is opened', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/');
+  await waitUntilReady(page);
+  await expect(page.getByTestId('source')).toContainText('Synthetic');
+  await expect(page.getByTestId('trade-count')).not.toHaveText('0');
+
+  // Hand-written, in Tardis's format and gzipped as Tardis serves it.
+  const csv =
+    'exchange,symbol,timestamp,local_timestamp,id,side,price,amount\n' +
+    'binance,BTCUSDT,1575158403572000,1575158403820370,1,sell,7540.78,0.039741\n' +
+    'binance,BTCUSDT,1575158403579000,1575158403820405,2,buy,7540.79,1.5\n';
+  const fileInput = page.locator('input[type=file]');
+  await fileInput.setInputFiles({ name: 'trades.csv.gz', mimeType: 'application/gzip', buffer: gzipSync(csv) });
+  await expect(page.getByTestId('source')).toHaveText('trades.csv.gz');
+  await expect(page.getByTestId('trade-count')).toHaveText('2');
+
+  // A file that isn't trades leaves them as they were.
+  await fileInput.setInputFiles({ name: 'page.csv', mimeType: 'text/csv', buffer: Buffer.from('<html>\n') });
+  await expect(page.getByRole('alert')).toHaveText('page.csv: Line 1: no "timestamp" column');
+  await expect(page.getByTestId('trade-count')).toHaveText('2');
+
+  expect(errors).toEqual([]);
 });
