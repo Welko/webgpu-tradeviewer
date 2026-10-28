@@ -1,4 +1,8 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, type ReporterDescription } from '@playwright/test';
+
+// Set in CI, as for the C++ tests (see cpp/cmake/testing.cmake).
+const junitDir = process.env.TRADEVIEWER_JUNIT_DIR;
+const junit: ReporterDescription[] = junitDir ? [['junit', { outputFile: `${junitDir}/e2e/Playwright.xml` }]] : [];
 
 /**
  * Smoke tests of the built site (docs/, from `npm run build`) in Chromium.
@@ -11,7 +15,7 @@ export default defineConfig({
   // One browser for all tests, warmed up once (see tests/smoke.spec.ts).
   workers: 1,
   forbidOnly: !!process.env.CI,
-  reporter: process.env.CI ? 'github' : 'list',
+  reporter: [[process.env.CI ? 'github' : 'list'], ...junit],
   use: {
     baseURL: 'http://localhost:4173',
     // Full Chromium in its new headless mode; the default headless shell has no WebGPU.

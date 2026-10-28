@@ -17,6 +17,9 @@ concurrency:
 
 env:
   EMSDK_VERSION: 6.0.13
+  # Every test run writes JUnit XML here (see cpp/cmake/testing.cmake); the
+  # summary job turns it into one table on the run's page.
+  TRADEVIEWER_JUNIT_DIR: ${{ github.workspace }}/test-results
 
 jobs:
   native:
@@ -55,6 +58,14 @@ jobs:
           cmake --preset native -B build/native-noprofiling -DTRADEVIEWER_PROFILING=OFF
           cmake --build build/native-noprofiling -j "$(nproc)"
           ctest --test-dir build/native-noprofiling --output-on-failure --no-tests=error
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-native
+          path: test-results
+          if-no-files-found: ignore
 
   web:
     name: Web build
@@ -111,9 +122,36 @@ jobs:
         working-directory: web
         run: npm run test:e2e
 
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-web
+          path: test-results
+          if-no-files-found: ignore
+
       - uses: actions/upload-pages-artifact@v5
         with:
           path: docs
+
+  summary:
+    name: Test summary
+    needs: [native, web]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      # Nothing to download if every build failed; the script says so.
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: test-results-*
+          path: test-results
+          merge-multiple: true
+
+      - name: Write the summary
+        run: node .github/scripts/test-summary.mjs test-results >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     name: Publish to GitHub Pages

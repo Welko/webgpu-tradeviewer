@@ -30,6 +30,12 @@ Gpu::Profiler::Times timed(double totalMs)
     return FrameStats::Gpu{ .totalMs = totalMs, .passes = {} };
 }
 
+/** Makes `queue` add each frame it reports to `reported`. */
+void record(StatsQueue& queue, std::vector<FrameStats>& reported)
+{
+    queue.setCallback([&reported](const FrameStats& stats) { reported.push_back(stats); });
+}
+
 /** The frame numbers in `reported`. */
 std::vector<std::uint64_t> numbers(const std::vector<FrameStats>& reported)
 {
@@ -42,37 +48,26 @@ std::vector<std::uint64_t> numbers(const std::vector<FrameStats>& reported)
 
 } // namespace
 
-TEST_CASE("A frame is reported as soon as its times are in")
+TEST_CASE("Frames are reported with their times, in the order they were drawn")
 {
     std::vector<FrameStats> reported;
     StatsQueue queue(4);
-    queue.setCallback([&reported](const FrameStats& stats) { reported.push_back(stats); });
-
-    queue.push(drawn(1));
-    CHECK(reported.empty());
-    queue.setTimes(1, timed(2.0));
-    CHECK(numbers(reported) == std::vector<std::uint64_t>{ 1 });
-    if (reported.size() == 1 && reported[0].gpu) {
-        CHECK(reported[0].gpu->totalMs == 2.0);
-    }
-}
-
-TEST_CASE("Frames are reported in the order they were drawn")
-{
-    std::vector<FrameStats> reported;
-    StatsQueue queue(4);
-    queue.setCallback([&reported](const FrameStats& stats) { reported.push_back(stats); });
+    record(queue, reported);
 
     queue.push(drawn(1));
     queue.push(drawn(2));
     queue.push(drawn(3));
     queue.setTimes(3, std::unexpected(UntimedReason::ProfilingOff));
-    queue.setTimes(2, timed(1.0));
+    queue.setTimes(2, timed(2.0));
     CHECK(reported.empty());  // both wait for frame 1
 
     queue.setTimes(1, timed(1.0));
     CHECK(numbers(reported) == std::vector<std::uint64_t>{ 1, 2, 3 });
     if (reported.size() == 3) {
+        CHECK(reported[1].gpu);
+        if (reported[1].gpu) {
+            CHECK(reported[1].gpu->totalMs == 2.0);
+        }
         CHECK(reported[2].gpu.error_or({}) == UntimedReason::ProfilingOff);
     }
 }
@@ -81,7 +76,7 @@ TEST_CASE("When full, the oldest frame is reported without GPU times")
 {
     std::vector<FrameStats> reported;
     StatsQueue queue(3);
-    queue.setCallback([&reported](const FrameStats& stats) { reported.push_back(stats); });
+    record(queue, reported);
 
     queue.push(drawn(1));
     queue.push(drawn(2));
@@ -115,7 +110,7 @@ TEST_CASE("Frames completed before the callback is set aren't reported")
     queue.push(drawn(1));
     queue.setTimes(1, timed(1.0));
     queue.push(drawn(2));
-    queue.setCallback([&reported](const FrameStats& stats) { reported.push_back(stats); });
+    record(queue, reported);
     queue.setTimes(2, timed(1.0));
     CHECK(numbers(reported) == std::vector<std::uint64_t>{ 2 });
 }

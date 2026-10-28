@@ -22,7 +22,6 @@ TEST_CASE("A ring queue starts empty")
 {
     const Core::RingQueue<int> ring(3);
     CHECK(ring.empty());
-    CHECK(ring.size() < ring.capacity());
     CHECK(ring.size() == 0);
     CHECK(ring.capacity() == 3);
 }

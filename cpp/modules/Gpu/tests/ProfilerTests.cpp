@@ -66,14 +66,16 @@ bool draw(Profiler& profiler, const Gpu::Context& context, std::uint64_t frame, 
     return timed;
 }
 
-/** Processes WebGPU events until `reported` holds `count` frames, or 5 s pass. */
-void waitFor(const Gpu::Context& context, const std::vector<Reported>& reported, std::size_t count)
+/** Processes events until `count` frames have been reported. False, with a failed check, if that takes 5 s. */
+bool waitFor(const Gpu::Context& context, const std::vector<Reported>& reported, std::size_t count)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (reported.size() < count && std::chrono::steady_clock::now() < deadline) {
         wgpuInstanceProcessEvents(context.instance.get());
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+    CHECK_MESSAGE(reported.size() == count, "Not every frame was reported");
+    return reported.size() == count;
 }
 
 /** The frame numbers in `reported`, sorted. */
@@ -120,13 +122,11 @@ TEST_CASE("An unfinished frame is dropped, freeing its slot")
     const auto profiler = createProfiler(*context, reported);
     const Gpu::Handle encoder(wgpuDeviceCreateCommandEncoder(context->device.get(), nullptr));
 
-    // Otherwise the slots would all stay busy, and the last frame go untimed.
+    // Otherwise the slots would run out. Every other frame ends its passes first.
     for (std::size_t frame = 0; frame < 2 * Slots; ++frame) {
         profiler->beginFrame(true);
         CHECK(profiler->measurePass("pass"));
-        SUBCASE("Begun again") {}
-        SUBCASE("Begun again after its passes")
-        {
+        if (frame % 2 == 1) {
             profiler->endPasses(encoder.get());
         }
     }
@@ -157,22 +157,23 @@ TEST_CASE("A timed frame is reported once its times are read back, freeing its s
         CHECK(reported[0].times.error_or({}) == UntimedReason::NoFreeSlot);
     }
 
-    waitFor(*context, reported, 4);
+    if (!waitFor(*context, reported, 4)) {
+        return;
+    }
     CHECK(numbers(reported) == std::vector<std::uint64_t>{ 1, 2, 3, 4 });
-    for (const auto& frame : reported) {
-        CHECK((frame.frame == 4 || frame.times.has_value()));
+    for (std::size_t i = 1; i < reported.size(); ++i) {
+        CHECK(reported[i].times);
     }
 
     // The slots are free again, with none of their passes left over.
     CHECK(draw(*profiler, *context, 5, true));
-    waitFor(*context, reported, 5);
-    CHECK(reported.size() == 5);
-    if (reported.size() == 5) {
-        CHECK(reported[4].frame == 5);
-        CHECK(reported[4].times);
-        if (reported[4].times) {
-            CHECK(reported[4].times->passes.size() == 1);
-        }
+    if (!waitFor(*context, reported, 5)) {
+        return;
+    }
+    CHECK(reported[4].frame == 5);
+    CHECK(reported[4].times);
+    if (reported[4].times) {
+        CHECK(reported[4].times->passes.size() == 1);
     }
 }
 
@@ -185,14 +186,24 @@ TEST_CASE("An untimed frame is reported right away, with why")
     std::vector<Reported> reported;
     const auto profiler = createProfiler(*context, reported);
 
+    // Never begun.
+    CHECK_FALSE(profiler->measurePass("pass"));
+    profiler->endFrame(1);
+
     profiler->beginFrame(false);
     CHECK_FALSE(profiler->measurePass("pass"));
     profiler->endPasses(nullptr);  // records nothing
-    profiler->endFrame(1);
-    CHECK(reported.size() == 1);
-    if (reported.size() == 1) {
-        CHECK(reported[0].frame == 1);
-        CHECK(reported[0].times.error_or({}) == UntimedReason::ProfilingOff);
+    profiler->endFrame(2);
+
+    // Ended already.
+    profiler->endFrame(3);
+
+    CHECK(reported.size() == 3);
+    if (reported.size() == 3) {
+        CHECK(reported[0].times.error_or({}) == UntimedReason::NotStarted);
+        CHECK(reported[1].frame == 2);
+        CHECK(reported[1].times.error_or({}) == UntimedReason::ProfilingOff);
+        CHECK(reported[2].times.error_or({}) == UntimedReason::NotStarted);
     }
 }
 
@@ -290,9 +301,7 @@ TEST_CASE("Each pass is timed with timestamps of its own, up to a limit")
     wgpuQueueSubmit(context->queue.get(), 1, &submitted);
     profiler->endFrame(1);
 
-    waitFor(*context, reported, 1);
-    CHECK(reported.size() == 1);
-    if (reported.size() != 1) {
+    if (!waitFor(*context, reported, 1)) {
         return;
     }
     const auto& times = reported[0].times;
@@ -325,29 +334,5 @@ TEST_CASE("Frames on a device without timestamp queries are untimed")
     if (reported.size() == 1) {
         const auto reason = Core::Profiling::Compiled ? UntimedReason::Unsupported : UntimedReason::ProfilingOff;
         CHECK(reported[0].times.error_or({}) == reason);
-    }
-}
-
-TEST_CASE("A frame that was never begun is untimed")
-{
-    const auto context = createContext();
-    if (!context) {
-        return;
-    }
-    std::vector<Reported> reported;
-    const auto profiler = createProfiler(*context, reported);
-
-    CHECK_FALSE(profiler->measurePass("pass"));
-    profiler->endFrame(1);
-
-    // Nor is a frame after one that was ended.
-    profiler->beginFrame(false);
-    profiler->endFrame(2);
-    profiler->endFrame(3);
-
-    CHECK(reported.size() == 3);
-    if (reported.size() == 3) {
-        CHECK(reported[0].times.error_or({}) == UntimedReason::NotStarted);
-        CHECK(reported[2].times.error_or({}) == UntimedReason::NotStarted);
     }
 }
