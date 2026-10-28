@@ -163,8 +163,8 @@ void Engine::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPrefer
             return;
         }
         impl->profiler = Profiler::create(impl->context,
-            [statsQueue = &impl->statsQueue](std::uint64_t frame, Profiler::Times times) {
-                statsQueue->setTimes(frame, std::move(times));
+            [&statsQueue = impl->statsQueue](std::uint64_t frame, Profiler::Times times) {
+                statsQueue.setTimes(frame, std::move(times));
             });
         onDone(std::unique_ptr<Engine>(new Engine(std::move(impl))));
     });
