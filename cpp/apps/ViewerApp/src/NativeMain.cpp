@@ -31,7 +31,7 @@ struct WindowState
     Gpu::Market::Type::MarkerScale markerScale = Gpu::Market::Type::MarkerScale::Area;
 };
 
-WindowState& stateOf(GLFWwindow* window)
+WindowState& getState(GLFWwindow* window)
 {
     return *static_cast<WindowState*>(glfwGetWindowUserPointer(window));
 }
@@ -49,25 +49,25 @@ double toPixels(GLFWwindow* window, double x)
 /** Forwards the window's input to the app. */
 void connectInput(GLFWwindow* window)
 {
-    glfwSetWindowRefreshCallback(window, [](GLFWwindow* refreshed) { stateOf(refreshed).repaint = true; });
+    glfwSetWindowRefreshCallback(window, [](GLFWwindow* refreshed) { getState(refreshed).repaint = true; });
 
     glfwSetScrollCallback(window, [](GLFWwindow* scrolled, double, double steps) {
         double x = 0.0;
         glfwGetCursorPos(scrolled, &x, nullptr);
         // Up zooms in.
-        stateOf(scrolled).app->zoomAt(toPixels(scrolled, x), std::pow(ZoomPerWheelStep, -steps));
+        getState(scrolled).app->zoomAt(toPixels(scrolled, x), std::pow(ZoomPerWheelStep, -steps));
     });
 
     glfwSetMouseButtonCallback(window, [](GLFWwindow* clicked, int button, int action, int) {
         if (button == GLFW_MOUSE_BUTTON_LEFT) {
-            auto& state = stateOf(clicked);
+            auto& state = getState(clicked);
             state.dragging = action == GLFW_PRESS;
             glfwGetCursorPos(clicked, &state.lastX, nullptr);
         }
     });
 
     glfwSetCursorPosCallback(window, [](GLFWwindow* moved, double x, double) {
-        auto& state = stateOf(moved);
+        auto& state = getState(moved);
         if (state.dragging) {
             state.app->panBy(toPixels(moved, x - state.lastX));
             state.lastX = x;
@@ -78,7 +78,7 @@ void connectInput(GLFWwindow* window)
         if (action != GLFW_PRESS) {
             return;
         }
-        auto& state = stateOf(pressed);
+        auto& state = getState(pressed);
         switch (key) {
         case GLFW_KEY_R:
             state.app->resetView();
@@ -97,11 +97,11 @@ void connectInput(GLFWwindow* window)
     });
 
     glfwSetWindowContentScaleCallback(window, [](GLFWwindow* scaled, float xScale, float) {
-        stateOf(scaled).app->setPixelRatio(xScale);
+        getState(scaled).app->setPixelRatio(xScale);
     });
 }
 
-std::optional<Gpu::Type::Target::Any> surfaceTarget(GLFWwindow* window)
+std::optional<Gpu::Type::Target::Any> getSurfaceTarget(GLFWwindow* window)
 {
     switch (glfwGetPlatform()) {
 #ifdef GLFW_EXPOSE_NATIVE_WAYLAND
@@ -133,7 +133,7 @@ Gpu::Type::PowerPreference parsePowerPreference(int argc, char** argv)
 }
 
 /** The first argument that isn't an option: a trades file to show. */
-const char* tradesPath(int argc, char** argv)
+const char* getTradesPath(int argc, char** argv)
 {
     for (int i = 1; i < argc; ++i) {
         if (!std::string_view(argv[i]).starts_with("--")) {
@@ -144,18 +144,18 @@ const char* tradesPath(int argc, char** argv)
 }
 
 /** A UTC time to the millisecond, such as 2019-12-01 00:00:03.572. */
-std::string utc(std::int64_t timeUs)
+std::string formatUtc(std::int64_t timeUs)
 {
     return std::format("{:%F %T}", std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(timeUs / 1000)));
 }
 
 /** The view's range and what it holds, so the window always says what it shows. */
-std::string windowTitle(const Viewer::App& app)
+std::string getWindowTitle(const Viewer::App& app)
 {
-    const auto view = app.view();
-    const auto visible = app.visible();
-    return std::format("Trade Viewer · {} to {} UTC · {} trades, {:.8f} BTC", utc(view.startUs), utc(view.endUs),
-                       visible.count, visible.amount);
+    const auto view = app.getView();
+    const auto summary = app.getViewSummary();
+    return std::format("Trade Viewer · {} to {} UTC · {} trades, {:.8f} BTC", formatUtc(view.startUs), formatUtc(view.endUs),
+                       summary.count, summary.totalAmount);
 }
 
 } // namespace
@@ -163,7 +163,7 @@ std::string windowTitle(const Viewer::App& app)
 int main(int argc, char** argv)
 {
     std::optional<Core::Data::Trades> loaded;
-    if (const char* path = tradesPath(argc, argv)) {
+    if (const char* path = getTradesPath(argc, argv)) {
         auto trades = Core::Data::readTradeFile(path);
         if (!trades) {
             Core::Log::error("{}", trades.error());
@@ -185,7 +185,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    const auto target = surfaceTarget(window);
+    const auto target = getSurfaceTarget(window);
     if (!target) {
         Core::Log::error("Unsupported windowing platform");
         glfwDestroyWindow(window);
@@ -201,7 +201,7 @@ int main(int argc, char** argv)
             return;
         }
         app = std::move(*result);
-        const auto& info = app->info();
+        const auto& info = app->getInfo();
         Core::Log::info("Using {} · {} · {}", info.device, info.backend, info.adapter);
     });
     if (!app) {
@@ -210,10 +210,10 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    app->setTrades(loaded ? std::move(*loaded) : Viewer::syntheticDay());
-    const auto summary = Core::Data::summarize(app->trades());
+    app->setTrades(loaded ? std::move(*loaded) : Viewer::generateSyntheticDay());
+    const auto summary = Core::Data::summarize(app->getTrades());
     Core::Log::info("{} {} trades from {} to {} UTC, {:.6f} in total", summary.count, loaded ? "loaded" : "synthetic",
-                    utc(summary.firstUs), utc(summary.lastUs), summary.totalAmount);
+                    formatUtc(summary.firstUs), formatUtc(summary.lastUs), summary.totalAmount);
 
     WindowState state{ .app = app.get() };
     glfwSetWindowUserPointer(window, &state);
@@ -241,7 +241,7 @@ int main(int argc, char** argv)
         if (app->needsRender() || state.repaint) {
             app->render();
             state.repaint = false;
-            glfwSetWindowTitle(window, windowTitle(*app).c_str());
+            glfwSetWindowTitle(window, getWindowTitle(*app).c_str());
         }
     }
 

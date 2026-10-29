@@ -36,10 +36,14 @@ struct Trades
  */
 constexpr double AmountUnit = 1e-8;
 
+namespace detail {
+
 inline std::int64_t toAmountUnits(double amount)
 {
     return std::llround(amount / AmountUnit);
 }
+
+} // namespace detail
 
 /** How many trades there are, when, and how much they traded. */
 struct TradeSummary
@@ -57,7 +61,7 @@ inline TradeSummary summarize(const Trades& trades)
     }
     std::int64_t totalUnits = 0;
     for (const double amount : trades.amount) {
-        totalUnits += toAmountUnits(amount);
+        totalUnits += detail::toAmountUnits(amount);
     }
     return {
         .count = trades.size(),
@@ -80,7 +84,7 @@ struct IndexRange
 };
 
 /** Where the trades in `range` are, start inclusive and end exclusive. */
-inline IndexRange tradesIn(const Trades& trades, TimeRange range)
+inline IndexRange getTradesIn(const Trades& trades, TimeRange range)
 {
     const auto begin = trades.timeUs.begin();
     const auto first = std::lower_bound(begin, trades.timeUs.end(), range.startUs);
@@ -98,14 +102,14 @@ public:
     {
         mRunning.reserve(trades.size() + 1);
         for (const double amount : trades.amount) {
-            mRunning.push_back(mRunning.back() + toAmountUnits(amount));
+            mRunning.push_back(mRunning.back() + detail::toAmountUnits(amount));
         }
     }
 
     /** In units of AmountUnit. */
-    [[nodiscard]] std::int64_t unitsIn(IndexRange indices) const { return mRunning[indices.last] - mRunning[indices.first]; }
+    [[nodiscard]] std::int64_t getUnits(IndexRange indices) const { return mRunning[indices.last] - mRunning[indices.first]; }
 
-    [[nodiscard]] double in(IndexRange indices) const { return static_cast<double>(unitsIn(indices)) * AmountUnit; }
+    [[nodiscard]] double getAmount(IndexRange indices) const { return static_cast<double>(getUnits(indices)) * AmountUnit; }
 
 private:
     std::vector<std::int64_t> mRunning{ 0 };  // mRunning[i]: the first i trades' total
@@ -118,7 +122,7 @@ struct PriceRange
 };
 
 /** The lowest and highest price of the trades in `indices`, or nothing if there are none. Reads every one. */
-inline std::optional<PriceRange> priceRange(const Trades& trades, IndexRange indices)
+inline std::optional<PriceRange> getPriceRange(const Trades& trades, IndexRange indices)
 {
     if (indices.empty()) {
         return std::nullopt;

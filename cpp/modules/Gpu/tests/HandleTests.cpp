@@ -97,18 +97,18 @@ TEST_CASE("Tracked handles report to Resource::Stats while alive")
     {
         const Gpu::Handle<FakeHandle> first(&a, stats, 1024);
         Gpu::Handle<FakeHandle> second(&b, stats, 256);
-        CHECK(stats.count(Gpu::Resource::Kind::Buffer) == 2);
-        CHECK(stats.bytes(Gpu::Resource::Kind::Buffer) == 1280);
-        CHECK(stats.totalBytes() == 1280);
+        CHECK(stats.getCount(Gpu::Resource::Kind::Buffer) == 2);
+        CHECK(stats.getBytes(Gpu::Resource::Kind::Buffer) == 1280);
+        CHECK(stats.getTotalBytes() == 1280);
 
         // Moving keeps the object counted once.
         const Gpu::Handle<FakeHandle> moved(std::move(second));
-        CHECK(stats.count(Gpu::Resource::Kind::Buffer) == 2);
+        CHECK(stats.getCount(Gpu::Resource::Kind::Buffer) == 2);
 
-        CHECK(stats.count(Gpu::Resource::Kind::Texture) == 0);
+        CHECK(stats.getCount(Gpu::Resource::Kind::Texture) == 0);
     }
-    CHECK(stats.count(Gpu::Resource::Kind::Buffer) == 0);
-    CHECK(stats.totalBytes() == 0);
+    CHECK(stats.getCount(Gpu::Resource::Kind::Buffer) == 0);
+    CHECK(stats.getTotalBytes() == 0);
 }
 
 TEST_CASE("A tracked handle around null counts nothing")
@@ -116,8 +116,8 @@ TEST_CASE("A tracked handle around null counts nothing")
     Gpu::Resource::Stats stats;
     {
         const Gpu::Handle<FakeHandle> handle(nullptr, stats, 1024);
-        CHECK(stats.count(Gpu::Resource::Kind::Buffer) == 0);
-        CHECK(stats.totalBytes() == 0);
+        CHECK(stats.getCount(Gpu::Resource::Kind::Buffer) == 0);
+        CHECK(stats.getTotalBytes() == 0);
     }
-    CHECK(stats.count(Gpu::Resource::Kind::Buffer) == 0);
+    CHECK(stats.getCount(Gpu::Resource::Kind::Buffer) == 0);
 }

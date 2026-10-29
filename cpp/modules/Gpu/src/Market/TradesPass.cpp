@@ -159,7 +159,7 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, std:
     const Uniforms uniforms{
         .startHigh = static_cast<std::uint32_t>(startUs >> 32),
         .startLow = static_cast<std::uint32_t>(startUs),
-        .lengthUs = static_cast<float>(mView.time.lengthUs()),
+        .lengthUs = static_cast<float>(mView.time.getLengthUs()),
         .markerScale = mMarkerScale == Type::MarkerScale::Area ? 0u : 1u,
         .priceLow = static_cast<float>(mView.price.low),
         .priceSpan = static_cast<float>(mView.price.high - mView.price.low),
@@ -187,7 +187,7 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, std:
     const std::size_t uploaded = mTrades.size() / sizeof(GpuTrade);
     const std::size_t first = std::min(mView.trades.first, uploaded);
     const std::size_t count = std::min(mView.trades.last, uploaded) - first;
-    if (count > 0 && mView.time.lengthUs() > 0 && mView.price.high > mView.price.low) {
+    if (count > 0 && mView.time.getLengthUs() > 0 && mView.price.high > mView.price.low) {
         wgpuRenderPassEncoderSetPipeline(pass.get(), mPipeline.get());
         wgpuRenderPassEncoderSetBindGroup(pass.get(), 0, mBindGroup.get(), 0, nullptr);
         wgpuRenderPassEncoderSetVertexBuffer(pass.get(), 0, mTrades.get(), 0, mTrades.size());

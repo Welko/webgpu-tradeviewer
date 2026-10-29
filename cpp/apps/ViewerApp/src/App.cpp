@@ -24,9 +24,9 @@ constexpr double PricePadding = 0.05;
 
 } // namespace
 
-Core::Data::Trades syntheticDay()
+Core::Data::Trades generateSyntheticDay()
 {
-    return Core::Data::syntheticTrades(DayStartUs, DayStartUs + DayUs, SyntheticSeed);
+    return Core::Data::generateSyntheticTrades(DayStartUs, DayStartUs + DayUs, SyntheticSeed);
 }
 
 void App::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone)
@@ -44,7 +44,7 @@ App::App(std::unique_ptr<Gpu::Market::Engine> engine) noexcept
     : mEngine(std::move(engine))
 {}
 
-const Core::Data::Trades& App::trades() const
+const Core::Data::Trades& App::getTrades() const
 {
     return mTrades;
 }
@@ -61,9 +61,17 @@ void App::setTrades(Core::Data::Trades trades)
     resetView();
 }
 
-App::Visible App::visible() const
+Core::Data::TradeSummary App::getViewSummary() const
 {
-    return { .count = mVisible.size(), .amount = mTotals.in(mVisible) };
+    if (mTradesInView.empty()) {
+        return {};
+    }
+    return {
+        .count = mTradesInView.size(),
+        .firstUs = mTrades.timeUs[mTradesInView.first],
+        .lastUs = mTrades.timeUs[mTradesInView.last - 1],
+        .totalAmount = mTotals.getAmount(mTradesInView),
+    };
 }
 
 void App::resetView()
@@ -80,7 +88,7 @@ void App::showDay()
 
 void App::zoomAt(double x, double factor)
 {
-    const auto length = static_cast<double>(mView.lengthUs());
+    const auto length = static_cast<double>(mView.getLengthUs());
     const double newLength = std::clamp(length * factor, static_cast<double>(MinViewUs), static_cast<double>(MaxViewUs));
     const double anchor = mWidth > 0 ? x / mWidth : 0.5;
     mView = mView.zoomed(anchor, newLength / length);
@@ -107,18 +115,18 @@ void App::setPixelRatio(float ratio)
 
 void App::applyView()
 {
-    mVisible = Core::Data::tradesIn(mTrades, mView);
-    if (const auto price = Core::Data::priceRange(mTrades, mVisible)) {
+    mTradesInView = Core::Data::getTradesIn(mTrades, mView);
+    if (const auto price = Core::Data::getPriceRange(mTrades, mTradesInView)) {
         // Some room even for a single price, so its trades sit mid-height.
         const double padding = std::max((price->high - price->low) * PricePadding, price->high * 1e-5);
         mPrice = { .low = price->low - padding, .high = price->high + padding };
     }
-    mEngine->setView({ .time = mView, .price = mPrice, .trades = mVisible });
+    mEngine->setView({ .time = mView, .price = mPrice, .trades = mTradesInView });
 }
 
-const Gpu::Type::Info& App::info() const
+const Gpu::Type::Info& App::getInfo() const
 {
-    return mEngine->info();
+    return mEngine->getInfo();
 }
 
 void App::resize(std::uint32_t width, std::uint32_t height)

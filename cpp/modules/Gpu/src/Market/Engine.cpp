@@ -335,9 +335,9 @@ void Engine::Impl::render()
         .cpu = timed ? std::optional(Gpu::Type::FrameStats::Cpu{ .acquireMs = acquireMs, .encodeMs = encodeMs, .submitMs = submitMs })
                      : std::nullopt,
         .gpu = std::unexpected(Gpu::Type::FrameStats::UntimedReason::Undefined),
-        .buffers = resources.count(Resource::Kind::Buffer),
-        .textures = resources.count(Resource::Kind::Texture),
-        .gpuBytes = resources.totalBytes(),
+        .buffers = resources.getCount(Resource::Kind::Buffer),
+        .textures = resources.getCount(Resource::Kind::Texture),
+        .gpuBytes = resources.getTotalBytes(),
     });
     profiler->endFrame(lastFrame);
 }
@@ -350,7 +350,7 @@ Engine::Engine(std::unique_ptr<Impl> impl) noexcept
 
 Engine::~Engine() = default;
 
-const Gpu::Type::Info& Engine::info() const
+const Gpu::Type::Info& Engine::getInfo() const
 {
     return mImpl->context.info;
 }

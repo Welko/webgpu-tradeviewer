@@ -16,7 +16,7 @@
 namespace Viewer {
 
 /** Synthetic trades for 2019-12-01 UTC, the brief's day, to show until real ones are loaded. */
-[[nodiscard]] Core::Data::Trades syntheticDay();
+[[nodiscard]] Core::Data::Trades generateSyntheticDay();
 
 /**
  * The platform-independent app. Each platform's main owns the loop: update(),
@@ -34,23 +34,16 @@ public:
     explicit App(std::unique_ptr<Gpu::Market::Engine> engine) noexcept;
 
     /** The trades on show: none until setTrades(). */
-    [[nodiscard]] const Core::Data::Trades& trades() const;
+    [[nodiscard]] const Core::Data::Trades& getTrades() const;
 
     /** Replaces the trades, which must be in time order, and resets the view. */
     void setTrades(Core::Data::Trades trades);
 
-    /** The trades in view: how many, and their total amount. */
-    struct Visible
-    {
-        std::size_t count;
-        double amount;
-    };
-
     /** The trades in the time range on screen, start inclusive and end exclusive. */
-    [[nodiscard]] Visible visible() const;
+    [[nodiscard]] Core::Data::TradeSummary getViewSummary() const;
 
     /** The time range on screen, left edge to right edge. */
-    [[nodiscard]] Core::Data::TimeRange view() const { return mView; }
+    [[nodiscard]] Core::Data::TimeRange getView() const { return mView; }
 
     /** 12:00 to 13:00 UTC on the day of the first trade. */
     void resetView();
@@ -70,7 +63,7 @@ public:
     void setPixelRatio(float ratio);
 
     /** The GPU in use. */
-    [[nodiscard]] const Gpu::Type::Info& info() const;
+    [[nodiscard]] const Gpu::Type::Info& getInfo() const;
 
     /** Surface size in physical pixels. */
     void resize(std::uint32_t width, std::uint32_t height);
@@ -105,7 +98,7 @@ private:
     std::int64_t mDayStartUs = 0;  // midnight UTC before the first trade
     Core::Data::TimeRange mView{};
     Core::Data::PriceRange mPrice{};  // kept while the view has no trades
-    Core::Data::IndexRange mVisible{};
+    Core::Data::IndexRange mTradesInView{};
     std::uint32_t mWidth = 0;
 };
 

@@ -39,7 +39,7 @@ private:
 
 } // namespace
 
-Trades syntheticTrades(std::int64_t startUs, std::int64_t endUs, std::uint64_t seed)
+Trades generateSyntheticTrades(std::int64_t startUs, std::int64_t endUs, std::uint64_t seed)
 {
     Random random(seed);
     Trades trades;

@@ -39,7 +39,7 @@ public:
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
-    [[nodiscard]] const Gpu::Type::Info& info() const;
+    [[nodiscard]] const Gpu::Type::Info& getInfo() const;
 
     /** Surface size in physical pixels. Zero sizes are ignored. */
     void resize(std::uint32_t width, std::uint32_t height);

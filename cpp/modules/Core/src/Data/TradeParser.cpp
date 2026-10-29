@@ -164,7 +164,7 @@ std::expected<void, std::string> TradeParser::parseHeader(std::string_view line)
     Fields fields;
     const std::size_t count = split(line, fields);
     if (count == 0) {
-        return std::unexpected(error("too many columns"));
+        return std::unexpected(formatError("too many columns"));
     }
 
     // Each column's index; `count` if it's missing.
@@ -173,7 +173,7 @@ std::expected<void, std::string> TradeParser::parseHeader(std::string_view line)
     };
     for (const std::string_view name : { "timestamp", "side", "price", "amount" }) {
         if (column(name) == count) {
-            return std::unexpected(error(std::format("no \"{}\" column", name)));
+            return std::unexpected(formatError(std::format("no \"{}\" column", name)));
         }
     }
     mColumns = {
@@ -192,7 +192,7 @@ std::expected<void, std::string> TradeParser::parseTrade(std::string_view line)
     const std::size_t count = split(line, fields);
     const std::size_t expected = mFormat == Format::Tardis ? mColumns.count : BinanceFields;
     if (count != expected) {
-        return std::unexpected(error(std::format("expected {} fields", expected)));
+        return std::unexpected(formatError(std::format("expected {} fields", expected)));
     }
 
     std::optional<std::int64_t> timeUs;
@@ -214,7 +214,7 @@ std::expected<void, std::string> TradeParser::parseTrade(std::string_view line)
         side = binanceSide(fields[5]);
     }
     if (!timeUs || !price || !amount || !side || *price <= 0.0 || *amount <= 0.0) {
-        return std::unexpected(error(std::format("can't read \"{}\"", line)));
+        return std::unexpected(formatError(std::format("can't read \"{}\"", line)));
     }
 
     if (!mTrades.empty() && *timeUs < mTrades.timeUs.back()) {
@@ -227,7 +227,7 @@ std::expected<void, std::string> TradeParser::parseTrade(std::string_view line)
     return {};
 }
 
-std::string TradeParser::error(std::string_view message) const
+std::string TradeParser::formatError(std::string_view message) const
 {
     return std::format("Line {}: {}", mLine, message);
 }

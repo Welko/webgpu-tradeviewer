@@ -37,12 +37,15 @@ struct WebTradeSummary
     double totalAmount;
 };
 
-/** Viewer::App::Visible, with the count as a JavaScript number. */
-struct WebVisible
+WebTradeSummary toWeb(const Core::Data::TradeSummary& summary)
 {
-    double count;
-    double amount;
-};
+    return {
+        .count = static_cast<double>(summary.count),
+        .firstMs = static_cast<double>(summary.firstUs) / 1000.0,
+        .lastMs = static_cast<double>(summary.lastUs) / 1000.0,
+        .totalAmount = summary.totalAmount,
+    };
+}
 
 /** A time range in milliseconds since the epoch, for Date. */
 struct WebTimeRange
@@ -74,15 +77,15 @@ public:
                     return;
                 }
                 *app = std::move(*result);
-                (*app)->setTrades(Viewer::syntheticDay());
+                (*app)->setTrades(Viewer::generateSyntheticDay());
                 onDone(val::null());
             });
     }
 
     /** The GPU in use, as a plain JavaScript object. Empty until init() succeeds. */
-    Gpu::Type::Info info() const
+    Gpu::Type::Info getInfo() const
     {
-        return *mApp ? (*mApp)->info() : Gpu::Type::Info{};
+        return *mApp ? (*mApp)->getInfo() : Gpu::Type::Info{};
     }
 
     void resize(std::uint32_t width, std::uint32_t height)
@@ -112,23 +115,19 @@ public:
     }
 
     /** The time range on screen. Empty until init() succeeds. */
-    WebTimeRange view() const
+    WebTimeRange getView() const
     {
         if (!*mApp) {
             return {};
         }
-        const auto view = (*mApp)->view();
+        const auto view = (*mApp)->getView();
         return { .startMs = static_cast<double>(view.startUs) / 1000.0, .endMs = static_cast<double>(view.endUs) / 1000.0 };
     }
 
     /** The trades in view. Empty until init() succeeds. */
-    WebVisible visible() const
+    WebTradeSummary getViewSummary() const
     {
-        if (!*mApp) {
-            return {};
-        }
-        const auto visible = (*mApp)->visible();
-        return { .count = static_cast<double>(visible.count), .amount = visible.amount };
+        return *mApp ? toWeb((*mApp)->getViewSummary()) : WebTradeSummary{};
     }
 
     void resetView()
@@ -177,18 +176,9 @@ public:
     }
 
     /** The trades on show. Empty until init() succeeds. */
-    WebTradeSummary tradeSummary() const
+    WebTradeSummary getTradeSummary() const
     {
-        if (!*mApp) {
-            return {};
-        }
-        const auto summary = Core::Data::summarize((*mApp)->trades());
-        return {
-            .count = static_cast<double>(summary.count),
-            .firstMs = static_cast<double>(summary.firstUs) / 1000.0,
-            .lastMs = static_cast<double>(summary.lastUs) / 1000.0,
-            .totalAmount = summary.totalAmount,
-        };
+        return *mApp ? toWeb(Core::Data::summarize((*mApp)->getTrades())) : WebTradeSummary{};
     }
 
     /** Starts reading a trades file, which appendChunk() then receives piece by piece. */
@@ -253,10 +243,6 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .field("lastMs", &WebTradeSummary::lastMs)
         .field("totalAmount", &WebTradeSummary::totalAmount);
 
-    emscripten::value_object<WebVisible>("Visible")
-        .field("count", &WebVisible::count)
-        .field("amount", &WebVisible::amount);
-
     emscripten::value_object<WebTimeRange>("TimeRange")
         .field("startMs", &WebTimeRange::startMs)
         .field("endMs", &WebTimeRange::endMs);
@@ -264,20 +250,20 @@ EMSCRIPTEN_BINDINGS(Viewer)
     emscripten::class_<WebViewer>("Viewer")
         .constructor<>()
         .function("init", &WebViewer::init)
-        .function("info", &WebViewer::info)
+        .function("info", &WebViewer::getInfo)
         .function("resize", &WebViewer::resize)
         .function("update", &WebViewer::update)
         .function("needsRender", &WebViewer::needsRender)
         .function("render", &WebViewer::render)
-        .function("view", &WebViewer::view)
-        .function("visible", &WebViewer::visible)
+        .function("view", &WebViewer::getView)
+        .function("viewSummary", &WebViewer::getViewSummary)
         .function("resetView", &WebViewer::resetView)
         .function("showDay", &WebViewer::showDay)
         .function("zoomAt", &WebViewer::zoomAt)
         .function("panBy", &WebViewer::panBy)
         .function("setMarkerScale", &WebViewer::setMarkerScale)
         .function("setPixelRatio", &WebViewer::setPixelRatio)
-        .function("tradeSummary", &WebViewer::tradeSummary)
+        .function("tradeSummary", &WebViewer::getTradeSummary)
         .function("beginLoad", &WebViewer::beginLoad)
         .function("appendChunk", &WebViewer::appendChunk)
         .function("finishLoad", &WebViewer::finishLoad);

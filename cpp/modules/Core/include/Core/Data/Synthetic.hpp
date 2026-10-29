@@ -11,6 +11,6 @@ namespace Core::Data {
  * with a random-walk price near 7,500 and mostly small amounts. The same
  * seed gives the same trades.
  */
-Trades syntheticTrades(std::int64_t startUs, std::int64_t endUs, std::uint64_t seed);
+Trades generateSyntheticTrades(std::int64_t startUs, std::int64_t endUs, std::uint64_t seed);
 
 } // namespace Core::Data

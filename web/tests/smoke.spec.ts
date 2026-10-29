@@ -135,11 +135,11 @@ test('the wheel zooms, dragging pans, and the buttons jump back', async ({ page 
   await expect(page.getByTestId('trade-count')).toHaveText('2');
   await expect(range).toHaveText(hour);
   // Both trades are a few seconds after midnight.
-  await expect(page.getByTestId('visible-count')).toHaveText('0');
+  await expect(page.getByTestId('view-count')).toHaveText('0');
   await page.getByRole('button', { name: 'Whole day' }).click();
   await expect(range).toHaveText('2019-12-01 00:00:00.000 UTC – 2019-12-02 00:00:00.000 UTC');
-  await expect(page.getByTestId('visible-count')).toHaveText('2');
-  await expect(page.getByTestId('visible-amount')).toHaveText('1.539741');
+  await expect(page.getByTestId('view-count')).toHaveText('2');
+  await expect(page.getByTestId('view-amount')).toHaveText('1.539741');
   await page.getByRole('button', { name: '12:00–13:00' }).click();
   await expect(range).toHaveText(hour);
 

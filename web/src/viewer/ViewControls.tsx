@@ -1,16 +1,17 @@
 import { utc } from '../utc';
-import type { TimeRange, Viewer, Visible } from './viewerModule';
+import type { TimeRange, TradeSummary, Viewer } from './viewerModule';
 
 interface ViewControlsProps {
   viewer: Viewer;
   view: TimeRange;
-  visible: Visible;
+  /** The trades in `view`. */
+  viewSummary: TradeSummary;
   /** Call after changing the viewer, to draw it again. */
   onChange: () => void;
 }
 
 /** The time range on screen and what it holds, and buttons to jump to the usual ranges. */
-export function ViewControls({ viewer, view, visible, onChange }: ViewControlsProps) {
+export function ViewControls({ viewer, view, viewSummary, onChange }: ViewControlsProps) {
   const act = (action: () => void) => () => {
     action();
     onChange();
@@ -22,8 +23,8 @@ export function ViewControls({ viewer, view, visible, onChange }: ViewControlsPr
         {utc(view.startMs)} – {utc(view.endMs)}
       </span>
       <span title="Trades from the start time up to, but not including, the end time">
-        <span data-testid="visible-count">{visible.count.toLocaleString('en-US')}</span> trades,{' '}
-        <span data-testid="visible-amount">{visible.amount.toLocaleString('en-US', { maximumFractionDigits: 8 })}</span> BTC
+        <span data-testid="view-count">{viewSummary.count.toLocaleString('en-US')}</span> trades,{' '}
+        <span data-testid="view-amount">{viewSummary.totalAmount.toLocaleString('en-US', { maximumFractionDigits: 8 })}</span> BTC
       </span>
       <button type="button" className="button" onClick={act(() => viewer.resetView())}>
         12:00–13:00

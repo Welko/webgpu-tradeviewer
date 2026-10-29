@@ -51,7 +51,7 @@ private:
     std::expected<void, std::string> parseLine(std::string_view line);
     std::expected<void, std::string> parseHeader(std::string_view line);
     std::expected<void, std::string> parseTrade(std::string_view line);
-    [[nodiscard]] std::string error(std::string_view message) const;
+    [[nodiscard]] std::string formatError(std::string_view message) const;
 
     Format mFormat = Format::Unknown;
     Columns mColumns{};

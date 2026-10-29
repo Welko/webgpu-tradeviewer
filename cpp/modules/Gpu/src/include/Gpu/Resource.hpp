@@ -34,10 +34,10 @@ public:
         mBytes[index(kind)] -= bytes;
     }
 
-    [[nodiscard]] std::uint32_t count(Kind kind) const { return mCounts[index(kind)]; }
-    [[nodiscard]] std::uint64_t bytes(Kind kind) const { return mBytes[index(kind)]; }
+    [[nodiscard]] std::uint32_t getCount(Kind kind) const { return mCounts[index(kind)]; }
+    [[nodiscard]] std::uint64_t getBytes(Kind kind) const { return mBytes[index(kind)]; }
 
-    [[nodiscard]] std::uint64_t totalBytes() const
+    [[nodiscard]] std::uint64_t getTotalBytes() const
     {
         std::uint64_t total = 0;
         for (const auto bytes : mBytes) {

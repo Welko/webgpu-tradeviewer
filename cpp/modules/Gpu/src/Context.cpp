@@ -49,7 +49,7 @@ struct Pending
 };
 
 /** Read once per page, since each read creates a WebGL context. */
-const std::string& webglRenderer()
+const std::string& getWebglRenderer()
 {
     static const std::string renderer = [] {
 #ifdef __EMSCRIPTEN__
@@ -79,7 +79,7 @@ Type::Info readInfo(WGPUAdapter adapter)
             .description = {},
             .backend = {},
             .adapter = {},
-            .webglRenderer = webglRenderer(),
+            .webglRenderer = getWebglRenderer(),
         };
     }
 
@@ -90,7 +90,7 @@ Type::Info readInfo(WGPUAdapter adapter)
         .description = std::string(Convert::FromWgpu::stringView(info.description)),
         .backend = std::string(Convert::FromWgpu::backend(info.backendType)),
         .adapter = std::string(Convert::FromWgpu::adapter(info.adapterType)),
-        .webglRenderer = webglRenderer(),
+        .webglRenderer = getWebglRenderer(),
     };
     wgpuAdapterInfoFreeMembers(info);
     return result;

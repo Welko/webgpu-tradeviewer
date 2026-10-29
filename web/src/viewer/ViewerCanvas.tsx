@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { GpuInfo } from './gpuInfo';
 import { ViewControls } from './ViewControls';
-import { createViewer, type PowerPreference, type TimeRange, type Viewer, type Visible } from './viewerModule';
+import { createViewer, type PowerPreference, type TimeRange, type TradeSummary, type Viewer } from './viewerModule';
 
 export type ViewerStatus =
   | { kind: 'loading' }
@@ -41,7 +41,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
   const canvasId = `viewer-${useId().replace(/:/g, '')}`;
   const onStatusRef = useRef(onStatus);
   onStatusRef.current = onStatus;
-  const [controls, setControls] = useState<{ viewer: Viewer; view: TimeRange; visible: Visible; refresh: () => void } | null>(null);
+  const [controls, setControls] = useState<{ viewer: Viewer; view: TimeRange; viewSummary: TradeSummary; refresh: () => void } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -82,7 +82,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
         };
         const refresh = () => {
           requestFrame();
-          setControls({ viewer: created, view: created.view(), visible: created.visible(), refresh });
+          setControls({ viewer: created, view: created.view(), viewSummary: created.viewSummary(), refresh });
         };
 
         // CSS pixels to the canvas's physical pixels, which the viewer works in.
