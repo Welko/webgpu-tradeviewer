@@ -19,25 +19,21 @@
 
 EM_JS_DEPS(GpuContext, "$stringToNewUTF8");
 
-/* Returns a malloc'd UTF-8 string, or 0. Chrome masks gl.RENDERER as "WebKit WebGL". */
+/*
+ * Returns a malloc'd UTF-8 string, or 0. Chrome masks gl.RENDERER as "WebKit WebGL".
+ * The context is left to the garbage collector: loseContext() would log "WebGL context was lost".
+ */
 EM_JS(char*, gpuQueryWebglRenderer, (), {
     const gl = document.createElement("canvas").getContext("webgl");
     if (!gl) {
         return 0;
     }
-    try {
-        let renderer = gl.getParameter(gl.RENDERER);
-        if (renderer === "WebKit WebGL") {
-            const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
-            renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : null;
-        }
-        return (typeof renderer === "string" && renderer !== "") ? stringToNewUTF8(renderer) : 0;
-    } finally {
-        const loseContext = gl.getExtension("WEBGL_lose_context");
-        if (loseContext) {
-            loseContext.loseContext();
-        }
+    let renderer = gl.getParameter(gl.RENDERER);
+    if (renderer === "WebKit WebGL") {
+        const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+        renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : null;
     }
+    return (typeof renderer === "string" && renderer !== "") ? stringToNewUTF8(renderer) : 0;
 });
 #endif
 
@@ -52,19 +48,23 @@ struct Pending
     Context::Callback onDone;
 };
 
-std::string readWebglRenderer()
+/** Read once per page, since each read creates a WebGL context. */
+const std::string& webglRenderer()
 {
+    static const std::string renderer = [] {
 #ifdef __EMSCRIPTEN__
-    char* renderer = gpuQueryWebglRenderer();
-    if (!renderer) {
-        return {};
-    }
-    std::string result(renderer);
-    std::free(renderer);
-    return result;
+        char* queried = gpuQueryWebglRenderer();
+        if (!queried) {
+            return std::string();
+        }
+        std::string result(queried);
+        std::free(queried);
+        return result;
 #else
-    return {};
+        return std::string();
 #endif
+    }();
+    return renderer;
 }
 
 Type::Info readInfo(WGPUAdapter adapter)
@@ -79,7 +79,7 @@ Type::Info readInfo(WGPUAdapter adapter)
             .description = {},
             .backend = {},
             .adapter = {},
-            .webglRenderer = readWebglRenderer(),
+            .webglRenderer = webglRenderer(),
         };
     }
 
@@ -90,7 +90,7 @@ Type::Info readInfo(WGPUAdapter adapter)
         .description = std::string(Convert::FromWgpu::stringView(info.description)),
         .backend = std::string(Convert::FromWgpu::backend(info.backendType)),
         .adapter = std::string(Convert::FromWgpu::adapter(info.adapterType)),
-        .webglRenderer = readWebglRenderer(),
+        .webglRenderer = webglRenderer(),
     };
     wgpuAdapterInfoFreeMembers(info);
     return result;

@@ -10,7 +10,9 @@ FetchContent_MakeAvailable(webgpu)
 
 add_library(Gpu STATIC
     src/Context.cpp
+    src/GrowableBuffer.cpp
     src/Market/Engine.cpp
+    src/Market/TradesPass.cpp
     src/Profiler.cpp
     src/Readback.cpp
 )
@@ -18,9 +20,8 @@ viewer_setup_target(Gpu)
 
 target_include_directories(Gpu PUBLIC include)
 target_include_directories(Gpu PRIVATE src/include)
-target_link_libraries(Gpu PRIVATE
-    Core
-    webgpu
-)
+# Core's trade data appears in the public API.
+target_link_libraries(Gpu PUBLIC Core)
+target_link_libraries(Gpu PRIVATE webgpu)
 
 add_subdirectory(tests)

@@ -106,3 +106,28 @@ mkdir -p data
 curl -L -o data/binance_trades_2019-12-01_BTCUSDT.csv.gz https://datasets.tardis.dev/v1/binance/trades/2019/12/01/BTCUSDT.csv.gz
 curl -L -o data/binance_incremental_book_L2_2019-12-01_BTCUSDT.csv.gz https://datasets.tardis.dev/v1/binance/incremental_book_L2/2019/12/01/BTCUSDT.csv.gz
 ```
+
+## Viewing trades
+
+Each trade is a disc: time across, price up, green for buys and red for sells, and larger for bigger amounts. The view opens on 12:00–13:00 UTC of the first trade's day. The price axis fits the trades in view.
+
+| | Web | Native |
+|---|---|---|
+| Zoom around the pointer | Mouse wheel | Mouse wheel |
+| Pan | Drag | Drag |
+| 12:00–13:00 | Button | `R` |
+| Whole day | Button | `D` |
+| Marker size: area ∝ amount, or log of amount | Size menu | `M` |
+
+Time ranges are half-open: a trade at the end time belongs to the next range.
+
+**On the GPU**, each trade takes 20 bytes in one vertex buffer and is drawn as an instance of a quad:
+
+| Bytes | Field |
+|---|---|
+| 0–7 | time, µs since 1970, as two u32 halves |
+| 8–11 | price, f32 |
+| 12–15 | amount, f32 |
+| 16–19 | side, u32 |
+
+A GPU has no 64-bit floats, and a day in microseconds needs 37 bits. The shader subtracts the view's start in 64-bit integer math, then converts the small difference to f32, so positions stay exact to the microsecond at any zoom. The CPU finds the trades in view by binary search, and only those are drawn. The buffer can be appended to: it keeps spare room, and when that runs out it moves to a bigger buffer, copying on the GPU.

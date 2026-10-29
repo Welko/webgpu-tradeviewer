@@ -20,16 +20,32 @@ async function waitUntilReady(page: Page) {
   await expect(status, await status.textContent() ?? '').toHaveAttribute('data-status', 'ready');
 }
 
+/** Two trades, hand-written in Tardis's format and gzipped as Tardis serves it. */
+const TwoTrades = gzipSync(
+  'exchange,symbol,timestamp,local_timestamp,id,side,price,amount\n' +
+    'binance,BTCUSDT,1575158403572000,1575158403820370,1,sell,7540.78,0.039741\n' +
+    'binance,BTCUSDT,1575158403579000,1575158403820405,2,buy,7540.79,1.5\n',
+);
+
+/** What the last drawn frame showed. */
+interface Frame {
+  /** RGBA in the middle of the top row, above the highest trade. */
+  top: number[];
+  /** Pixels mostly green or red: buys and sells. */
+  buyPixels: number;
+  sellPixels: number;
+}
+
 /**
- * Before the page loads: counts requestAnimationFrame calls, and copies the
- * canvas's centre pixel right after each frame callback. Later, a presented
- * WebGPU canvas reads back empty.
+ * Before the page loads: counts requestAnimationFrame calls, and reads the
+ * canvas right after each frame callback. Later, a presented WebGPU canvas
+ * reads back empty.
  */
 async function instrument(page: Page) {
   await page.addInitScript(() => {
-    const probe = window as unknown as { frameRequests: number; lastPixel: number[] | null };
+    const probe = window as unknown as { frameRequests: number; lastFrame: Frame | null };
     probe.frameRequests = 0;
-    probe.lastPixel = null;
+    probe.lastFrame = null;
     const request = window.requestAnimationFrame.bind(window);
     window.requestAnimationFrame = (callback) => {
       probe.frameRequests += 1;
@@ -40,7 +56,15 @@ async function instrument(page: Page) {
           const copy = new OffscreenCanvas(canvas.width, canvas.height);
           const context = copy.getContext('2d')!;
           context.drawImage(canvas, 0, 0);
-          probe.lastPixel = Array.from(context.getImageData(canvas.width >> 1, canvas.height >> 1, 1, 1).data);
+          const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+          let buyPixels = 0;
+          let sellPixels = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            buyPixels += data[i + 1] > data[i] + 50 ? 1 : 0;
+            sellPixels += data[i] > data[i + 1] + 50 ? 1 : 0;
+          }
+          const top = (canvas.width >> 1) * 4;
+          probe.lastFrame = { top: Array.from(data.slice(top, top + 4)), buyPixels, sellPixels };
         }
       });
     };
@@ -50,9 +74,7 @@ async function instrument(page: Page) {
 const frameRequests = (page: Page) =>
   page.evaluate(() => (window as unknown as { frameRequests: number }).frameRequests);
 
-/** The RGBA of the canvas's centre pixel in the last drawn frame. */
-const lastPixel = (page: Page) =>
-  page.evaluate(() => (window as unknown as { lastPixel: number[] | null }).lastPixel);
+const lastFrame = (page: Page) => page.evaluate(() => (window as unknown as { lastFrame: Frame | null }).lastFrame);
 
 // In a freshly launched headless Chromium, the first adapter request returns
 // null while SwiftShader starts up; later ones succeed. Warm up the browser
@@ -66,19 +88,56 @@ test.beforeAll(async ({ browser }) => {
   await page.close();
 });
 
-test('starts WebGPU and draws the background', async ({ page }) => {
+test('starts WebGPU and draws the background and both sides\' trades', async ({ page }) => {
   const errors = collectErrors(page);
   await instrument(page);
   await page.goto('/');
   await waitUntilReady(page);
 
+  await expect.poll(() => lastFrame(page)).not.toBeNull();
+  const { top, buyPixels, sellPixels } = (await lastFrame(page))!;
   // The engine's background, (0.07, 0.08, 0.10), in 8-bit RGBA.
-  await expect.poll(() => lastPixel(page)).not.toBeNull();
-  const [red, green, blue, alpha] = (await lastPixel(page))!;
+  const [red, green, blue, alpha] = top;
   expect(Math.abs(red - 18)).toBeLessThanOrEqual(2);
   expect(Math.abs(green - 20)).toBeLessThanOrEqual(2);
   expect(Math.abs(blue - 26)).toBeLessThanOrEqual(2);
   expect(alpha).toBe(255);
+  expect(buyPixels).toBeGreaterThan(100);
+  expect(sellPixels).toBeGreaterThan(100);
+
+  expect(errors).toEqual([]);
+});
+
+test('the wheel zooms, dragging pans, and the buttons jump back', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/');
+  await waitUntilReady(page);
+  const range = page.getByTestId('view-range');
+  const hour = '2019-12-01 12:00:00.000 UTC – 2019-12-01 13:00:00.000 UTC';
+  await expect(range).toHaveText(hour);
+
+  // Zooming in around the middle keeps 12:30 in the middle.
+  const box = (await page.locator('canvas').boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -500);
+  await expect(range).toHaveText(/^2019-12-01 12:\d\d:\d\d\.\d{3} UTC – 2019-12-01 12:\d\d:\d\d\.\d{3} UTC$/);
+  const zoomed = await range.textContent();
+
+  // Dragging right shows earlier trades.
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 100, box.y + box.height / 2);
+  await page.mouse.up();
+  await expect(range).not.toHaveText(zoomed!);
+  expect((await range.textContent())! < zoomed!).toBe(true);
+
+  // Few trades from here: drawing the whole synthetic day takes SwiftShader many seconds.
+  await page.locator('input[type=file]').setInputFiles({ name: 'trades.csv.gz', mimeType: 'application/gzip', buffer: TwoTrades });
+  await expect(page.getByTestId('trade-count')).toHaveText('2');
+  await expect(range).toHaveText(hour);
+  await page.getByRole('button', { name: 'Whole day' }).click();
+  await expect(range).toHaveText('2019-12-01 00:00:00.000 UTC – 2019-12-02 00:00:00.000 UTC');
+  await page.getByRole('button', { name: '12:00–13:00' }).click();
+  await expect(range).toHaveText(hour);
 
   expect(errors).toEqual([]);
 });
@@ -104,13 +163,8 @@ test('shows synthetic trades until a file is opened', async ({ page }) => {
   await expect(page.getByTestId('source')).toContainText('Synthetic');
   await expect(page.getByTestId('trade-count')).not.toHaveText('0');
 
-  // Hand-written, in Tardis's format and gzipped as Tardis serves it.
-  const csv =
-    'exchange,symbol,timestamp,local_timestamp,id,side,price,amount\n' +
-    'binance,BTCUSDT,1575158403572000,1575158403820370,1,sell,7540.78,0.039741\n' +
-    'binance,BTCUSDT,1575158403579000,1575158403820405,2,buy,7540.79,1.5\n';
   const fileInput = page.locator('input[type=file]');
-  await fileInput.setInputFiles({ name: 'trades.csv.gz', mimeType: 'application/gzip', buffer: gzipSync(csv) });
+  await fileInput.setInputFiles({ name: 'trades.csv.gz', mimeType: 'application/gzip', buffer: TwoTrades });
   await expect(page.getByTestId('source')).toHaveText('trades.csv.gz');
   await expect(page.getByTestId('trade-count')).toHaveText('2');
 

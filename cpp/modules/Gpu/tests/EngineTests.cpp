@@ -1,5 +1,6 @@
 #include "Gpu/Market/Engine.hpp"
 
+#include "Core/Data/Trades.hpp"
 #include "Core/Profiling.hpp"
 
 #include <doctest/doctest.h>
@@ -18,6 +19,10 @@ using Gpu::Market::Engine;
 using Pixels = Engine::Pixels;
 using Gpu::Type::FrameStats;
 using UntimedReason = FrameStats::UntimedReason;
+using Core::Data::Side;
+using Core::Data::Trades;
+
+constexpr std::int64_t NoonUs = 1'575'201'600'000'000;  // 2019-12-01 12:00 UTC
 
 // Built without exceptions: CHECK and return early, instead of REQUIRE.
 
@@ -90,7 +95,180 @@ bool isBackground(const Pixels& pixels)
     return !pixels.empty();
 }
 
+struct Rgba
+{
+    int red;
+    int green;
+    int blue;
+    int alpha;
+};
+
+/** The pixel at column `x` and row `y`, counting rows from the top. */
+Rgba pixelAt(const Pixels& pixels, std::uint32_t width, std::uint32_t x, std::uint32_t y)
+{
+    const std::size_t i = (std::size_t{ y } * width + x) * 4;
+    return { pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3] };
+}
+
+bool isBuy(Rgba pixel)
+{
+    return pixel.green > pixel.red + 50;
+}
+
+bool isSell(Rgba pixel)
+{
+    return pixel.red > pixel.green + 50;
+}
+
+bool isBackground(Rgba pixel)
+{
+    return std::abs(pixel.red - 18) <= 1 && std::abs(pixel.green - 20) <= 1 && std::abs(pixel.blue - 26) <= 1;
+}
+
+/** Adds a trade at `timeUs`. */
+void add(Trades& trades, std::int64_t timeUs, double price, double amount, Side side)
+{
+    trades.timeUs.push_back(timeUs);
+    trades.price.push_back(price);
+    trades.amount.push_back(amount);
+    trades.side.push_back(side);
+}
+
+/** A buy a quarter of the way along, mid-height, and a sell three quarters along. */
+Trades buyThenSell()
+{
+    Trades trades;
+    add(trades, NoonUs + 25, 100.0, 1.0, Side::Buy);
+    add(trades, NoonUs + 75, 100.0, 1.0, Side::Sell);
+    return trades;
+}
+
+/** 100 µs from noon, prices 99 to 101, showing `trades`. */
+Gpu::Market::Type::View viewOf(Core::Data::IndexRange trades)
+{
+    return { .time = { NoonUs, NoonUs + 100 }, .price = { .low = 99.0, .high = 101.0 }, .trades = trades };
+}
+
 } // namespace
+
+TEST_CASE("Trades are drawn where their time and price fall, colored by side")
+{
+    const auto engine = createOffscreen(100, 50);
+    if (!engine) {
+        return;
+    }
+    engine->setTrades(buyThenSell());
+    engine->setView(viewOf({ 0, 2 }));
+    engine->render();
+
+    const auto pixels = readPixels(*engine);
+    if (!pixels) {
+        return;
+    }
+    CHECK(isBuy(pixelAt(*pixels, 100, 25, 25)));
+    CHECK(isSell(pixelAt(*pixels, 100, 75, 25)));
+    CHECK(isBackground(pixelAt(*pixels, 100, 50, 25)));
+    CHECK(isBackground(pixelAt(*pixels, 100, 25, 5)));
+}
+
+TEST_CASE("Only the view's trades are drawn")
+{
+    const auto engine = createOffscreen(100, 50);
+    if (!engine) {
+        return;
+    }
+    engine->setTrades(buyThenSell());
+    engine->setView(viewOf({ 1, 2 }));
+    engine->render();
+
+    const auto pixels = readPixels(*engine);
+    if (!pixels) {
+        return;
+    }
+    CHECK(isBackground(pixelAt(*pixels, 100, 25, 25)));
+    CHECK(isSell(pixelAt(*pixels, 100, 75, 25)));
+}
+
+TEST_CASE("Times are exact to the microsecond, decades after 1970")
+{
+    const auto engine = createOffscreen(100, 50);
+    if (!engine) {
+        return;
+    }
+    // 3 µs before the lower 32 bits wrap, so the second trade's subtraction borrows.
+    constexpr std::int64_t StartUs = (((NoonUs >> 32) + 1) << 32) - 3;
+    // Tiny trades, drawn as small as markers get, 1 µs apart.
+    Trades trades;
+    add(trades, StartUs + 2, 100.0, 1e-6, Side::Buy);
+    add(trades, StartUs + 3, 100.0, 1e-6, Side::Sell);
+    engine->setTrades(trades);
+    engine->setView({ .time = { StartUs, StartUs + 10 }, .price = { .low = 99.0, .high = 101.0 }, .trades = { 0, 2 } });
+    engine->render();
+
+    const auto pixels = readPixels(*engine);
+    if (!pixels) {
+        return;
+    }
+    // 10 pixels per microsecond.
+    CHECK(isBuy(pixelAt(*pixels, 100, 20, 25)));
+    CHECK(isSell(pixelAt(*pixels, 100, 30, 25)));
+    CHECK(isBackground(pixelAt(*pixels, 100, 25, 25)));
+}
+
+TEST_CASE("Appending past the reserved room keeps the earlier trades")
+{
+    const auto engine = createOffscreen(100, 50);
+    if (!engine) {
+        return;
+    }
+    std::vector<FrameStats> reported;
+    recordStats(*engine, reported);
+    const auto both = buyThenSell();
+    Trades first;
+    add(first, both.timeUs[0], both.price[0], both.amount[0], both.side[0]);
+    Trades second;
+    add(second, both.timeUs[1], both.price[1], both.amount[1], both.side[1]);
+
+    engine->reserveTrades(1);
+    engine->appendTrades(first);
+    engine->render();
+    engine->appendTrades(second);
+    engine->setView(viewOf({ 0, 2 }));
+    engine->render();
+
+    const auto pixels = readPixels(*engine);
+    if (!pixels || reported.size() != 2) {
+        CHECK(reported.size() == 2);
+        return;
+    }
+    CHECK(isBuy(pixelAt(*pixels, 100, 25, 25)));
+    CHECK(isSell(pixelAt(*pixels, 100, 75, 25)));
+    // The bigger buffer replaced the first: as many buffers, more bytes.
+    CHECK(reported[1].buffers == reported[0].buffers);
+    CHECK(reported[1].gpuBytes > reported[0].gpuBytes);
+}
+
+TEST_CASE("Zooming and panning allocate nothing")
+{
+    const auto engine = createOffscreen(100, 50);
+    if (!engine) {
+        return;
+    }
+    std::vector<FrameStats> reported;
+    recordStats(*engine, reported);
+    engine->setTrades(buyThenSell());
+    for (std::int64_t step = 0; step < 50; ++step) {
+        engine->setView({ .time = { NoonUs + step, NoonUs + 100 + step * 3 }, .price = { .low = 99.0, .high = 101.0 },
+                          .trades = { 0, 2 } });
+        engine->render();
+    }
+    CHECK(reported.size() == 50);
+    for (const auto& stats : reported) {
+        CHECK(stats.buffers == reported.front().buffers);
+        CHECK(stats.textures == reported.front().textures);
+        CHECK(stats.gpuBytes == reported.front().gpuBytes);
+    }
+}
 
 TEST_CASE("An offscreen engine draws its background into every pixel")
 {
@@ -116,6 +294,7 @@ TEST_CASE("Resizing an offscreen engine replaces its texture")
     }
     std::vector<FrameStats> reported;
     recordStats(*engine, reported);
+    engine->render();
     engine->resize(32, 8);
     CHECK(engine->needsRender());
     engine->render();
@@ -127,10 +306,10 @@ TEST_CASE("Resizing an offscreen engine replaces its texture")
     }
     CHECK(pixels->size() == 32 * 8 * 4);
     CHECK(isBackground(*pixels));
-    CHECK(reported.size() == 1);
-    if (reported.size() == 1) {
-        CHECK(reported[0].textures == 1);
-        CHECK(reported[0].gpuBytes == 32 * 8 * 4);
+    CHECK(reported.size() == 2);
+    if (reported.size() == 2) {
+        CHECK(reported[1].textures == 1);
+        CHECK(reported[0].gpuBytes - reported[1].gpuBytes == (64 * 16 - 32 * 8) * 4);
     }
 }
 
@@ -158,7 +337,7 @@ TEST_CASE("Profiling reports CPU times and the GPU time of each pass")
     CHECK_MESSAGE(stats.gpu, "No GPU timings arrived; the device needs timestamp-query");
     if (stats.gpu) {
         CHECK(stats.gpu->passes.size() == 1);
-        CHECK(stats.gpu->passes.front().name == "clear");
+        CHECK(stats.gpu->passes.front().name == "trades");
     }
 }
 

@@ -1,7 +1,11 @@
 #pragma once
 
+#include "Gpu/Market/Type.hpp"
 #include "Gpu/Type.hpp"
 
+#include "Core/Data/Trades.hpp"
+
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <functional>
@@ -39,6 +43,27 @@ public:
 
     /** Surface size in physical pixels. Zero sizes are ignored. */
     void resize(std::uint32_t width, std::uint32_t height);
+
+    /** Physical pixels per CSS or window pixel, which marker sizes are given in. */
+    void setPixelRatio(float ratio);
+
+    /** Replaces the trades, which must be in time order. */
+    void setTrades(const Core::Data::Trades& trades);
+
+    /**
+     * Adds trades after the current ones; they must not be earlier. If they
+     * don't fit in the room reserved, the GPU copies everything to a bigger
+     * buffer, which is slow.
+     */
+    void appendTrades(const Core::Data::Trades& trades);
+
+    /** Makes room for `count` trades in total, for appending without copies. */
+    void reserveTrades(std::size_t count);
+
+    /** What part of the trades to show. */
+    void setView(const Type::View& view);
+
+    void setMarkerScale(Type::MarkerScale scale);
 
     /** Advances the engine's state to `nowMs`. */
     void update(double nowMs);

@@ -1,5 +1,6 @@
 import { useEffect, useState, type DragEvent } from 'react';
 import type { TradeSummary, Viewer } from '../viewer/viewerModule';
+import { utc } from '../utc';
 import { BinanceSampleUrl, loadBinanceSample, loadFile, type OnProgress } from './loadTrades';
 
 const TardisUrl = 'https://datasets.tardis.dev/v1/binance/trades/2019/12/01/BTCUSDT.csv.gz';
@@ -10,17 +11,12 @@ type LoadState =
   | { kind: 'loading'; what: string; loaded: number; total: number | null }
   | { kind: 'error'; message: string };
 
-/** 2019-12-01 12:00:00.000 UTC */
-function utc(ms: number): string {
-  return `${new Date(ms).toISOString().replace('T', ' ').replace('Z', '')} UTC`;
-}
-
 function megabytes(bytes: number): string {
   return `${(bytes / 1e6).toFixed(1)} MB`;
 }
 
 /** What's loaded, ways to load real data, and why the site doesn't host it. */
-export function DataPanel({ viewer }: { viewer: Viewer }) {
+export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTradesChanged: () => void }) {
   const [source, setSource] = useState(Synthetic);
   const [summary, setSummary] = useState<TradeSummary>(() => viewer.tradeSummary());
   const [load, setLoad] = useState<LoadState>({ kind: 'idle' });
@@ -38,6 +34,7 @@ export function DataPanel({ viewer }: { viewer: Viewer }) {
       await loading((loaded, total) => setLoad({ kind: 'loading', what, loaded, total }));
       setSource(what);
       setSummary(viewer.tradeSummary());
+      onTradesChanged();
       setLoad({ kind: 'idle' });
     } catch (error) {
       setLoad({ kind: 'error', message: `${what}: ${error instanceof Error ? error.message : String(error)}` });

@@ -37,6 +37,13 @@ struct WebTradeSummary
     double totalAmount;
 };
 
+/** A time range in milliseconds since the epoch, for Date. */
+struct WebTimeRange
+{
+    double startMs;
+    double endMs;
+};
+
 /**
  * The object JavaScript holds. JavaScript owns the frame loop and must
  * call delete() when done.
@@ -94,6 +101,61 @@ public:
     {
         if (*mApp) {
             (*mApp)->render();
+        }
+    }
+
+    /** The time range on screen. Empty until init() succeeds. */
+    WebTimeRange view() const
+    {
+        if (!*mApp) {
+            return {};
+        }
+        const auto view = (*mApp)->view();
+        return { .startMs = static_cast<double>(view.startUs) / 1000.0, .endMs = static_cast<double>(view.endUs) / 1000.0 };
+    }
+
+    void resetView()
+    {
+        if (*mApp) {
+            (*mApp)->resetView();
+        }
+    }
+
+    void showDay()
+    {
+        if (*mApp) {
+            (*mApp)->showDay();
+        }
+    }
+
+    /** `x` in physical pixels from the canvas's left edge; a `factor` above 1 zooms out. */
+    void zoomAt(double x, double factor)
+    {
+        if (*mApp) {
+            (*mApp)->zoomAt(x, factor);
+        }
+    }
+
+    /** `dx` in physical pixels. */
+    void panBy(double dx)
+    {
+        if (*mApp) {
+            (*mApp)->panBy(dx);
+        }
+    }
+
+    /** "area" or "log". */
+    void setMarkerScale(const std::string& scale)
+    {
+        if (*mApp) {
+            (*mApp)->setMarkerScale(scale == "log" ? Gpu::Market::Type::MarkerScale::Log : Gpu::Market::Type::MarkerScale::Area);
+        }
+    }
+
+    void setPixelRatio(float ratio)
+    {
+        if (*mApp) {
+            (*mApp)->setPixelRatio(ratio);
         }
     }
 
@@ -174,6 +236,10 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .field("lastMs", &WebTradeSummary::lastMs)
         .field("totalAmount", &WebTradeSummary::totalAmount);
 
+    emscripten::value_object<WebTimeRange>("TimeRange")
+        .field("startMs", &WebTimeRange::startMs)
+        .field("endMs", &WebTimeRange::endMs);
+
     emscripten::class_<WebViewer>("Viewer")
         .constructor<>()
         .function("init", &WebViewer::init)
@@ -182,6 +248,13 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("update", &WebViewer::update)
         .function("needsRender", &WebViewer::needsRender)
         .function("render", &WebViewer::render)
+        .function("view", &WebViewer::view)
+        .function("resetView", &WebViewer::resetView)
+        .function("showDay", &WebViewer::showDay)
+        .function("zoomAt", &WebViewer::zoomAt)
+        .function("panBy", &WebViewer::panBy)
+        .function("setMarkerScale", &WebViewer::setMarkerScale)
+        .function("setPixelRatio", &WebViewer::setPixelRatio)
         .function("tradeSummary", &WebViewer::tradeSummary)
         .function("beginLoad", &WebViewer::beginLoad)
         .function("appendChunk", &WebViewer::appendChunk)

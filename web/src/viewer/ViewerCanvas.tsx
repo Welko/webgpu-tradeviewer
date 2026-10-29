@@ -1,11 +1,28 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { GpuInfo } from './gpuInfo';
-import { createViewer, type PowerPreference, type Viewer } from './viewerModule';
+import { ViewControls } from './ViewControls';
+import { createViewer, type PowerPreference, type TimeRange, type Viewer } from './viewerModule';
 
 export type ViewerStatus =
   | { kind: 'loading' }
-  | { kind: 'ready'; gpu: GpuInfo; viewer: Viewer }
+  /** `refresh()` draws again; call it after changing the viewer, such as loading trades. */
+  | { kind: 'ready'; gpu: GpuInfo; viewer: Viewer; refresh: () => void }
   | { kind: 'error'; message: string };
+
+// Zooming per pixel of wheel scrolling: a usual 100-pixel step zooms by about 1.22.
+const ZoomPerWheelPixel = 0.002;
+
+/** A wheel event's vertical scroll in pixels, whatever unit it came in. */
+function wheelPixels(event: WheelEvent, pageHeight: number): number {
+  switch (event.deltaMode) {
+    case WheelEvent.DOM_DELTA_LINE:
+      return event.deltaY * 16;
+    case WheelEvent.DOM_DELTA_PAGE:
+      return event.deltaY * pageHeight;
+    default:
+      return event.deltaY;
+  }
+}
 
 interface ViewerCanvasProps {
   /** Changing it recreates the viewer on a newly requested adapter. */
@@ -14,7 +31,8 @@ interface ViewerCanvasProps {
 }
 
 /**
- * Hosts the C++ viewer. React owns the frame loop and the canvas size.
+ * Hosts the C++ viewer. React owns the frame loop and the canvas size, and
+ * forwards input: the wheel zooms around the pointer, dragging pans.
  * Frames are requested only while the viewer needs them, so an idle page
  * schedules nothing.
  */
@@ -23,6 +41,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
   const canvasId = `viewer-${useId().replace(/:/g, '')}`;
   const onStatusRef = useRef(onStatus);
   onStatusRef.current = onStatus;
+  const [controls, setControls] = useState<{ viewer: Viewer; view: TimeRange; refresh: () => void } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -31,6 +50,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
     let frame = 0;
     let scheduled = false;
     let observer: ResizeObserver | null = null;
+    const removeInput = new AbortController();
 
     onStatusRef.current?.({ kind: 'loading' });
 
@@ -60,6 +80,50 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
             frame = requestAnimationFrame(tick);
           }
         };
+        const refresh = () => {
+          requestFrame();
+          setControls({ viewer: created, view: created.view(), refresh });
+        };
+
+        // CSS pixels to the canvas's physical pixels, which the viewer works in.
+        const toPixels = (x: number) => (canvas.clientWidth > 0 ? (x * canvas.width) / canvas.clientWidth : x);
+        const listen = { signal: removeInput.signal };
+        canvas.addEventListener(
+          'wheel',
+          (event) => {
+            event.preventDefault();
+            created.zoomAt(toPixels(event.offsetX), Math.exp(wheelPixels(event, canvas.clientHeight) * ZoomPerWheelPixel));
+            refresh();
+          },
+          { ...listen, passive: false },
+        );
+        let dragX: number | null = null;
+        canvas.addEventListener(
+          'pointerdown',
+          (event) => {
+            if (event.button === 0) {
+              canvas.setPointerCapture(event.pointerId);
+              dragX = event.clientX;
+            }
+          },
+          listen,
+        );
+        canvas.addEventListener(
+          'pointermove',
+          (event) => {
+            if (dragX !== null) {
+              created.panBy(toPixels(event.clientX - dragX));
+              dragX = event.clientX;
+              refresh();
+            }
+          },
+          listen,
+        );
+        const endDrag = () => {
+          dragX = null;
+        };
+        canvas.addEventListener('pointerup', endDrag, listen);
+        canvas.addEventListener('pointercancel', endDrag, listen);
 
         observer = new ResizeObserver(([entry]) => {
           const box = entry.devicePixelContentBoxSize?.[0];
@@ -71,12 +135,14 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
             canvas.height = height;
           }
           created.resize(width, height);
+          // Also changes when the page is zoomed or moved to another screen, which resizes the canvas in pixels.
+          created.setPixelRatio(devicePixelRatio);
           requestFrame();
         });
         observer.observe(canvas);
-        requestFrame();
+        refresh();
 
-        onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created });
+        onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created, refresh });
       })
       .catch((error: unknown) => {
         if (!disposed) {
@@ -88,6 +154,8 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
       disposed = true;
       cancelAnimationFrame(frame);
       observer?.disconnect();
+      removeInput.abort();
+      setControls(null);
       viewer?.delete();
     };
   }, [canvasId, powerPreference]);
@@ -95,6 +163,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
   return (
     <div className="viewer">
       <canvas id={canvasId} ref={canvasRef} />
+      {controls && <ViewControls {...controls} onChange={controls.refresh} />}
     </div>
   );
 }

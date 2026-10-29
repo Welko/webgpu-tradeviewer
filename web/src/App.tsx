@@ -38,7 +38,7 @@ export function App() {
       </header>
       <main className="app-main">
         <ViewerCanvas powerPreference={powerPreference} onStatus={setStatus} />
-        {status.kind === 'ready' && <DataPanel viewer={status.viewer} />}
+        {status.kind === 'ready' && <DataPanel viewer={status.viewer} onTradesChanged={status.refresh} />}
       </main>
     </div>
   );

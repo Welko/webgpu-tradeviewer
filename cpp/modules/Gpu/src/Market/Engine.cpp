@@ -3,6 +3,7 @@
 #include "Gpu/Context.hpp"
 #include "Gpu/Convert.hpp"
 #include "Gpu/Handle.hpp"
+#include "Gpu/Market/TradesPass.hpp"
 #include "Gpu/Profiler.hpp"
 #include "Gpu/Readback.hpp"
 #include "Gpu/Resource.hpp"
@@ -22,8 +23,6 @@ namespace Gpu::Market {
 
 namespace {
 
-constexpr WGPUColor ClearColor{ 0.07, 0.08, 0.10, 1.0 };
-
 // Readable back to the CPU without swizzling, for image tests.
 constexpr WGPUTextureFormat OffscreenFormat = WGPUTextureFormat_RGBA8Unorm;
 constexpr std::uint64_t OffscreenBytesPerPixel = 4;
@@ -32,19 +31,19 @@ constexpr std::uint64_t OffscreenBytesPerPixel = 4;
 constexpr std::size_t MaxWaitingFrames = 16;
 
 /** The WebGPU surface for a window or canvas; null if it can't be created. */
-WGPUSurface createSurface(WGPUInstance instance, const Type::Target::Any& target)
+WGPUSurface createSurface(WGPUInstance instance, const Gpu::Type::Target::Any& target)
 {
     WGPUSurfaceDescriptor descriptor{};
 
 #ifdef __EMSCRIPTEN__
-    const auto& canvas = std::get<Type::Target::Canvas>(target);
+    const auto& canvas = std::get<Gpu::Type::Target::Canvas>(target);
     WGPUEmscriptenSurfaceSourceCanvasHTMLSelector source{};
     source.chain.sType = WGPUSType_EmscriptenSurfaceSourceCanvasHTMLSelector;
     source.selector = Convert::ToWgpu::stringView(canvas.selector);
     descriptor.nextInChain = &source.chain;
     return wgpuInstanceCreateSurface(instance, &descriptor);
 #else
-    if (const auto* wayland = std::get_if<Type::Target::Wayland>(&target)) {
+    if (const auto* wayland = std::get_if<Gpu::Type::Target::Wayland>(&target)) {
         WGPUSurfaceSourceWaylandSurface source{};
         source.chain.sType = WGPUSType_SurfaceSourceWaylandSurface;
         source.display = wayland->display;
@@ -52,7 +51,7 @@ WGPUSurface createSurface(WGPUInstance instance, const Type::Target::Any& target
         descriptor.nextInChain = &source.chain;
         return wgpuInstanceCreateSurface(instance, &descriptor);
     }
-    if (const auto* xlib = std::get_if<Type::Target::Xlib>(&target)) {
+    if (const auto* xlib = std::get_if<Gpu::Type::Target::Xlib>(&target)) {
         WGPUSurfaceSourceXlibWindow source{};
         source.chain.sType = WGPUSType_SurfaceSourceXlibWindow;
         source.display = xlib->display;
@@ -82,7 +81,7 @@ struct Engine::Impl
     ~Impl();
 
     /** Creates the surface for a window or canvas, or records an offscreen size. */
-    [[nodiscard]] std::expected<void, std::string> prepare(WGPUInstance instance, const Type::Target::Any& target);
+    [[nodiscard]] std::expected<void, std::string> prepare(WGPUInstance instance, const Gpu::Type::Target::Any& target);
 
     /** Picks the format and makes the output ready, once the device exists. */
     [[nodiscard]] std::expected<void, std::string> finishOutput();
@@ -100,12 +99,6 @@ struct Engine::Impl
 
     void render();
 
-    struct Passes
-    {
-        // In the order render() runs them.
-        static void encodeClear(WGPUCommandEncoder encoder, WGPUTextureView view, Profiler& profiler);
-    };
-
     // Declared first so it is destroyed last, after every tracked handle.
     Resource::Stats resources;
 
@@ -115,6 +108,7 @@ struct Engine::Impl
     std::shared_ptr<Profiler> profiler;  // set once the device exists
     Handle<WGPUSurface> surface;  // set for a window or canvas
     Handle<WGPUTexture> offscreen;  // set for an offscreen target
+    std::optional<TradesPass> trades;  // set once the output format is known
 
     WGPUTextureFormat format = WGPUTextureFormat_Undefined;
     std::uint32_t width = 0;
@@ -162,6 +156,7 @@ void Engine::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPrefer
             onDone(std::unexpected(std::move(finished.error())));
             return;
         }
+        impl->trades.emplace(impl->context, impl->resources, impl->format);
         impl->profiler = Profiler::create(impl->context,
             [&statsQueue = impl->statsQueue](std::uint64_t frame, Profiler::Times times) {
                 statsQueue.setTimes(frame, std::move(times));
@@ -170,10 +165,10 @@ void Engine::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPrefer
     });
 }
 
-std::expected<void, std::string> Engine::Impl::prepare(WGPUInstance instance, const Type::Target::Any& target)
+std::expected<void, std::string> Engine::Impl::prepare(WGPUInstance instance, const Gpu::Type::Target::Any& target)
 {
 #ifndef __EMSCRIPTEN__
-    if (const auto* size = std::get_if<Type::Target::Offscreen>(&target)) {
+    if (const auto* size = std::get_if<Gpu::Type::Target::Offscreen>(&target)) {
         if (size->width == 0 || size->height == 0) {
             return std::unexpected("An offscreen target needs a non-zero size");
         }
@@ -323,7 +318,7 @@ void Engine::Impl::render()
     const Handle encoder(wgpuDeviceCreateCommandEncoder(context.device.get(), nullptr));
     {
         const Core::Profiling::Scope scope(encodeMs, timed);
-        Passes::encodeClear(encoder.get(), image->view.get(), *profiler);
+        trades->encode(encoder.get(), image->view.get(), width, height, *profiler);
         profiler->endPasses(encoder.get());
     }
     {
@@ -337,33 +332,14 @@ void Engine::Impl::render()
 
     statsQueue.push({
         .frame = ++lastFrame,
-        .cpu = timed ? std::optional(Type::FrameStats::Cpu{ .acquireMs = acquireMs, .encodeMs = encodeMs, .submitMs = submitMs })
+        .cpu = timed ? std::optional(Gpu::Type::FrameStats::Cpu{ .acquireMs = acquireMs, .encodeMs = encodeMs, .submitMs = submitMs })
                      : std::nullopt,
-        .gpu = std::unexpected(Type::FrameStats::UntimedReason::Undefined),
+        .gpu = std::unexpected(Gpu::Type::FrameStats::UntimedReason::Undefined),
         .buffers = resources.count(Resource::Kind::Buffer),
         .textures = resources.count(Resource::Kind::Texture),
         .gpuBytes = resources.totalBytes(),
     });
     profiler->endFrame(lastFrame);
-}
-
-void Engine::Impl::Passes::encodeClear(WGPUCommandEncoder encoder, WGPUTextureView view, Profiler& profiler)
-{
-    WGPURenderPassColorAttachment color{};
-    color.view = view;
-    color.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
-    color.loadOp = WGPULoadOp_Clear;
-    color.storeOp = WGPUStoreOp_Store;
-    color.clearValue = ClearColor;
-
-    WGPURenderPassDescriptor descriptor{};
-    descriptor.colorAttachmentCount = 1;
-    descriptor.colorAttachments = &color;
-    descriptor.timestampWrites = profiler.measurePass("clear");
-
-    // Clearing happens when the pass begins; there is nothing to draw.
-    const Handle pass(wgpuCommandEncoderBeginRenderPass(encoder, &descriptor));
-    wgpuRenderPassEncoderEnd(pass.get());
 }
 
 // Public interface
@@ -382,6 +358,43 @@ const Gpu::Type::Info& Engine::info() const
 void Engine::resize(std::uint32_t width, std::uint32_t height)
 {
     mImpl->resize(width, height);
+}
+
+void Engine::setPixelRatio(float ratio)
+{
+    mImpl->trades->setPixelRatio(ratio);
+    mImpl->dirty = true;
+}
+
+void Engine::setTrades(const Core::Data::Trades& trades)
+{
+    mImpl->trades->clear();
+    mImpl->trades->reserve(trades.size());
+    mImpl->trades->append(trades);
+    mImpl->dirty = true;
+}
+
+void Engine::appendTrades(const Core::Data::Trades& trades)
+{
+    mImpl->trades->append(trades);
+    mImpl->dirty = true;
+}
+
+void Engine::reserveTrades(std::size_t count)
+{
+    mImpl->trades->reserve(count);
+}
+
+void Engine::setView(const Type::View& view)
+{
+    mImpl->trades->setView(view);
+    mImpl->dirty = true;
+}
+
+void Engine::setMarkerScale(Type::MarkerScale scale)
+{
+    mImpl->trades->setMarkerScale(scale);
+    mImpl->dirty = true;
 }
 
 void Engine::update(double nowMs)
