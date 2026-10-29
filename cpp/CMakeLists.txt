@@ -6,6 +6,7 @@ project(
 )
 
 include(cmake/common.cmake)
+include(cmake/shaders.cmake)
 
 # Native builds use Wayland or X11; other systems can come later.
 if (NOT EMSCRIPTEN AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")

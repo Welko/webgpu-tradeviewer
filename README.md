@@ -32,8 +32,15 @@ The platform side owns the frame loop: `requestAnimationFrame` on the web, a GLF
 - [emsdk](https://emscripten.org/docs/getting_started/downloads.html) (tested with Emscripten 6.0.13)
 - Native, Linux only for now: `sudo apt install libwayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev zlib1g-dev`
 - A browser with WebGPU
+- Optional: [naga](https://crates.io/crates/naga-cli), to check shaders while building: `cargo install naga-cli --version 24.0.0`
 
 The first configure downloads WebGPU-distribution (wgpu-native or emdawnwebgpu) and GLFW.
+
+### Shaders
+
+WGSL shaders live next to the pass that uses them, such as `cpp/modules/Gpu/src/Market/TradesPass.wgsl`. `gpu_embed_shader()` (`cpp/cmake/shaders.cmake`) turns each into a generated header, `Gpu/Shaders/<Name>.hpp`, holding it as a `std::string_view`, so binaries need no shader files at runtime. When naga is installed, every build checks each shader with it. Naga 24 is the compiler inside wgpu-native v24, so it catches what the native build would. CI requires it (`-DTRADEVIEWER_REQUIRE_NAGA=ON`). Chrome compiles with a different compiler, Tint, so the browser tests remain the web's check.
+
+In VS Code or Cursor, the recommended [wgsl-analyzer](https://github.com/wgsl-analyzer/wgsl-analyzer) extension shows errors as you type, with hover and go-to-definition.
 
 ## Web
 

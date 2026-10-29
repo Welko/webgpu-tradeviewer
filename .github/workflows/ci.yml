@@ -19,6 +19,8 @@ concurrency:
 
 env:
   EMSDK_VERSION: 6.0.13
+  # The shader compiler in wgpu-native v24; the build checks every shader with it.
+  NAGA_VERSION: 24.0.0
   # Every test run writes JUnit XML here (see cpp/cmake/testing.cmake); the
   # summary job turns it into one table on the run's page.
   TRADEVIEWER_JUNIT_DIR: ${{ github.workspace }}/test-results
@@ -41,9 +43,21 @@ jobs:
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
             zlib1g-dev libvulkan1 mesa-vulkan-drivers
 
+      # Cargo comes with the runner; the cache skips building naga again.
+      - name: Cache naga
+        id: naga-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/naga
+          key: naga-${{ env.NAGA_VERSION }}-${{ runner.os }}
+
+      - name: Install naga
+        if: steps.naga-cache.outputs.cache-hit != 'true'
+        run: cargo install naga-cli --version "$NAGA_VERSION" --locked
+
       - name: Configure
         working-directory: cpp
-        run: cmake --preset native
+        run: cmake --preset native -DTRADEVIEWER_REQUIRE_NAGA=ON
 
       - name: Build
         working-directory: cpp

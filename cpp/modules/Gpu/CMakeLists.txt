@@ -17,6 +17,7 @@ add_library(Gpu STATIC
     src/Readback.cpp
 )
 viewer_setup_target(Gpu)
+gpu_embed_shader(Gpu src/Market/TradesPass.wgsl)
 
 target_include_directories(Gpu PUBLIC include)
 target_include_directories(Gpu PRIVATE src/include)
