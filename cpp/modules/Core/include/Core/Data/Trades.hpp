@@ -3,6 +3,7 @@
 #include "Core/Data/TimeRange.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -29,6 +30,17 @@ struct Trades
     [[nodiscard]] bool empty() const { return timeUs.empty(); }
 };
 
+/**
+ * Amounts are summed in whole units of 1e-8, the finest step Binance trades
+ * in, so totals are exact and the same however they're added up.
+ */
+constexpr double AmountUnit = 1e-8;
+
+inline std::int64_t toAmountUnits(double amount)
+{
+    return std::llround(amount / AmountUnit);
+}
+
 /** How many trades there are, when, and how much they traded. */
 struct TradeSummary
 {
@@ -43,15 +55,15 @@ inline TradeSummary summarize(const Trades& trades)
     if (trades.empty()) {
         return {};
     }
-    double totalAmount = 0.0;
+    std::int64_t totalUnits = 0;
     for (const double amount : trades.amount) {
-        totalAmount += amount;
+        totalUnits += toAmountUnits(amount);
     }
     return {
         .count = trades.size(),
         .firstUs = trades.timeUs.front(),
         .lastUs = trades.timeUs.back(),
-        .totalAmount = totalAmount,
+        .totalAmount = static_cast<double>(totalUnits) * AmountUnit,
     };
 }
 
@@ -75,6 +87,29 @@ inline IndexRange tradesIn(const Trades& trades, TimeRange range)
     const auto last = std::lower_bound(first, trades.timeUs.end(), range.endUs);
     return { .first = static_cast<std::size_t>(first - begin), .last = static_cast<std::size_t>(last - begin) };
 }
+
+/** The total amount of any range of trades in constant time: running totals, built once. */
+class AmountTotals
+{
+public:
+    AmountTotals() = default;
+
+    explicit AmountTotals(const Trades& trades)
+    {
+        mRunning.reserve(trades.size() + 1);
+        for (const double amount : trades.amount) {
+            mRunning.push_back(mRunning.back() + toAmountUnits(amount));
+        }
+    }
+
+    /** In units of AmountUnit. */
+    [[nodiscard]] std::int64_t unitsIn(IndexRange indices) const { return mRunning[indices.last] - mRunning[indices.first]; }
+
+    [[nodiscard]] double in(IndexRange indices) const { return static_cast<double>(unitsIn(indices)) * AmountUnit; }
+
+private:
+    std::vector<std::int64_t> mRunning{ 0 };  // mRunning[i]: the first i trades' total
+};
 
 struct PriceRange
 {

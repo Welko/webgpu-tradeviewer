@@ -67,6 +67,19 @@ jobs:
         working-directory: cpp
         run: ctest --test-dir build/native --output-on-failure --no-tests=error
 
+      # Task 1 asks for the visible count and amount of three fixed ranges to
+      # match an independent calculation. TradeStatsApp runs the viewer's code and
+      # tools/check_ranges.py works them out on its own, here on Binance's
+      # public copy of the brief's day. The table goes on the run's page.
+      - name: Check visible counts and amounts
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/trades.zip" \
+            https://data.binance.vision/data/spot/daily/trades/BTCUSDT/BTCUSDT-trades-2019-12-01.zip
+          unzip -q -d "$RUNNER_TEMP" "$RUNNER_TEMP/trades.zip"
+          echo "### Visible count and amount, against an independent calculation" >> "$GITHUB_STEP_SUMMARY"
+          python3 tools/check_ranges.py cpp/build/native/apps/TradeStatsApp/TradeStatsApp \
+            "$RUNNER_TEMP/BTCUSDT-trades-2019-12-01.csv" | tee -a "$GITHUB_STEP_SUMMARY"
+
       # Keeps the compiled-out stubs building and passing.
       - name: Build and test with profiling compiled out
         working-directory: cpp
@@ -89,8 +102,8 @@ jobs:
           build=cpp/build/native-release
           package=dist/trade-viewer
           mkdir -p "$package"
-          cp "$build/apps/Viewer/Viewer" "$package/"
-          strip "$package/Viewer"
+          cp "$build/apps/ViewerApp/ViewerApp" "$package/"
+          strip "$package/ViewerApp"
           cp "$build/_deps/glfw-src/LICENSE.md" "$package/LICENSE-glfw.md"
           wgpu_tag=$(cat "$build/_deps/wgpu-linux-x86_64-release-src/wgpu-native-meta/wgpu-native-git-tag")
           curl -fsSL "https://raw.githubusercontent.com/gfx-rs/wgpu-native/$wgpu_tag/LICENSE.MIT" -o "$package/LICENSE-wgpu-native.txt"
@@ -238,4 +251,4 @@ jobs:
           fi
           gh release create latest trade-viewer-linux-x86_64.tar.gz \
             --target "$GITHUB_SHA" --latest --title "Latest build" \
-            --notes "Built from $GITHUB_SHA on Ubuntu 24.04, for Linux x86_64 with Wayland or X11 and a Vulkan driver. Run \`./Viewer\` for synthetic data, or \`./Viewer BTCUSDT.csv.gz\` for a trades file."
+            --notes "Built from $GITHUB_SHA on Ubuntu 24.04, for Linux x86_64 with Wayland or X11 and a Vulkan driver. Run \`./ViewerApp\` for synthetic data, or \`./ViewerApp BTCUSDT.csv.gz\` for a trades file."

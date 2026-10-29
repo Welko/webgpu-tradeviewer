@@ -1,15 +1,16 @@
 import { utc } from '../utc';
-import type { TimeRange, Viewer } from './viewerModule';
+import type { TimeRange, Viewer, Visible } from './viewerModule';
 
 interface ViewControlsProps {
   viewer: Viewer;
   view: TimeRange;
+  visible: Visible;
   /** Call after changing the viewer, to draw it again. */
   onChange: () => void;
 }
 
-/** The time range on screen, and buttons to jump to the usual ones. */
-export function ViewControls({ viewer, view, onChange }: ViewControlsProps) {
+/** The time range on screen and what it holds, and buttons to jump to the usual ranges. */
+export function ViewControls({ viewer, view, visible, onChange }: ViewControlsProps) {
   const act = (action: () => void) => () => {
     action();
     onChange();
@@ -19,6 +20,10 @@ export function ViewControls({ viewer, view, onChange }: ViewControlsProps) {
     <div className="view-controls">
       <span data-testid="view-range">
         {utc(view.startMs)} – {utc(view.endMs)}
+      </span>
+      <span title="Trades from the start time up to, but not including, the end time">
+        <span data-testid="visible-count">{visible.count.toLocaleString('en-US')}</span> trades,{' '}
+        <span data-testid="visible-amount">{visible.amount.toLocaleString('en-US', { maximumFractionDigits: 8 })}</span> BTC
       </span>
       <button type="button" className="button" onClick={act(() => viewer.resetView())}>
         12:00–13:00

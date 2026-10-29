@@ -6,6 +6,7 @@
 #include "Gpu/Market/Type.hpp"
 #include "Gpu/Type.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <functional>
@@ -37,6 +38,16 @@ public:
 
     /** Replaces the trades, which must be in time order, and resets the view. */
     void setTrades(Core::Data::Trades trades);
+
+    /** The trades in view: how many, and their total amount. */
+    struct Visible
+    {
+        std::size_t count;
+        double amount;
+    };
+
+    /** The trades in the time range on screen, start inclusive and end exclusive. */
+    [[nodiscard]] Visible visible() const;
 
     /** The time range on screen, left edge to right edge. */
     [[nodiscard]] Core::Data::TimeRange view() const { return mView; }
@@ -90,9 +101,11 @@ private:
 
     std::unique_ptr<Gpu::Market::Engine> mEngine;
     Core::Data::Trades mTrades;
+    Core::Data::AmountTotals mTotals;
     std::int64_t mDayStartUs = 0;  // midnight UTC before the first trade
     Core::Data::TimeRange mView{};
     Core::Data::PriceRange mPrice{};  // kept while the view has no trades
+    Core::Data::IndexRange mVisible{};
     std::uint32_t mWidth = 0;
 };
 

@@ -52,12 +52,18 @@ const Core::Data::Trades& App::trades() const
 void App::setTrades(Core::Data::Trades trades)
 {
     mTrades = std::move(trades);
+    mTotals = Core::Data::AmountTotals(mTrades);
     mEngine->setTrades(mTrades);
     const std::int64_t firstUs = mTrades.empty() ? 0 : mTrades.timeUs.front();
     // Rounded down, also before 1970.
     mDayStartUs = (firstUs >= 0 ? firstUs : firstUs - DayUs + 1) / DayUs * DayUs;
     mPrice = {};
     resetView();
+}
+
+App::Visible App::visible() const
+{
+    return { .count = mVisible.size(), .amount = mTotals.in(mVisible) };
 }
 
 void App::resetView()
@@ -101,13 +107,13 @@ void App::setPixelRatio(float ratio)
 
 void App::applyView()
 {
-    const auto indices = Core::Data::tradesIn(mTrades, mView);
-    if (const auto price = Core::Data::priceRange(mTrades, indices)) {
+    mVisible = Core::Data::tradesIn(mTrades, mView);
+    if (const auto price = Core::Data::priceRange(mTrades, mVisible)) {
         // Some room even for a single price, so its trades sit mid-height.
         const double padding = std::max((price->high - price->low) * PricePadding, price->high * 1e-5);
         mPrice = { .low = price->low - padding, .high = price->high + padding };
     }
-    mEngine->setView({ .time = mView, .price = mPrice, .trades = indices });
+    mEngine->setView({ .time = mView, .price = mPrice, .trades = mVisible });
 }
 
 const Gpu::Type::Info& App::info() const

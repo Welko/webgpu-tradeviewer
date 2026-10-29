@@ -4,8 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build:wasm": "cd ../cpp && cmake --preset web && cmake --build --preset web",
-    "dev": "npm run build:wasm && vite",
+    "build:wasm": "cd ../cpp && cmake --preset web -DTRADEVIEWER_WASM_NAMES=OFF && cmake --build --preset web",
+    "build:wasm:dev": "cd ../cpp && cmake --preset web -DTRADEVIEWER_WASM_NAMES=ON && cmake --build --preset web",
+    "dev": "npm run build:wasm:dev && vite",
     "build": "npm run build:wasm && tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",

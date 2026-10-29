@@ -5,6 +5,13 @@ add_library(Core STATIC
 )
 viewer_setup_target(Core)
 
+# Reading .csv.gz files natively; the browser has DecompressionStream.
+if (NOT EMSCRIPTEN)
+    find_package(ZLIB REQUIRED)
+    target_sources(Core PRIVATE src/Data/TradeFile.cpp)
+    target_link_libraries(Core PRIVATE ZLIB::ZLIB)
+endif()
+
 target_include_directories(Core PUBLIC include)
 target_compile_features(Core PUBLIC cxx_std_23)
 # Everything that links Core sees the same switch (0 or 1).

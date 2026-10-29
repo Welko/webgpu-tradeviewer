@@ -7,6 +7,7 @@
 
 namespace {
 
+using Core::Data::AmountTotals;
 using Core::Data::IndexRange;
 using Core::Data::TimeRange;
 using Core::Data::Trades;
@@ -72,4 +73,20 @@ TEST_CASE("The price range covers only the given trades")
         CHECK(middle->high == 120.0);
     }
     CHECK_FALSE(priceRange(trades, { 2, 2 }));
+}
+
+TEST_CASE("Totals of amounts are exact for any range")
+{
+    auto trades = tradesAt({ 1, 2, 3, 4 });
+    // Doubles add 0.1 + 0.2 to 0.30000000000000004; units of 1e-8 don't.
+    trades.amount = { 0.1, 0.2, 0.00000001, 12.5 };
+    const AmountTotals totals(trades);
+
+    CHECK(totals.unitsIn({ 0, 2 }) == 30'000'000);
+    CHECK(totals.in({ 0, 2 }) == 0.3);
+    CHECK(totals.unitsIn({ 2, 3 }) == 1);
+    CHECK(totals.unitsIn({ 0, 4 }) == 1'280'000'001);
+    CHECK(totals.unitsIn({ 3, 3 }) == 0);
+    CHECK(AmountTotals().unitsIn({ 0, 0 }) == 0);
+    CHECK(Core::Data::summarize(trades).totalAmount == totals.in({ 0, 4 }));
 }

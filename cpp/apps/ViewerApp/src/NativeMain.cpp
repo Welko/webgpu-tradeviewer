@@ -1,18 +1,15 @@
 #include "App.hpp"
 
-#include "Core/Data/TradeParser.hpp"
+#include "Core/Data/TradeFile.hpp"
 #include "Core/Log.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
-#include <zlib.h>
 
-#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
-#include <expected>
 #include <format>
 #include <memory>
 #include <optional>
@@ -146,34 +143,19 @@ const char* tradesPath(int argc, char** argv)
     return nullptr;
 }
 
-/** Reads a trades CSV, gzip-compressed or not. */
-std::expected<Core::Data::Trades, std::string> readTrades(const char* path)
-{
-    const std::unique_ptr<gzFile_s, decltype(&gzclose)> file(gzopen(path, "rb"), &gzclose);
-    if (!file) {
-        return std::unexpected(std::format("Can't open {}", path));
-    }
-    Core::Data::TradeParser parser;
-    std::array<char, 64 * 1024> buffer{};
-    while (true) {
-        const int read = gzread(file.get(), buffer.data(), static_cast<unsigned>(buffer.size()));
-        if (read < 0) {
-            int code = 0;
-            return std::unexpected(std::format("Can't read {}: {}", path, gzerror(file.get(), &code)));
-        }
-        if (read == 0) {
-            return parser.finish();
-        }
-        if (auto appended = parser.append({ buffer.data(), static_cast<std::size_t>(read) }); !appended) {
-            return std::unexpected(std::format("{}: {}", path, appended.error()));
-        }
-    }
-}
-
 /** A UTC time to the millisecond, such as 2019-12-01 00:00:03.572. */
 std::string utc(std::int64_t timeUs)
 {
     return std::format("{:%F %T}", std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(timeUs / 1000)));
+}
+
+/** The view's range and what it holds, so the window always says what it shows. */
+std::string windowTitle(const Viewer::App& app)
+{
+    const auto view = app.view();
+    const auto visible = app.visible();
+    return std::format("Trade Viewer · {} to {} UTC · {} trades, {:.8f} BTC", utc(view.startUs), utc(view.endUs),
+                       visible.count, visible.amount);
 }
 
 } // namespace
@@ -182,7 +164,7 @@ int main(int argc, char** argv)
 {
     std::optional<Core::Data::Trades> loaded;
     if (const char* path = tradesPath(argc, argv)) {
-        auto trades = readTrades(path);
+        auto trades = Core::Data::readTradeFile(path);
         if (!trades) {
             Core::Log::error("{}", trades.error());
             return 1;
@@ -259,6 +241,7 @@ int main(int argc, char** argv)
         if (app->needsRender() || state.repaint) {
             app->render();
             state.repaint = false;
+            glfwSetWindowTitle(window, windowTitle(*app).c_str());
         }
     }
 

@@ -1,4 +1,4 @@
-import type { GpuInfo as WasmGpuInfo } from '../wasm/Viewer.js';
+import type { GpuInfo as WasmGpuInfo } from '../wasm/ViewerApp.js';
 
 /**
  * The GPU details the viewer reports. The generated type allows any embind

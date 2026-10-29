@@ -1,9 +1,9 @@
-add_executable(Viewer
+add_executable(ViewerApp
     src/App.cpp
 )
-viewer_setup_target(Viewer)
+viewer_setup_target(ViewerApp)
 
-target_link_libraries(Viewer PRIVATE
+target_link_libraries(ViewerApp PRIVATE
     Core
     Gpu
 )
@@ -11,19 +11,23 @@ target_link_libraries(Viewer PRIVATE
 if (EMSCRIPTEN)
     # The React app imports the generated module from web/src/wasm.
     set(VIEWER_WEB_OUTPUT_DIR "${PROJECT_SOURCE_DIR}/../web/src/wasm" CACHE PATH
-        "Where the Emscripten build writes Viewer.js and Viewer.wasm")
+        "Where the Emscripten build writes ViewerApp.js and ViewerApp.wasm")
 
-    target_sources(Viewer PRIVATE src/WebMain.cpp)
-    target_link_options(Viewer PRIVATE
+    target_sources(ViewerApp PRIVATE src/WebMain.cpp)
+    target_link_options(ViewerApp PRIVATE
         -lembind
         -sMODULARIZE=1
         -sEXPORT_ES6=1
         -sEXPORT_NAME=createViewerModule
         -sENVIRONMENT=web
         -sALLOW_MEMORY_GROWTH=1
-        --emit-tsd Viewer.d.ts
+        --emit-tsd ViewerApp.d.ts
     )
-    set_target_properties(Viewer PROPERTIES
+    if (TRADEVIEWER_WASM_NAMES)
+        # Names only; optimizations stay as they are, so profiles stay representative.
+        target_link_options(ViewerApp PRIVATE --profiling-funcs)
+    endif()
+    set_target_properties(ViewerApp PROPERTIES
         SUFFIX ".js"
         RUNTIME_OUTPUT_DIRECTORY "${VIEWER_WEB_OUTPUT_DIR}"
     )
@@ -40,19 +44,16 @@ else()
     )
     FetchContent_MakeAvailable(glfw)
 
-    # Reads .csv.gz trade files natively; the browser has DecompressionStream.
-    find_package(ZLIB REQUIRED)
-
-    target_sources(Viewer PRIVATE src/NativeMain.cpp)
-    target_link_libraries(Viewer PRIVATE glfw ZLIB::ZLIB)
+    target_sources(ViewerApp PRIVATE src/NativeMain.cpp)
+    target_link_libraries(ViewerApp PRIVATE glfw)
 
     # Expose the native handles of the platforms GLFW was built with.
     if (GLFW_BUILD_WAYLAND)
-        target_compile_definitions(Viewer PRIVATE GLFW_EXPOSE_NATIVE_WAYLAND)
+        target_compile_definitions(ViewerApp PRIVATE GLFW_EXPOSE_NATIVE_WAYLAND)
     endif()
     if (GLFW_BUILD_X11)
-        target_compile_definitions(Viewer PRIVATE GLFW_EXPOSE_NATIVE_X11)
+        target_compile_definitions(ViewerApp PRIVATE GLFW_EXPOSE_NATIVE_X11)
     endif()
 
-    target_copy_webgpu_binaries(Viewer)
+    target_copy_webgpu_binaries(ViewerApp)
 endif()

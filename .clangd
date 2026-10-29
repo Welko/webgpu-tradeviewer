@@ -12,6 +12,6 @@ Diagnostics:
 ---
 # The web entry point is only built by Emscripten.
 If:
-  PathMatch: cpp/apps/Viewer/src/WebMain\.cpp
+  PathMatch: cpp/apps/ViewerApp/src/WebMain\.cpp
 CompileFlags:
   CompilationDatabase: cpp/build/web

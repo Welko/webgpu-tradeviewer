@@ -37,6 +37,13 @@ struct WebTradeSummary
     double totalAmount;
 };
 
+/** Viewer::App::Visible, with the count as a JavaScript number. */
+struct WebVisible
+{
+    double count;
+    double amount;
+};
+
 /** A time range in milliseconds since the epoch, for Date. */
 struct WebTimeRange
 {
@@ -112,6 +119,16 @@ public:
         }
         const auto view = (*mApp)->view();
         return { .startMs = static_cast<double>(view.startUs) / 1000.0, .endMs = static_cast<double>(view.endUs) / 1000.0 };
+    }
+
+    /** The trades in view. Empty until init() succeeds. */
+    WebVisible visible() const
+    {
+        if (!*mApp) {
+            return {};
+        }
+        const auto visible = (*mApp)->visible();
+        return { .count = static_cast<double>(visible.count), .amount = visible.amount };
     }
 
     void resetView()
@@ -236,6 +253,10 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .field("lastMs", &WebTradeSummary::lastMs)
         .field("totalAmount", &WebTradeSummary::totalAmount);
 
+    emscripten::value_object<WebVisible>("Visible")
+        .field("count", &WebVisible::count)
+        .field("amount", &WebVisible::amount);
+
     emscripten::value_object<WebTimeRange>("TimeRange")
         .field("startMs", &WebTimeRange::startMs)
         .field("endMs", &WebTimeRange::endMs);
@@ -249,6 +270,7 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("needsRender", &WebViewer::needsRender)
         .function("render", &WebViewer::render)
         .function("view", &WebViewer::view)
+        .function("visible", &WebViewer::visible)
         .function("resetView", &WebViewer::resetView)
         .function("showDay", &WebViewer::showDay)
         .function("zoomAt", &WebViewer::zoomAt)
