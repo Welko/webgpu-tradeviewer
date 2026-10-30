@@ -77,6 +77,12 @@ public:
 
     void setMarkerScale(Gpu::Market::Type::MarkerScale scale);
 
+    /** The colours of the plot and the trades. */
+    void setTheme(const Gpu::Market::Type::Theme& theme);
+
+    /** Colours and reference sizes of the markers, at the current marker scale and theme. */
+    [[nodiscard]] Gpu::Market::Type::Legend getLegend() const;
+
     /** Physical pixels per CSS or window pixel. Pointer positions are in physical pixels. */
     void setPixelRatio(float ratio);
 
@@ -147,6 +153,8 @@ private:
     TradeData mData;
     View mView;
     Layout mLayout;
+    Gpu::Market::Type::MarkerScale mMarkerScale = Gpu::Market::Type::MarkerScale::Area;
+    Gpu::Market::Type::Theme mTheme;
 };
 
 } // namespace Viewer

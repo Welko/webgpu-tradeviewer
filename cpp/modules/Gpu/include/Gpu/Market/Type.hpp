@@ -1,8 +1,12 @@
 #pragma once
 
+#include "Gpu/Plot/Type.hpp"
+#include "Gpu/Type.hpp"
+
 #include "Core/Range.hpp"
 
 #include <cstdint>
+#include <vector>
 
 namespace Gpu::Market::Type {
 
@@ -11,6 +15,41 @@ enum class MarkerScale : std::uint8_t
 {
     Area,  ///< Area proportional to the amount.
     Log,   ///< Radius growing with the amount's logarithm, which separates small trades better.
+};
+
+/** Colours of the plot and the trades. */
+struct Theme
+{
+    Plot::Type::Theme plot;
+    Gpu::Type::Color buy{ .red = 0.20f, .green = 0.80f, .blue = 0.45f };
+    Gpu::Type::Color sell{ .red = 0.95f, .green = 0.30f, .blue = 0.30f };
+    /** Of every marker, over the background. */
+    float markerOpacity = 0.6f;
+};
+
+/** One marker size a legend shows. */
+struct LegendSize
+{
+    /** Where the scale stops growing, a size stands for every amount past it too. */
+    enum class Bound : std::uint8_t
+    {
+        Exact,    ///< Just this amount.
+        AtMost,   ///< This amount and all smaller ones.
+        AtLeast,  ///< This amount and all larger ones.
+    };
+
+    double amount = 0.0;  // BTC
+    float radius = 0.0f;  // CSS or window pixels
+    Bound bound = Bound::Exact;
+};
+
+/** What the trade markers look like, for a legend to match them. */
+struct Legend
+{
+    Gpu::Type::Color buy;
+    Gpu::Type::Color sell;
+    float opacity = 1.0f;  // of every marker, over the background
+    std::vector<LegendSize> sizes;  // smallest first
 };
 
 /** The part of the trades on screen. */

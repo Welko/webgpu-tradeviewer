@@ -3,6 +3,7 @@
 
 struct Plot {
     size: vec2f,  // pixels
+    lineColor: vec3f,
 };
 @group(0) @binding(0) var<uniform> plot: Plot;
 
@@ -10,8 +11,6 @@ struct Line {
     @location(0) position: f32,  // fraction of the plot: from the left if vertical, from the bottom if not
     @location(1) vertical: u32,
 };
-
-const Opacity = 0.08;
 
 @vertex
 fn vertexMain(line: Line, @builtin(vertex_index) corner: u32) -> @builtin(position) vec4f {
@@ -30,5 +29,5 @@ fn vertexMain(line: Line, @builtin(vertex_index) corner: u32) -> @builtin(positi
 
 @fragment
 fn fragmentMain() -> @location(0) vec4f {
-    return vec4f(vec3f(Opacity), Opacity);  // white, premultiplied
+    return vec4f(plot.lineColor, 1.0);
 }

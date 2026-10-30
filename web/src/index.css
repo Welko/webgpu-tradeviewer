@@ -3,6 +3,13 @@
   font-family: system-ui, sans-serif;
   background: #111318;
   color: #e6e8ec;
+
+  /* The viewer's colours: it reads these when it starts (see viewer/theme.ts). Colours in hex or rgb(). */
+  --plot-background: #12141a;
+  --plot-grid: #25282b;
+  --buy: #33cc73;
+  --sell: #f24d4d;
+  --marker-opacity: 0.6;
 }
 
 html,
@@ -63,6 +70,7 @@ body,
   position: relative;
   flex: 1;
   min-height: 0;
+  background: var(--plot-background);
 }
 
 .plot canvas {
@@ -87,6 +95,26 @@ body,
   border-bottom: 1px solid #2a2e37;
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.7rem;
+  margin-left: auto;
+  color: #9aa1ad;
+}
+
+.legend-sizes,
+.legend-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.legend-sizes {
+  gap: 0.25rem 0.6rem;
 }
 
 .axis-labels {

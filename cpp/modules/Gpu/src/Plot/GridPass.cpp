@@ -12,8 +12,6 @@ namespace Gpu::Plot {
 
 namespace {
 
-constexpr WGPUColor ClearColor{ 0.07, 0.08, 0.10, 1.0 };
-
 /** One line as the shader reads it (GridPass.wgsl). */
 struct GpuLine
 {
@@ -27,9 +25,11 @@ struct Uniforms
 {
     float width;
     float height;
-    std::array<float, 2> padding;  // uniform structs are sized in 16-byte steps
+    std::array<float, 2> padding;  // lineColor starts on 16 bytes
+    std::array<float, 3> lineColor;
+    float padding2;  // uniform structs are sized in 16-byte steps
 };
-static_assert(sizeof(Uniforms) == 16);
+static_assert(sizeof(Uniforms) == 32);
 
 Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat format)
 {
@@ -135,7 +135,7 @@ void GridPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Area p
     color.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
     color.loadOp = WGPULoadOp_Clear;
     color.storeOp = WGPUStoreOp_Store;
-    color.clearValue = ClearColor;
+    color.clearValue = { .r = mTheme.background.red, .g = mTheme.background.green, .b = mTheme.background.blue, .a = 1.0 };
 
     WGPURenderPassDescriptor descriptor{};
     descriptor.colorAttachmentCount = 1;
@@ -144,7 +144,13 @@ void GridPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Area p
     const Handle pass(wgpuCommandEncoderBeginRenderPass(encoder, &descriptor));
 
     if (mLineCount > 0 && !plot.empty()) {
-        const Uniforms uniforms{ .width = static_cast<float>(plot.width), .height = static_cast<float>(plot.height), .padding = {} };
+        const Uniforms uniforms{
+            .width = static_cast<float>(plot.width),
+            .height = static_cast<float>(plot.height),
+            .padding = {},
+            .lineColor = { mTheme.grid.red, mTheme.grid.green, mTheme.grid.blue },
+            .padding2 = {},
+        };
         wgpuQueueWriteBuffer(mContext->queue.get(), mUniforms.get(), 0, &uniforms, sizeof(uniforms));
         plot.apply(pass.get());
         wgpuRenderPassEncoderSetPipeline(pass.get(), mPipeline.get());

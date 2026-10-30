@@ -1,6 +1,7 @@
 #include "Gpu/Market/TradesPass.hpp"
 
 #include "Gpu/Convert.hpp"
+#include "Gpu/Market/Marker.hpp"
 #include "Gpu/Shaders/TradesPass.hpp"
 
 #include <algorithm>
@@ -24,21 +25,41 @@ struct GpuTrade
 };
 static_assert(sizeof(GpuTrade) == 20);
 
+/** The shader's Markers uniform (TradesPass.wgsl). */
+struct GpuMarkers
+{
+    std::array<float, 3> buyColor;
+    float opacity;
+    std::array<float, 3> sellColor;
+    std::uint32_t scale;  // 0 area, 1 log
+    float minRadius;
+    float maxRadius;
+    float areaRadiusAt1Btc;
+    float logLowest;
+    float logHighest;
+    std::array<float, 3> padding;  // uniform structs are sized in 16-byte steps
+};
+static_assert(sizeof(GpuMarkers) == 64);
+
 /** The shader's View uniform (TradesPass.wgsl). */
 struct Uniforms
 {
     std::uint32_t startHigh;
     std::uint32_t startLow;
     float lengthUs;
-    std::uint32_t markerScale;
     float priceLow;
     float priceSpan;
     float width;
     float height;
     float pixelRatio;
-    std::array<float, 3> padding;  // uniform structs are sized in 16-byte steps
+    GpuMarkers markers;
 };
-static_assert(sizeof(Uniforms) == 48);
+static_assert(sizeof(Uniforms) == 96);
+
+std::array<float, 3> toGpu(Gpu::Type::Color color)
+{
+    return { color.red, color.green, color.blue };
+}
 
 
 Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat format)
@@ -157,13 +178,23 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot
         .startHigh = static_cast<std::uint32_t>(startUs >> 32),
         .startLow = static_cast<std::uint32_t>(startUs),
         .lengthUs = static_cast<float>(mView.time.getLengthUs()),
-        .markerScale = mMarkerScale == Type::MarkerScale::Area ? 0u : 1u,
         .priceLow = static_cast<float>(mView.price.low),
         .priceSpan = static_cast<float>(mView.price.high - mView.price.low),
         .width = static_cast<float>(plot.width),
         .height = static_cast<float>(plot.height),
         .pixelRatio = mPixelRatio,
-        .padding = {},
+        .markers = {
+            .buyColor = toGpu(mTheme.buy),
+            .opacity = mTheme.markerOpacity,
+            .sellColor = toGpu(mTheme.sell),
+            .scale = mMarkerScale == Type::MarkerScale::Area ? 0u : 1u,
+            .minRadius = Marker::MinRadius,
+            .maxRadius = Marker::MaxRadius,
+            .areaRadiusAt1Btc = Marker::AreaRadiusAt1Btc,
+            .logLowest = Marker::LogLowest,
+            .logHighest = Marker::LogHighest,
+            .padding = {},
+        },
     };
     wgpuQueueWriteBuffer(mContext->queue.get(), mUniforms.get(), 0, &uniforms, sizeof(uniforms));
 

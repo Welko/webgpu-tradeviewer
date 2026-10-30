@@ -96,7 +96,7 @@ test('starts WebGPU and draws the background and both sides\' trades', async ({ 
 
   await expect.poll(() => lastFrame(page)).not.toBeNull();
   const { corner, buyPixels, sellPixels } = (await lastFrame(page))!;
-  // The engine's background, (0.07, 0.08, 0.10), in 8-bit RGBA.
+  // The stylesheet's --plot-background, #12141a.
   const [red, green, blue, alpha] = corner;
   expect(Math.abs(red - 18)).toBeLessThanOrEqual(2);
   expect(Math.abs(green - 20)).toBeLessThanOrEqual(2);
@@ -147,6 +147,51 @@ test('the wheel zooms, dragging pans, and the buttons jump back', async ({ page 
   await expect(page.getByTestId('view-amount')).toHaveText('1.539741');
   await page.getByRole('button', { name: '12:00–13:00' }).click();
   await expect(range).toHaveText(hour);
+
+  expect(errors).toEqual([]);
+});
+
+test('the stylesheet sets the plot\'s colours, and the legend follows', async ({ page }) => {
+  const errors = collectErrors(page);
+  await instrument(page);
+  await page.addInitScript(() => {
+    document.addEventListener('DOMContentLoaded', () => {
+      document.documentElement.style.setProperty('--plot-background', '#ffffff');
+      document.documentElement.style.setProperty('--buy', 'rgb(0, 0, 255)');
+    });
+  });
+  await page.goto('/');
+  await waitUntilReady(page);
+
+  await expect.poll(() => lastFrame(page)).not.toBeNull();
+  const { corner, buyPixels, sellPixels } = (await lastFrame(page))!;
+  expect(corner).toEqual([255, 255, 255, 255]);
+  // Buys are blue now, so only sells count as green or red.
+  expect(buyPixels).toBe(0);
+  expect(sellPixels).toBeGreaterThan(100);
+  const buySwatch = page.getByTestId('legend').getByText('Buy').locator('circle');
+  await expect(buySwatch).toHaveAttribute('fill', 'rgb(0 0 255)');
+
+  expect(errors).toEqual([]);
+});
+
+test('the legend shows both sides and the sizes of the chosen scale', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/');
+  await waitUntilReady(page);
+  const legend = page.getByTestId('legend');
+  await expect(legend).toContainText('Buy');
+  await expect(legend).toContainText('Sell');
+
+  // Each size ends where the scale stops growing.
+  const sizes = page.getByTestId('legend-size');
+  await expect(sizes).toHaveText(['≤ 0.0625', '0.25', '1', '4', '≥ 7.11']);
+  const radius = (index: number) => sizes.nth(index).locator('circle').getAttribute('r');
+  expect(Number(await radius(2))).toBe(6);
+
+  await page.getByLabel('Size').selectOption('log');
+  await expect(sizes).toHaveText(['≤ 0.0001', '0.01', '1', '≥ 100']);
+  expect(Number(await radius(3))).toBe(16);
 
   expect(errors).toEqual([]);
 });

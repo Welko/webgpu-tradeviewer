@@ -1,17 +1,23 @@
 import { utc } from '../utc';
-import type { TimeRange, TradeSummary, Viewer } from './viewerModule';
+import { Legend } from './Legend';
+import type { Legend as LegendData, TimeRange, TradeSummary, Viewer } from './viewerModule';
 
 interface ViewControlsProps {
   viewer: Viewer;
   view: TimeRange;
   /** The trades in `view`. */
   viewSummary: TradeSummary;
+  /** What the markers mean at the chosen size scale. */
+  legend: LegendData;
   /** Call after changing the viewer, to draw it again. */
   onChange: () => void;
 }
 
-/** The time range on screen and what it holds, and buttons to jump to the usual ranges. */
-export function ViewControls({ viewer, view, viewSummary, onChange }: ViewControlsProps) {
+/**
+ * The time range on screen and what it holds, buttons to jump to the usual
+ * ranges, and the markers' size scale and legend.
+ */
+export function ViewControls({ viewer, view, viewSummary, legend, onChange }: ViewControlsProps) {
   const act = (action: () => void) => () => {
     action();
     onChange();
@@ -39,6 +45,7 @@ export function ViewControls({ viewer, view, viewSummary, onChange }: ViewContro
           <option value="log">Log of amount</option>
         </select>
       </label>
+      <Legend legend={legend} />
     </div>
   );
 }

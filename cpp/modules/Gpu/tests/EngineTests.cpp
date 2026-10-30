@@ -1,4 +1,5 @@
 #include "Gpu/Market/Engine.hpp"
+#include "Gpu/Market/Marker.hpp"
 
 #include "Core/Data/Trades.hpp"
 #include "Core/Profiling.hpp"
@@ -6,6 +7,7 @@
 #include <doctest/doctest.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
@@ -224,6 +226,121 @@ TEST_CASE("Only the view's trades are drawn")
     }
     CHECK(isBackground(pixelAt(*pixels, 100, 25, 25)));
     CHECK(isSell(pixelAt(*pixels, 100, 75, 25)));
+}
+
+namespace {
+
+using Gpu::Market::Type::MarkerScale;
+using Gpu::Market::Type::Theme;
+namespace Marker = Gpu::Market::Marker;
+
+constexpr Rgba BackgroundColor{ .red = 18, .green = 20, .blue = 26, .alpha = 255 };
+const Theme DefaultTheme;
+
+/** One trade of `amount` BTC, drawn alone in the middle of a 100 × 100 engine. */
+std::optional<Pixels> drawOne(Engine& engine, double amount, Side side, MarkerScale scale, float pixelRatio)
+{
+    Trades trades;
+    add(trades, NoonUs + 50, 100.0, amount, side);
+    engine.setTrades(trades);
+    engine.setView(viewOf({ 0, 1 }));
+    engine.setMarkerScale(scale);
+    engine.setPixelRatio(pixelRatio);
+    engine.render();
+    return readPixels(engine);
+}
+
+/** A channel of `color` drawn at the markers' opacity over the background. */
+double blend(float color, int background, float opacity = DefaultTheme.markerOpacity)
+{
+    return color * 255.0 * opacity + background * (1.0 - opacity);
+}
+
+/** How many pixels of a buy marker's middle row it covers at least half of: its diameter, to a pixel. */
+int measureDiameter(const Pixels& pixels)
+{
+    const double halfCovered = (BackgroundColor.green + blend(DefaultTheme.buy.green, BackgroundColor.green)) / 2.0;
+    int count = 0;
+    for (std::uint32_t x = 0; x < 100; ++x) {
+        count += pixelAt(pixels, 100, x, 50).green > halfCovered ? 1 : 0;
+    }
+    return count;
+}
+
+} // namespace
+
+TEST_CASE("Markers are drawn at the legend's sizes, scaled by the pixel ratio")
+{
+    const auto engine = createOffscreen(100, 100);
+    if (!engine) {
+        return;
+    }
+    for (const auto scale : { MarkerScale::Area, MarkerScale::Log }) {
+        for (const auto& size : Marker::getLegend(scale, DefaultTheme).sizes) {
+            for (const float pixelRatio : { 1.0f, 2.0f }) {
+                CAPTURE(scale);
+                CAPTURE(size.amount);
+                CAPTURE(pixelRatio);
+                const auto pixels = drawOne(*engine, size.amount, Side::Buy, scale, pixelRatio);
+                if (!pixels) {
+                    return;
+                }
+                CHECK(std::abs(measureDiameter(*pixels) - 2.0 * size.radius * pixelRatio) <= 1.0);
+            }
+        }
+    }
+}
+
+TEST_CASE("Markers have the legend's colours, at its opacity")
+{
+    const auto engine = createOffscreen(100, 100);
+    if (!engine) {
+        return;
+    }
+    const auto legend = Marker::getLegend(MarkerScale::Area, DefaultTheme);
+    for (const auto side : { Side::Buy, Side::Sell }) {
+        CAPTURE(side == Side::Buy ? "buy" : "sell");
+        const auto pixels = drawOne(*engine, 1.0, side, MarkerScale::Area, 1.0f);
+        if (!pixels) {
+            return;
+        }
+        const auto color = side == Side::Buy ? legend.buy : legend.sell;
+        const Rgba middle = pixelAt(*pixels, 100, 50, 50);
+        CHECK(std::abs(middle.red - blend(color.red, BackgroundColor.red)) <= 2.0);
+        CHECK(std::abs(middle.green - blend(color.green, BackgroundColor.green)) <= 2.0);
+        CHECK(std::abs(middle.blue - blend(color.blue, BackgroundColor.blue)) <= 2.0);
+    }
+}
+
+TEST_CASE("A theme sets the background, grid and marker colours")
+{
+    const auto engine = createOffscreen(100, 100);
+    if (!engine) {
+        return;
+    }
+    const Theme theme{
+        .plot = { .background = { .red = 1.0f, .green = 1.0f, .blue = 1.0f }, .grid = { .red = 0.0f, .green = 0.0f, .blue = 1.0f } },
+        .buy = { .red = 0.0f, .green = 0.0f, .blue = 0.0f },
+        .sell = { .red = 0.0f, .green = 0.0f, .blue = 0.0f },
+        .markerOpacity = 1.0f,
+    };
+    engine->setTheme(theme);
+    engine->setGrid({ .verticalLines = { 0.1f }, .horizontalLines = {} });
+    const auto pixels = drawOne(*engine, 1.0, Side::Buy, MarkerScale::Area, 1.0f);
+    if (!pixels) {
+        return;
+    }
+    const Rgba background = pixelAt(*pixels, 100, 30, 10);
+    CHECK(background.red == 255);
+    CHECK(background.blue == 255);
+    // The line at a tenth of the plot's width is column 10.
+    const Rgba line = pixelAt(*pixels, 100, 10, 10);
+    CHECK(line.red == 0);
+    CHECK(line.blue == 255);
+    const Rgba marker = pixelAt(*pixels, 100, 50, 50);
+    CHECK(marker.red == 0);
+    CHECK(marker.green == 0);
+    CHECK(marker.blue == 0);
 }
 
 TEST_CASE("Times are exact to the microsecond, decades after 1970")

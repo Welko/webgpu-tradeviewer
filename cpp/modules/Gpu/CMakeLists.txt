@@ -16,6 +16,7 @@ add_library(Gpu STATIC
     src/Context.cpp
     src/GrowableBuffer.cpp
     src/Market/Engine.cpp
+    src/Market/Marker.cpp
     src/Market/TradesPass.cpp
     src/Plot/GridPass.cpp
     src/Profiler.cpp

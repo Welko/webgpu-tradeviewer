@@ -14,9 +14,10 @@
 namespace Gpu::Plot {
 
 /**
- * Clears the frame and draws the grid: faint lines across the plot, usually
- * at the axis ticks, under whatever is drawn next. Each line is one instance of a quad, 8 bytes
- * in a vertex buffer with room for MaxLines.
+ * Clears the frame to the theme's background and draws the grid: lines
+ * across the plot, usually at the axis ticks, under whatever is drawn next.
+ * Each line is one instance of a quad, 8 bytes in a vertex buffer with room
+ * for MaxLines.
  */
 class GridPass
 {
@@ -28,6 +29,7 @@ public:
     GridPass(const Context& context, Resource::Stats& stats, WGPUTextureFormat format);
 
     void setGrid(const Type::Grid& grid);
+    void setTheme(const Type::Theme& theme) { mTheme = theme; }
 
     /** Records the pass into `target`, drawing inside `plot`. */
     void encode(WGPUCommandEncoder encoder, WGPUTextureView target, Area plot, Profiler& profiler);
@@ -39,6 +41,7 @@ private:
     Handle<WGPUBuffer> mLines;
     Handle<WGPUBindGroup> mBindGroup;
     std::uint32_t mLineCount = 0;
+    Type::Theme mTheme;
 };
 
 } // namespace Gpu::Plot

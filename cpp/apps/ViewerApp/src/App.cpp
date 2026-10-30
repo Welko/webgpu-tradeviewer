@@ -1,6 +1,7 @@
 #include "Viewer/App.hpp"
 
 #include "Core/Data/Synthetic.hpp"
+#include "Gpu/Market/Marker.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -110,7 +111,19 @@ void App::panBy(double dx)
 
 void App::setMarkerScale(Gpu::Market::Type::MarkerScale scale)
 {
+    mMarkerScale = scale;
     mEngine->setMarkerScale(scale);
+}
+
+void App::setTheme(const Gpu::Market::Type::Theme& theme)
+{
+    mTheme = theme;
+    mEngine->setTheme(theme);
+}
+
+Gpu::Market::Type::Legend App::getLegend() const
+{
+    return Gpu::Market::Marker::getLegend(mMarkerScale, mTheme);
 }
 
 void App::setPixelRatio(float ratio)

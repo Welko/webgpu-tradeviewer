@@ -36,6 +36,18 @@ WindowState& getState(GLFWwindow* window)
     return *static_cast<WindowState*>(glfwGetWindowUserPointer(window));
 }
 
+/** Logs what marker sizes mean, as the web app's legend shows it, since the window has no text. */
+void logLegend(const Viewer::App& app, Gpu::Market::Type::MarkerScale scale)
+{
+    using Bound = Gpu::Market::Type::LegendSize::Bound;
+    std::string sizes;
+    for (const auto& size : app.getLegend().sizes) {
+        const char* prefix = size.bound == Bound::AtMost ? "<= " : size.bound == Bound::AtLeast ? ">= " : "";
+        sizes += std::format("{}{}{:.4g} BTC {:.3g} px", sizes.empty() ? "" : ", ", prefix, size.amount, size.radius);
+    }
+    Core::Log::info("Buys green, sells red; marker radius by {}: {}", scale == Gpu::Market::Type::MarkerScale::Area ? "area" : "log", sizes);
+}
+
 /** Window coordinates in physical pixels, which differ on scaled screens. */
 double toPixels(GLFWwindow* window, double x)
 {
@@ -90,6 +102,7 @@ void connectInput(GLFWwindow* window)
             state.markerScale = state.markerScale == Gpu::Market::Type::MarkerScale::Area ? Gpu::Market::Type::MarkerScale::Log
                                                                                           : Gpu::Market::Type::MarkerScale::Area;
             state.app->setMarkerScale(state.markerScale);
+            logLegend(*state.app, state.markerScale);
             break;
         default:
             break;
@@ -222,6 +235,7 @@ int main(int argc, char** argv)
     glfwGetWindowContentScale(window, &contentScale, nullptr);
     app->setPixelRatio(contentScale);
     Core::Log::info("Scroll to zoom, drag to pan; R: 12:00-13:00, D: whole day, M: marker size by area or log");
+    logLegend(*app, state.markerScale);
 
     while (!glfwWindowShouldClose(window)) {
         // Sleep until the next event when there's nothing to draw.

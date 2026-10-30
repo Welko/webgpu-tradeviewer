@@ -43,6 +43,7 @@ public:
 
     void setView(const Type::View& view) { mView = view; }
     void setMarkerScale(Type::MarkerScale scale) { mMarkerScale = scale; }
+    void setTheme(const Type::Theme& theme) { mTheme = theme; }
 
     /** Physical pixels per CSS or window pixel, which marker sizes are given in. */
     void setPixelRatio(float ratio) { mPixelRatio = ratio; }
@@ -59,6 +60,7 @@ private:
 
     Type::View mView{};
     Type::MarkerScale mMarkerScale = Type::MarkerScale::Area;
+    Type::Theme mTheme;
     float mPixelRatio = 1.0f;
 };
 

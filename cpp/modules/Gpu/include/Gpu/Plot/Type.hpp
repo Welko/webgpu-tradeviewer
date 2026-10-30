@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Gpu/Type.hpp"
+
 #include <cstdint>
 #include <vector>
 
@@ -19,6 +21,14 @@ struct Grid
 {
     std::vector<float> verticalLines;
     std::vector<float> horizontalLines;
+};
+
+/** The plot's colours. */
+struct Theme
+{
+    Gpu::Type::Color background{ .red = 0.07f, .green = 0.08f, .blue = 0.10f };
+    /** Of the grid lines, which are opaque. */
+    Gpu::Type::Color grid{ .red = 0.145f, .green = 0.155f, .blue = 0.17f };
 };
 
 } // namespace Gpu::Plot::Type

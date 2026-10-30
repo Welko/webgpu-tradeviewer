@@ -72,6 +72,9 @@ public:
 
     void setMarkerScale(Type::MarkerScale scale);
 
+    /** The colours of everything drawn. Type::Theme's defaults until called. */
+    void setTheme(const Type::Theme& theme);
+
     /** Advances the engine's state to `nowMs`. */
     void update(double nowMs);
 

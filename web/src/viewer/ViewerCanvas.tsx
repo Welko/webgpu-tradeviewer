@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { GpuInfo } from './gpuInfo';
 import { AxisLabels, AxisMargins } from './AxisLabels';
+import { readTheme } from './theme';
 import { ViewControls } from './ViewControls';
-import { createViewer, type Axes, type PowerPreference, type TimeRange, type TradeSummary, type Viewer } from './viewerModule';
+import { createViewer, type Axes, type Legend, type PowerPreference, type TimeRange, type TradeSummary, type Viewer } from './viewerModule';
 
 export type ViewerStatus =
   | { kind: 'loading' }
@@ -47,6 +48,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
     view: TimeRange;
     viewSummary: TradeSummary;
     axes: Axes;
+    legend: Legend;
     /** The canvas in CSS pixels. */
     size: { width: number; height: number };
     refresh: () => void;
@@ -70,6 +72,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
           return;
         }
         viewer = created;
+        created.setTheme(readTheme(canvas.parentElement!));
 
         const tick = (now: number) => {
           scheduled = false;
@@ -97,6 +100,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
             view: created.view(),
             viewSummary: created.viewSummary(),
             axes: created.axes() as Axes,
+            legend: created.legend() as Legend,
             size,
             refresh,
           });
@@ -183,7 +187,13 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
   return (
     <div className="viewer">
       {shown && (
-        <ViewControls viewer={shown.viewer} view={shown.view} viewSummary={shown.viewSummary} onChange={shown.refresh} />
+        <ViewControls
+          viewer={shown.viewer}
+          view={shown.view}
+          viewSummary={shown.viewSummary}
+          legend={shown.legend}
+          onChange={shown.refresh}
+        />
       )}
       <div className="plot">
         <canvas id={canvasId} ref={canvasRef} />

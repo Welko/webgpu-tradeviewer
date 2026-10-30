@@ -1,16 +1,31 @@
 // Trades as discs: time across, price up, colored by side, sized by amount.
 // One instance per trade; layouts must match GpuTrade and Uniforms in TradesPass.cpp.
 
+// How markers look: colours from the theme, sizes from Gpu/Market/Marker.hpp.
+struct Markers {
+    buyColor: vec3f,
+    opacity: f32,
+    sellColor: vec3f,
+    scale: u32,  // 0 area, 1 log
+    // Radii in CSS or window pixels.
+    minRadius: f32,
+    maxRadius: f32,
+    areaRadiusAt1Btc: f32,
+    // The log scale grows from minRadius at logLowest BTC to maxRadius at logHighest BTC.
+    logLowest: f32,
+    logHighest: f32,
+};
+
 struct View {
     startHigh: u32,
     startLow: u32,
     lengthUs: f32,
-    markerScale: u32,  // 0 area, 1 log
     priceLow: f32,
     priceSpan: f32,
     width: f32,  // pixels
     height: f32,
     pixelRatio: f32,
+    markers: Markers,
 };
 @group(0) @binding(0) var<uniform> view: View;
 
@@ -28,18 +43,6 @@ struct Marker {
     @location(2) color: vec3f,
 };
 
-const BuyColor = vec3f(0.20, 0.80, 0.45);
-const SellColor = vec3f(0.95, 0.30, 0.30);
-const Opacity = 0.6;
-
-// Marker radii in CSS or window pixels.
-const MinRadius = 1.5;
-const MaxRadius = 16.0;
-const AreaRadiusAt1Btc = 6.0;
-// The log scale spans these amounts, in BTC, from MinRadius to MaxRadius.
-const LogLowest = 1e-4;
-const LogHighest = 100.0;
-
 /** Microseconds from the view's start, subtracted as 64-bit integers so they stay exact far from 1970. */
 fn sinceStartUs(time: vec2u) -> f32 {
     let borrow = select(0u, 1u, time.y < view.startLow);
@@ -48,14 +51,17 @@ fn sinceStartUs(time: vec2u) -> f32 {
     return f32(high) * 4294967296.0 + f32(low);
 }
 
+/** In physical pixels. Marker::getRadius() computes the same in CSS or window pixels. */
 fn markerRadius(amount: f32) -> f32 {
+    let markers = view.markers;
     var radius: f32;
-    if (view.markerScale == 0u) {
-        radius = AreaRadiusAt1Btc * sqrt(amount);
+    if (markers.scale == 0u) {
+        radius = markers.areaRadiusAt1Btc * sqrt(amount);
     } else {
-        radius = mix(MinRadius, MaxRadius, log2(amount / LogLowest) / log2(LogHighest / LogLowest));
+        let along = log2(amount / markers.logLowest) / log2(markers.logHighest / markers.logLowest);
+        radius = mix(markers.minRadius, markers.maxRadius, along);
     }
-    return clamp(radius, MinRadius, MaxRadius) * view.pixelRatio;
+    return clamp(radius, markers.minRadius, markers.maxRadius) * view.pixelRatio;
 }
 
 @vertex
@@ -71,7 +77,7 @@ fn vertexMain(trade: Trade, @builtin(vertex_index) corner: u32) -> Marker {
     marker.position = vec4f(centre + pixel * 2.0 / vec2f(view.width, view.height), 0.0, 1.0);
     marker.pixel = pixel;
     marker.radius = radius;
-    marker.color = select(SellColor, BuyColor, trade.side == 0u);
+    marker.color = select(view.markers.sellColor, view.markers.buyColor, trade.side == 0u);
     return marker;
 }
 
@@ -79,6 +85,6 @@ fn vertexMain(trade: Trade, @builtin(vertex_index) corner: u32) -> Marker {
 fn fragmentMain(marker: Marker) -> @location(0) vec4f {
     // How much of this pixel the disc covers.
     let coverage = clamp(marker.radius + 0.5 - length(marker.pixel), 0.0, 1.0);
-    let alpha = coverage * Opacity;
+    let alpha = coverage * view.markers.opacity;
     return vec4f(marker.color * alpha, alpha);  // premultiplied
 }

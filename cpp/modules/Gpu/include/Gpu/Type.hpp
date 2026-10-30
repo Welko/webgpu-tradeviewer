@@ -9,6 +9,14 @@
 
 namespace Gpu::Type {
 
+/** A colour as CSS gives it: sRGB, each channel from 0 to 1. */
+struct Color
+{
+    float red = 0.0f;
+    float green = 0.0f;
+    float blue = 0.0f;
+};
+
 struct Info
 {
     std::string vendor;

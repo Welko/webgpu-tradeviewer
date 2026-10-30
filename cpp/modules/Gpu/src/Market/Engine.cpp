@@ -15,8 +15,10 @@
 
 #include <webgpu/webgpu.h>
 
+#include <algorithm>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <variant>
@@ -31,6 +33,20 @@ constexpr std::uint64_t OffscreenBytesPerPixel = 4;
 
 // Frames whose GPU times may be on their way at once.
 constexpr std::size_t MaxWaitingFrames = 16;
+
+/**
+ * The first format that stores colours as given. Theme colours are sRGB
+ * values, as CSS gives them; an sRGB format would convert them again and
+ * draw them lighter than the page around them. Native surfaces often list
+ * one first, browsers' canvases don't.
+ */
+WGPUTextureFormat pickSurfaceFormat(std::span<const WGPUTextureFormat> formats)
+{
+    const auto plain = std::ranges::find_if(formats, [](WGPUTextureFormat format) {
+        return format != WGPUTextureFormat_RGBA8UnormSrgb && format != WGPUTextureFormat_BGRA8UnormSrgb;
+    });
+    return plain != formats.end() ? *plain : formats.front();
+}
 
 /** The WebGPU surface for a window or canvas; null if it can't be created. */
 WGPUSurface createSurface(WGPUInstance instance, const Gpu::Type::Target::Any& target)
@@ -224,7 +240,7 @@ std::expected<void, std::string> Engine::Impl::finishOutput()
         || capabilities.formatCount == 0) {
         return std::unexpected("The WebGPU surface reports no supported formats");
     }
-    output.format = capabilities.formats[0];
+    output.format = pickSurfaceFormat(std::span(capabilities.formats, capabilities.formatCount));
     wgpuSurfaceCapabilitiesFreeMembers(capabilities);
     // Unconfigured until the first resize().
     return {};
@@ -432,6 +448,13 @@ void Engine::setView(const Type::View& view)
 void Engine::setMarkerScale(Type::MarkerScale scale)
 {
     mImpl->passes->trades.setMarkerScale(scale);
+    mImpl->dirty = true;
+}
+
+void Engine::setTheme(const Type::Theme& theme)
+{
+    mImpl->passes->grid.setTheme(theme.plot);
+    mImpl->passes->trades.setTheme(theme);
     mImpl->dirty = true;
 }
 

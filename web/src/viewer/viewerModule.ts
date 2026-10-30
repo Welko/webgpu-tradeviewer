@@ -14,6 +14,43 @@ export interface Axes {
   prices: AxisTick[];
 }
 
+/** A colour, each channel from 0 to 1. */
+export interface Color {
+  red: number;
+  green: number;
+  blue: number;
+}
+
+/** The colours the viewer draws with. */
+export interface Theme {
+  background: Color;
+  /** Of the grid lines, which are opaque. */
+  grid: Color;
+  buy: Color;
+  sell: Color;
+  /** Of every marker, over the background. */
+  markerOpacity: number;
+}
+
+/** One marker size in a legend. Where the scale stops growing, a size also stands for all amounts past it. */
+export interface LegendSize {
+  /** In BTC. */
+  amount: number;
+  /** In CSS pixels. */
+  radius: number;
+  bound: 'exact' | 'atMost' | 'atLeast';
+}
+
+/** What Viewer.legend() returns: what the markers look like at the current marker scale. */
+export interface Legend {
+  buy: Color;
+  sell: Color;
+  /** Of every marker, over the background. */
+  opacity: number;
+  /** Smallest first. */
+  sizes: LegendSize[];
+}
+
 /** Same values as WebGPU's GPUPowerPreference, plus 'default' for no hint. */
 export type PowerPreference = 'default' | 'low-power' | 'high-performance';
 

@@ -51,6 +51,42 @@ val toWeb(const std::vector<Core::Axis::Tick>& ticks)
     return array;
 }
 
+/** A colour as a JavaScript { red, green, blue }, each from 0 to 1. */
+val toWeb(Gpu::Type::Color color)
+{
+    val object = val::object();
+    object.set("red", color.red);
+    object.set("green", color.green);
+    object.set("blue", color.blue);
+    return object;
+}
+
+/** A legend as { buy, sell, opacity, sizes: [{ amount, radius, bound }] }, `bound` being "exact", "atMost" or "atLeast". */
+val toWeb(const Gpu::Market::Type::Legend& legend)
+{
+    using Bound = Gpu::Market::Type::LegendSize::Bound;
+    val sizes = val::array();
+    for (const auto& size : legend.sizes) {
+        val object = val::object();
+        object.set("amount", size.amount);
+        object.set("radius", size.radius);
+        object.set("bound", size.bound == Bound::AtMost ? "atMost" : size.bound == Bound::AtLeast ? "atLeast" : "exact");
+        sizes.call<void>("push", object);
+    }
+    val result = val::object();
+    result.set("buy", toWeb(legend.buy));
+    result.set("sell", toWeb(legend.sell));
+    result.set("opacity", legend.opacity);
+    result.set("sizes", sizes);
+    return result;
+}
+
+/** A JavaScript { red, green, blue }, each from 0 to 1. */
+Gpu::Type::Color toColor(const val& color)
+{
+    return { .red = color["red"].as<float>(), .green = color["green"].as<float>(), .blue = color["blue"].as<float>() };
+}
+
 WebTradeSummary toWeb(const Core::Data::TradeSummary& summary)
 {
     return {
@@ -155,6 +191,25 @@ public:
         result.set("times", toWeb(axes.times));
         result.set("prices", toWeb(axes.prices));
         return result;
+    }
+
+    /** Takes { background, grid, buy, sell, markerOpacity }, each colour a { red, green, blue } from 0 to 1. */
+    void setTheme(const val& theme)
+    {
+        if (*mApp) {
+            (*mApp)->setTheme({
+                .plot = { .background = toColor(theme["background"]), .grid = toColor(theme["grid"]) },
+                .buy = toColor(theme["buy"]),
+                .sell = toColor(theme["sell"]),
+                .markerOpacity = theme["markerOpacity"].as<float>(),
+            });
+        }
+    }
+
+    /** What markers look like at the current marker scale, for a legend; null before init() succeeds. */
+    val getLegend() const
+    {
+        return *mApp ? toWeb((*mApp)->getLegend()) : val::null();
     }
 
     /** Space around the plot for axis labels, in physical pixels. */
@@ -293,6 +348,8 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("view", &WebViewer::getView)
         .function("viewSummary", &WebViewer::getViewSummary)
         .function("axes", &WebViewer::getAxes)
+        .function("legend", &WebViewer::getLegend)
+        .function("setTheme", &WebViewer::setTheme)
         .function("setPlotInsets", &WebViewer::setPlotInsets)
         .function("resetView", &WebViewer::resetView)
         .function("showDay", &WebViewer::showDay)
