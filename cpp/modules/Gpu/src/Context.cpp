@@ -4,6 +4,10 @@
 
 #include "Core/Log.hpp"
 
+#ifndef __EMSCRIPTEN__
+#include <webgpu/wgpu.h>  // wgpuQueueGetTimestampPeriod
+#endif
+
 #include <chrono>
 #include <cstdlib>
 #include <format>
@@ -151,8 +155,13 @@ void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView 
     context.device = Handle(device);
     context.queue = Handle(wgpuDeviceGetQueue(device));
     context.features = Context::Features{ .timestampQuery = wgpuDeviceHasFeature(device, WGPUFeatureName_TimestampQuery) != 0 };
+#ifndef __EMSCRIPTEN__
+    context.nanosecondsPerTick = wgpuQueueGetTimestampPeriod(context.queue.get());
+#endif
     context.info = readInfo(context.adapter.get());
-    Core::Log::info("GPU timestamps: {}", context.features.timestampQuery ? "available" : "not available");
+    Core::Log::info("GPU timestamps: {}", context.features.timestampQuery
+                                              ? std::format("available, {:.4g} ns per tick", context.nanosecondsPerTick)
+                                              : "not available");
 
     auto result = std::move(pending->context);
     auto onDone = std::move(pending->onDone);

@@ -19,8 +19,8 @@ concurrency:
 
 env:
   EMSDK_VERSION: 6.0.13
-  # The shader compiler in wgpu-native v24; the build checks every shader with it.
-  NAGA_VERSION: 24.0.0
+  # The shader compiler in wgpu-native v29; the build checks every shader with it.
+  NAGA_VERSION: 29.0.4
   # Every test run writes JUnit XML here (see cpp/cmake/testing.cmake); the
   # summary job turns it into one table on the run's page.
   TRADEVIEWER_JUNIT_DIR: ${{ github.workspace }}/test-results
@@ -95,6 +95,21 @@ jobs:
           cmake --preset native-release
           cmake --build --preset native-release -j "$(nproc)"
           ctest --test-dir build/native-release --output-on-failure --no-tests=error
+
+      # Frame times at four zoom levels, from the profiler: the CPU phases and
+      # each GPU pass. lavapipe runs on the CPU, so compare runs with each
+      # other, not with real GPUs. Shown on the run's page and kept as a file.
+      - name: Benchmark
+        run: |
+          mkdir -p benchmark
+          cpp/build/native-release/apps/BenchmarkApp/BenchmarkApp benchmark/benchmark.md "$RUNNER_TEMP/BTCUSDT-trades-2019-12-01.csv"
+          { echo "### Frame times on lavapipe (a CPU Vulkan driver)"; cat benchmark/benchmark.md; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: benchmark
+          path: benchmark/benchmark.md
+          if-no-files-found: error
 
       # The stripped binary, with the licenses of what's linked into it.
       - name: Package the release binary

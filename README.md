@@ -18,10 +18,13 @@ cpp/
                      (a facade with no WebGPU types). Context (device, surface...) and the
                      passes are internal (src/include): Gpu::Plot (plot area, grid) is
                      generic, Gpu::Market (trades) is about markets. Design: design/gpu.md
-  apps/ViewerApp     App (resize/update/render) + entry points:
+  apps/ViewerApp     the viewer:
+                       App.cpp          ViewerAppLib: the platform-independent part
+                                        (view state, input, engine), shared with BenchmarkApp
                        NativeMain.cpp   GLFW window and loop
                        WebMain.cpp      embind `Viewer` class, loop driven by JS
   apps/TradeStatsApp native command line: a time range's trade count and amount, as the viewer computes them
+  apps/BenchmarkApp  native command line: frame times at four zoom levels, from the profiler
 tools/check_ranges.py  checks TradeStatsApp against an independent calculation
 web/                 Vite + React + TypeScript
   src/viewer/        createViewer(), <ViewerCanvas> and its <ViewControls> toolbar
@@ -38,13 +41,13 @@ The platform side owns the frame loop: `requestAnimationFrame` on the web, a GLF
 - [emsdk](https://emscripten.org/docs/getting_started/downloads.html) (tested with Emscripten 6.0.13)
 - Native, Linux only for now: `sudo apt install libwayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev zlib1g-dev`
 - A browser with WebGPU
-- Optional: [naga](https://crates.io/crates/naga-cli), to check shaders while building: `cargo install naga-cli --version 24.0.0`
+- Optional: [naga](https://crates.io/crates/naga-cli), to check shaders while building: `cargo install naga-cli --version 29.0.4`
 
 The first configure downloads WebGPU-distribution (wgpu-native or emdawnwebgpu) and GLFW.
 
 ### Shaders
 
-WGSL shaders live next to the pass that uses them, such as `cpp/modules/Gpu/src/Market/TradesPass.wgsl`. `gpu_embed_shader()` (`cpp/cmake/shaders.cmake`) turns each into a generated header, `Gpu/Shaders/<Name>.hpp`, holding it as a `std::string_view`, so binaries need no shader files at runtime. When naga is installed, every build checks each shader with it. Naga 24 is the compiler inside wgpu-native v24, so it catches what the native build would. CI requires it (`-DTRADEVIEWER_REQUIRE_NAGA=ON`). Chrome compiles with a different compiler, Tint, so the browser tests remain the web's check.
+WGSL shaders live next to the pass that uses them, such as `cpp/modules/Gpu/src/Market/TradesPass.wgsl`. `gpu_embed_shader()` (`cpp/cmake/shaders.cmake`) turns each into a generated header, `Gpu/Shaders/<Name>.hpp`, holding it as a `std::string_view`, so binaries need no shader files at runtime. When naga is installed, every build checks each shader with it. Naga 29 is the compiler inside wgpu-native v29, so it catches what the native build would. CI requires it (`-DTRADEVIEWER_REQUIRE_NAGA=ON`). Chrome compiles with a different compiler, Tint, so the browser tests remain the web's check.
 
 In VS Code or Cursor, the recommended [wgsl-analyzer](https://github.com/wgsl-analyzer/wgsl-analyzer) extension shows errors as you type, with hover and go-to-definition.
 
@@ -67,7 +70,7 @@ npm run dev        # builds the wasm, then starts Vite on http://localhost:5173
 
 Work happens on `dev`; `main` gets what's ready to publish. `.github/workflows/ci.yml` runs on every push to either (and manually from the Actions tab):
 
-1. **Native:** builds with the `native` preset and runs the tests with `ctest`, then again with profiling compiled out. It then builds and tests the `native-release` preset, a single binary with wgpu-native linked in statically, and packages it with the licenses of what's linked in. Along the way it checks the visible counts (see [Viewing trades](#viewing-trades)); the table appears on the run's page, signed in to GitHub.
+1. **Native:** builds with the `native` preset and runs the tests with `ctest`, then again with profiling compiled out. It then builds and tests the `native-release` preset, a single binary with wgpu-native linked in statically, and packages it with the licenses of what's linked in. Along the way it checks the visible counts (see [Viewing trades](#viewing-trades)) and runs `BenchmarkApp` on Mesa's lavapipe; both tables appear on the run's page, signed in to GitHub, and the benchmark is also kept as the `benchmark` artifact.
 2. **Web:** installs Emscripten, runs `npm ci` and `npm run build`, which builds the wasm module, type-checks and writes `docs/`. It then runs the same tests compiled to wasm in Node, and the site's smoke tests in Chromium.
 3. **On `main` only, if both jobs pass:** publishes `docs/` to GitHub Pages, and replaces the [`latest` release](../../releases/latest) with the new Linux binary. If anything fails, both keep their previous version.
 
@@ -155,6 +158,12 @@ CI runs the same check on Binance's public copy of the day, which has 11 more tr
 ```bash
 python3 tools/check_ranges.py cpp/build/native/apps/TradeStatsApp/TradeStatsApp data/binance_trades_2019-12-01_BTCUSDT.csv.gz
 ```
+
+### Frame times
+
+`BenchmarkApp <table.md> [trades.csv.gz]` draws offscreen at 1600 × 900 (Task 3's viewport) and writes, for the whole day, 12:00–13:00, a minute and a second: the CPU time to update the view, the CPU phases of a frame (acquire, encode, submit) and each GPU pass (`grid`, `trades`), as the median and 95th percentile of 60 frames. It draws one frame at a time, so each is measured alone. CI runs it on lavapipe, a Vulkan driver on the CPU, so compare its runs with each other rather than with real GPUs.
+
+GPU times are in nanoseconds on every platform. wgpu-native counts timestamps in device ticks (83.3 ns each on Intel's Skylake GPUs, for example), so the profiler multiplies by the tick length it reports (`wgpuQueueGetTimestampPeriod`). Browsers report nanoseconds already.
 
 ### GPU buffer layout
 

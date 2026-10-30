@@ -16,26 +16,23 @@ constexpr std::uint32_t MaxNumTimestamps = 2 * MaxNumPasses;
 
 using UntimedReason = Type::FrameStats::UntimedReason;
 
-/** GPU times from the timestamps of passes named `passNames`, as read back. */
-Type::FrameStats::Gpu gpuTimes(const std::vector<std::string>& passNames, const Readback::Bytes& bytes)
-{
-    std::array<std::uint64_t, MaxNumTimestamps> timestamps{};
-    std::memcpy(timestamps.data(), bytes.data(), 2 * passNames.size() * sizeof(std::uint64_t));
+} // namespace
 
+Type::FrameStats::Gpu Profiler::toGpuTimes(const std::vector<std::string>& passNames, std::span<const std::uint64_t> timestamps,
+                                           double nanosecondsPerTick)
+{
     std::vector<Type::FrameStats::Gpu::PassTiming> passes;
     double totalMs = 0.0;
     for (std::size_t pass = 0; pass < passNames.size(); ++pass) {
         const std::uint64_t begin = timestamps[2 * pass];
         const std::uint64_t end = timestamps[2 * pass + 1];
         // Some drivers report end before begin for very short passes.
-        const double ms = end > begin ? static_cast<double>(end - begin) / 1e6 : 0.0;
+        const double ms = end > begin ? static_cast<double>(end - begin) * nanosecondsPerTick / 1e6 : 0.0;
         passes.push_back({ .name = passNames[pass], .gpuMs = ms });
         totalMs += ms;
     }
     return { .totalMs = totalMs, .passes = std::move(passes) };
 }
-
-} // namespace
 
 std::shared_ptr<Profiler> Profiler::create(const Context& context, TimesCallback onTimes)
 {
@@ -45,7 +42,8 @@ std::shared_ptr<Profiler> Profiler::create(const Context& context, TimesCallback
 Profiler::Profiler(const Context& context, TimesCallback onTimes)
     : mTimestamps(std::unexpected(UntimedReason::Undefined)),
       mCurrentFrame(std::unexpected(UntimedReason::NotStarted)),
-      mOnTimes(std::move(onTimes))
+      mOnTimes(std::move(onTimes)),
+      mNanosecondsPerTick(context.nanosecondsPerTick)
 {
     if (!Core::Profiling::Compiled)
     {
@@ -135,9 +133,7 @@ const Profiler::TimestampWrites* Profiler::measurePass(std::string_view name)
     passNames.emplace_back(name);
 
     mCurrentFrame->timestampWrites = TimestampWrites{
-#ifdef __EMSCRIPTEN__
         .nextInChain = nullptr,
-#endif
         .querySet = mTimestamps->querySet.get(),
         .beginningOfPassWriteIndex = 2 * pass,
         .endOfPassWriteIndex = 2 * pass + 1,
@@ -197,7 +193,9 @@ void Profiler::endFrame(std::uint64_t frame)
             slot->busy = false;
             if (bytes)
             {
-                profiler->mOnTimes(frame, gpuTimes(slot->passNames, *bytes));
+                std::array<std::uint64_t, MaxNumTimestamps> timestamps{};
+                std::memcpy(timestamps.data(), bytes->data(), 2 * slot->passNames.size() * sizeof(std::uint64_t));
+                profiler->mOnTimes(frame, toGpuTimes(slot->passNames, timestamps, profiler->mNanosecondsPerTick));
             }
             else
             {

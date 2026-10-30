@@ -1,12 +1,14 @@
-add_executable(ViewerApp
-    src/App.cpp
-)
+# The viewer without its platform (view state, input, engine), so BenchmarkApp
+# can drive the same code.
+add_library(ViewerAppLib STATIC src/App.cpp)
+viewer_setup_target(ViewerAppLib)
+target_include_directories(ViewerAppLib PUBLIC include)
+target_link_libraries(ViewerAppLib PUBLIC Core Gpu)
+
+add_executable(ViewerApp)
 viewer_setup_target(ViewerApp)
 
-target_link_libraries(ViewerApp PRIVATE
-    Core
-    Gpu
-)
+target_link_libraries(ViewerApp PRIVATE ViewerAppLib)
 
 if (EMSCRIPTEN)
     # The React app imports the generated module from web/src/wasm.

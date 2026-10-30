@@ -6,6 +6,10 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/eliemichel/WebGPU-distribution.git
     GIT_TAG 17dcd42a7683355e7a40ac4e97e77f36dff5b5ab
 )
+# Natively, wgpu-native v29 rather than WebGPU-distribution's default (v24):
+# v29 says how long a GPU timestamp tick is, so GPU times can be converted to
+# nanoseconds. Forced, so existing build folders switch too.
+set(WGPU_VERSION "v29.0.1.1" CACHE STRING "wgpu-native release to download" FORCE)
 FetchContent_MakeAvailable(webgpu)
 
 add_library(Gpu STATIC

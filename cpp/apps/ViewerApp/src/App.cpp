@@ -1,4 +1,4 @@
-#include "App.hpp"
+#include "Viewer/App.hpp"
 
 #include "Core/Data/Synthetic.hpp"
 

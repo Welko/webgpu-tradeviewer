@@ -1,14 +1,14 @@
 # Shaders live in .wgsl files next to the code that uses them. Each becomes a
 # generated header holding it as a string, so binaries need no shader files at
-# runtime. With naga (`cargo install naga-cli --version 24.0.0`, the version
-# wgpu-native v24 uses), the build also checks each shader as it embeds it.
+# runtime. With naga (`cargo install naga-cli --version 29.0.4`, the version
+# wgpu-native v29 uses), the build also checks each shader as it embeds it.
 
 find_program(NAGA_EXECUTABLE naga HINTS "$ENV{HOME}/.cargo/bin")
 option(TRADEVIEWER_REQUIRE_NAGA "Fail without naga, so every build checks its shaders" OFF)
 if (NAGA_EXECUTABLE)
     message(STATUS "Checking shaders with ${NAGA_EXECUTABLE}")
 elseif (TRADEVIEWER_REQUIRE_NAGA)
-    message(FATAL_ERROR "naga not found; install it with `cargo install naga-cli --version 24.0.0`")
+    message(FATAL_ERROR "naga not found; install it with `cargo install naga-cli --version 29.0.4`")
 else()
     message(STATUS "naga not found: shaders are only checked when they're loaded")
 endif()

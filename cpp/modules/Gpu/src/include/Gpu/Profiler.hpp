@@ -15,6 +15,7 @@
 #include <expected>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -25,13 +26,8 @@ namespace Gpu {
 class Profiler : public std::enable_shared_from_this<Profiler>
 {
 public:
-    // Newer webgpu.h (emdawnwebgpu) shares one struct between render and
-    // compute passes; wgpu-native 24 still has the render-only one.
-#ifdef __EMSCRIPTEN__
+    // Shared by render and compute passes.
     using TimestampWrites = WGPUPassTimestampWrites;
-#else
-    using TimestampWrites = WGPURenderPassTimestampWrites;
-#endif
 
     using Times = std::expected<Type::FrameStats::Gpu, Type::FrameStats::UntimedReason>;
     using TimesCallback = std::function<void(std::uint64_t frame, Times times)>;
@@ -41,6 +37,13 @@ public:
      * untimed, otherwise once its timestamps are read back.
      */
     static std::shared_ptr<Profiler> create(const Context& context, TimesCallback onTimes);
+
+    /**
+     * GPU times from two timestamps per pass, begin and end, counted in ticks
+     * of `nanosecondsPerTick`. A pass that ends before it begins counts as 0.
+     */
+    static Type::FrameStats::Gpu toGpuTimes(const std::vector<std::string>& passNames,
+                                            std::span<const std::uint64_t> timestamps, double nanosecondsPerTick);
 
     void beginFrame(bool timed);
 
@@ -112,6 +115,7 @@ private:
     std::expected<Timestamps, Type::FrameStats::UntimedReason> mTimestamps;
     std::expected<CurrentFrame, Type::FrameStats::UntimedReason> mCurrentFrame;
     TimesCallback mOnTimes;
+    double mNanosecondsPerTick;
 
     struct Dropped
     {

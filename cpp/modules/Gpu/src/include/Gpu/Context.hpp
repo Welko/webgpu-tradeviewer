@@ -42,6 +42,13 @@ struct Context
 
     Features features{};
 
+    /**
+     * Nanoseconds per GPU timestamp tick. wgpu-native reports raw ticks (83.3
+     * ns each on Intel's Skylake GPUs, for example); browsers report
+     * nanoseconds, so it stays 1 on the web.
+     */
+    double nanosecondsPerTick = 1.0;
+
     Type::Info info;
 };
 

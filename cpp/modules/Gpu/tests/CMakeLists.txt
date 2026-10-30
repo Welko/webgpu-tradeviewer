@@ -4,6 +4,7 @@ viewer_add_test(GpuTests
     HandleTests.cpp
     ResourceTests.cpp
     StatsQueueTests.cpp
+    TimestampTests.cpp
 )
 target_include_directories(GpuTests PRIVATE ../include ../src/include)
 target_link_libraries(GpuTests PRIVATE Gpu Core webgpu)
