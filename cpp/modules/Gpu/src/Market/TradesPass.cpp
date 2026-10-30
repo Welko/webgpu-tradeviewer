@@ -13,8 +13,6 @@ namespace Gpu::Market {
 
 namespace {
 
-constexpr WGPUColor ClearColor{ 0.07, 0.08, 0.10, 1.0 };
-
 /** One trade as the shader reads it (TradesPass.wgsl). */
 struct GpuTrade
 {
@@ -152,8 +150,7 @@ void TradesPass::append(const Core::Data::Trades& trades)
     mTrades.append(std::as_bytes(std::span(packed)));
 }
 
-void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, std::uint32_t width, std::uint32_t height,
-                        Profiler& profiler)
+void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot::Area plot, Profiler& profiler)
 {
     const auto startUs = static_cast<std::uint64_t>(mView.time.startUs);
     const Uniforms uniforms{
@@ -163,8 +160,8 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, std:
         .markerScale = mMarkerScale == Type::MarkerScale::Area ? 0u : 1u,
         .priceLow = static_cast<float>(mView.price.low),
         .priceSpan = static_cast<float>(mView.price.high - mView.price.low),
-        .width = static_cast<float>(width),
-        .height = static_cast<float>(height),
+        .width = static_cast<float>(plot.width),
+        .height = static_cast<float>(plot.height),
         .pixelRatio = mPixelRatio,
         .padding = {},
     };
@@ -173,9 +170,9 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, std:
     WGPURenderPassColorAttachment color{};
     color.view = target;
     color.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
-    color.loadOp = WGPULoadOp_Clear;
+    // Over the grid.
+    color.loadOp = WGPULoadOp_Load;
     color.storeOp = WGPUStoreOp_Store;
-    color.clearValue = ClearColor;
 
     WGPURenderPassDescriptor descriptor{};
     descriptor.colorAttachmentCount = 1;
@@ -187,7 +184,8 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, std:
     const std::size_t uploaded = mTrades.size() / sizeof(GpuTrade);
     const std::size_t first = std::min(mView.trades.first, uploaded);
     const std::size_t count = std::min(mView.trades.last, uploaded) - first;
-    if (count > 0 && mView.time.getLengthUs() > 0 && mView.price.high > mView.price.low) {
+    if (count > 0 && !plot.empty() && mView.time.getLengthUs() > 0 && mView.price.high > mView.price.low) {
+        plot.apply(pass.get());
         wgpuRenderPassEncoderSetPipeline(pass.get(), mPipeline.get());
         wgpuRenderPassEncoderSetBindGroup(pass.get(), 0, mBindGroup.get(), 0, nullptr);
         wgpuRenderPassEncoderSetVertexBuffer(pass.get(), 0, mTrades.get(), 0, mTrades.size());

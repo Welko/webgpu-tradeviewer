@@ -1,9 +1,11 @@
 #pragma once
 
-#include "Core/Data/TimeRange.hpp"
+#include "Core/Axis.hpp"
+#include "Core/Range.hpp"
 #include "Core/Data/Trades.hpp"
 #include "Gpu/Market/Engine.hpp"
 #include "Gpu/Market/Type.hpp"
+#include "Gpu/Plot/Type.hpp"
 #include "Gpu/Type.hpp"
 
 #include <cstddef>
@@ -12,6 +14,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace Viewer {
 
@@ -43,7 +46,7 @@ public:
     [[nodiscard]] Core::Data::TradeSummary getViewSummary() const;
 
     /** The time range on screen, left edge to right edge. */
-    [[nodiscard]] Core::Data::TimeRange getView() const { return mView; }
+    [[nodiscard]] Core::TimeRange getView() const { return mView.time; }
 
     /** 12:00 to 13:00 UTC on the day of the first trade. */
     void resetView();
@@ -51,7 +54,22 @@ public:
     /** The whole UTC day of the first trade. */
     void showDay();
 
-    /** Scales the time range by `factor` (above 1 zooms out), keeping the time at `x` pixels from the left in place. */
+    /** Ticks for the axes of the current view, also drawn as grid lines. */
+    struct Axes
+    {
+        std::vector<Core::Axis::Tick> times;
+        std::vector<Core::Axis::Tick> prices;
+    };
+
+    [[nodiscard]] const Axes& getAxes() const { return mView.axes; }
+
+    /** Space to leave around the plot for axis labels, in physical pixels. */
+    void setPlotInsets(Gpu::Plot::Type::Insets insets);
+
+    /**
+     * Scales the time range by `factor` (above 1 zooms out), keeping the time
+     * at `x` pixels from the surface's left edge in place.
+     */
     void zoomAt(double x, double factor);
 
     /** Follows a drag of `dx` pixels: dragging right shows earlier trades. */
@@ -89,17 +107,46 @@ public:
 #endif
 
 private:
-    /** Shows mView: finds its trades and fits the price range to them. */
+    /** Shows mView.time: finds its trades and fits the price range to them. */
     void applyView();
 
+    /** Ticks and grid lines for the current view and plot size. */
+    void updateAxes();
+
+    /** The plot's size in physical pixels: the surface less the insets. */
+    [[nodiscard]] double getPlotWidth() const;
+    [[nodiscard]] double getPlotHeight() const;
+
+    /** The trades, and what's worked out from them when they're set. */
+    struct TradeData
+    {
+        Core::Data::Trades trades;
+        Core::Data::AmountTotals totals;
+        std::int64_t dayStartUs = 0;  // midnight UTC before the first trade
+    };
+
+    /** What's on screen; applyView() updates it all. */
+    struct View
+    {
+        Core::TimeRange time{};
+        Core::ValueRange price{};  // kept while the view has no trades
+        Core::IndexRange trades{};  // the trades in `time`
+        Axes axes;
+    };
+
+    /** The surface, and the plot inside it. */
+    struct Layout
+    {
+        std::uint32_t width = 0;
+        std::uint32_t height = 0;
+        float pixelRatio = 1.0f;
+        Gpu::Plot::Type::Insets insets{};
+    };
+
     std::unique_ptr<Gpu::Market::Engine> mEngine;
-    Core::Data::Trades mTrades;
-    Core::Data::AmountTotals mTotals;
-    std::int64_t mDayStartUs = 0;  // midnight UTC before the first trade
-    Core::Data::TimeRange mView{};
-    Core::Data::PriceRange mPrice{};  // kept while the view has no trades
-    Core::Data::IndexRange mTradesInView{};
-    std::uint32_t mWidth = 0;
+    TradeData mData;
+    View mView;
+    Layout mLayout;
 };
 
 } // namespace Viewer

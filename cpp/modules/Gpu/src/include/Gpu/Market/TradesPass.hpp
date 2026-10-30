@@ -3,6 +3,7 @@
 #include "Gpu/Context.hpp"
 #include "Gpu/GrowableBuffer.hpp"
 #include "Gpu/Handle.hpp"
+#include "Gpu/Plot/Area.hpp"
 #include "Gpu/Market/Type.hpp"
 #include "Gpu/Profiler.hpp"
 #include "Gpu/Resource.hpp"
@@ -17,8 +18,8 @@
 namespace Gpu::Market {
 
 /**
- * Clears the frame and draws each trade in the view as a disc: time across,
- * price up, colored by side, sized by amount.
+ * Draws each trade in the view as a disc, over the grid and inside the plot:
+ * time across, price up, colored by side, sized by amount.
  *
  * Each trade is one instance of a quad, 20 bytes in a vertex buffer:
  * time in microseconds as two u32 halves, price and amount as f32, and side.
@@ -46,9 +47,8 @@ public:
     /** Physical pixels per CSS or window pixel, which marker sizes are given in. */
     void setPixelRatio(float ratio) { mPixelRatio = ratio; }
 
-    /** Records the pass into `target`, `width` × `height` pixels. */
-    void encode(WGPUCommandEncoder encoder, WGPUTextureView target, std::uint32_t width, std::uint32_t height,
-                Profiler& profiler);
+    /** Records the pass into `target`, drawing inside `plot`. */
+    void encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot::Area plot, Profiler& profiler);
 
 private:
     const Context* mContext;

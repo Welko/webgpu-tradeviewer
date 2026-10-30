@@ -1,5 +1,6 @@
 #include "App.hpp"
 
+#include "Core/Axis.hpp"
 #include "Core/Data/TradeParser.hpp"
 
 #include <emscripten/bind.h>
@@ -36,6 +37,19 @@ struct WebTradeSummary
     double lastMs;
     double totalAmount;
 };
+
+/** Ticks as a JavaScript array of { fraction, label }. */
+val toWeb(const std::vector<Core::Axis::Tick>& ticks)
+{
+    val array = val::array();
+    for (const auto& tick : ticks) {
+        val object = val::object();
+        object.set("fraction", tick.fraction);
+        object.set("label", tick.label);
+        array.call<void>("push", object);
+    }
+    return array;
+}
 
 WebTradeSummary toWeb(const Core::Data::TradeSummary& summary)
 {
@@ -128,6 +142,27 @@ public:
     WebTradeSummary getViewSummary() const
     {
         return *mApp ? toWeb((*mApp)->getViewSummary()) : WebTradeSummary{};
+    }
+
+    /** The axes' ticks as { times, prices }, each an array of { fraction, label }. Null until init() succeeds. */
+    val getAxes() const
+    {
+        if (!*mApp) {
+            return val::null();
+        }
+        const auto& axes = (*mApp)->getAxes();
+        val result = val::object();
+        result.set("times", toWeb(axes.times));
+        result.set("prices", toWeb(axes.prices));
+        return result;
+    }
+
+    /** Space around the plot for axis labels, in physical pixels. */
+    void setPlotInsets(std::uint32_t left, std::uint32_t top, std::uint32_t right, std::uint32_t bottom)
+    {
+        if (*mApp) {
+            (*mApp)->setPlotInsets({ .left = left, .top = top, .right = right, .bottom = bottom });
+        }
     }
 
     void resetView()
@@ -257,6 +292,8 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("render", &WebViewer::render)
         .function("view", &WebViewer::getView)
         .function("viewSummary", &WebViewer::getViewSummary)
+        .function("axes", &WebViewer::getAxes)
+        .function("setPlotInsets", &WebViewer::setPlotInsets)
         .function("resetView", &WebViewer::resetView)
         .function("showDay", &WebViewer::showDay)
         .function("zoomAt", &WebViewer::zoomAt)

@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { GpuInfo } from './gpuInfo';
+import { AxisLabels, AxisMargins } from './AxisLabels';
 import { ViewControls } from './ViewControls';
-import { createViewer, type PowerPreference, type TimeRange, type TradeSummary, type Viewer } from './viewerModule';
+import { createViewer, type Axes, type PowerPreference, type TimeRange, type TradeSummary, type Viewer } from './viewerModule';
 
 export type ViewerStatus =
   | { kind: 'loading' }
@@ -41,7 +42,15 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
   const canvasId = `viewer-${useId().replace(/:/g, '')}`;
   const onStatusRef = useRef(onStatus);
   onStatusRef.current = onStatus;
-  const [controls, setControls] = useState<{ viewer: Viewer; view: TimeRange; viewSummary: TradeSummary; refresh: () => void } | null>(null);
+  const [shown, setShown] = useState<{
+    viewer: Viewer;
+    view: TimeRange;
+    viewSummary: TradeSummary;
+    axes: Axes;
+    /** The canvas in CSS pixels. */
+    size: { width: number; height: number };
+    refresh: () => void;
+  } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -80,9 +89,17 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
             frame = requestAnimationFrame(tick);
           }
         };
+        let size = { width: canvas.clientWidth, height: canvas.clientHeight };
         const refresh = () => {
           requestFrame();
-          setControls({ viewer: created, view: created.view(), viewSummary: created.viewSummary(), refresh });
+          setShown({
+            viewer: created,
+            view: created.view(),
+            viewSummary: created.viewSummary(),
+            axes: created.axes() as Axes,
+            size,
+            refresh,
+          });
         };
 
         // CSS pixels to the canvas's physical pixels, which the viewer works in.
@@ -134,10 +151,13 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
             canvas.width = width;
             canvas.height = height;
           }
-          created.resize(width, height);
           // Also changes when the page is zoomed or moved to another screen, which resizes the canvas in pixels.
           created.setPixelRatio(devicePixelRatio);
-          requestFrame();
+          const scale = width / Math.max(1, entry.contentRect.width);
+          created.setPlotInsets(0, 0, Math.round(AxisMargins.right * scale), Math.round(AxisMargins.bottom * scale));
+          created.resize(width, height);
+          size = { width: entry.contentRect.width, height: entry.contentRect.height };
+          refresh();
         });
         observer.observe(canvas);
         refresh();
@@ -155,15 +175,20 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
       cancelAnimationFrame(frame);
       observer?.disconnect();
       removeInput.abort();
-      setControls(null);
+      setShown(null);
       viewer?.delete();
     };
   }, [canvasId, powerPreference]);
 
   return (
     <div className="viewer">
-      <canvas id={canvasId} ref={canvasRef} />
-      {controls && <ViewControls {...controls} onChange={controls.refresh} />}
+      {shown && (
+        <ViewControls viewer={shown.viewer} view={shown.view} viewSummary={shown.viewSummary} onChange={shown.refresh} />
+      )}
+      <div className="plot">
+        <canvas id={canvasId} ref={canvasRef} />
+        {shown && <AxisLabels axes={shown.axes} width={shown.size.width} height={shown.size.height} />}
+      </div>
     </div>
   );
 }

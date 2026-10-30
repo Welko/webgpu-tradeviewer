@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 
-namespace Core::Data {
+/** Intervals of time, values and positions. */
+namespace Core {
 
 /** A time interval [startUs, endUs): start inclusive, end exclusive. */
 struct TimeRange
@@ -37,4 +39,23 @@ struct TimeRange
     bool operator==(const TimeRange&) const = default;
 };
 
-} // namespace Core::Data
+/** Positions [first, last) in a sequence. */
+struct IndexRange
+{
+    std::size_t first;
+    std::size_t last;
+
+    [[nodiscard]] std::size_t size() const { return last - first; }
+    [[nodiscard]] bool empty() const { return first == last; }
+
+    bool operator==(const IndexRange&) const = default;
+};
+
+/** Values from `low` to `high`, both included. */
+struct ValueRange
+{
+    double low;
+    double high;
+};
+
+} // namespace Core

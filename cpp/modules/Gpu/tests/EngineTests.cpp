@@ -125,6 +125,12 @@ bool isBackground(Rgba pixel)
     return std::abs(pixel.red - 18) <= 1 && std::abs(pixel.green - 20) <= 1 && std::abs(pixel.blue - 26) <= 1;
 }
 
+/** A faint grey grid line over the background. */
+bool isGridLine(Rgba pixel)
+{
+    return pixel.red > 25 && pixel.red < 50 && std::abs(pixel.red - pixel.green) <= 3;
+}
+
 /** Adds a trade at `timeUs`. */
 void add(Trades& trades, std::int64_t timeUs, double price, double amount, Side side)
 {
@@ -144,7 +150,7 @@ Trades buyThenSell()
 }
 
 /** 100 µs from noon, prices 99 to 101, showing `trades`. */
-Gpu::Market::Type::View viewOf(Core::Data::IndexRange trades)
+Gpu::Market::Type::View viewOf(Core::IndexRange trades)
 {
     return { .time = { NoonUs, NoonUs + 100 }, .price = { .low = 99.0, .high = 101.0 }, .trades = trades };
 }
@@ -169,6 +175,37 @@ TEST_CASE("Trades are drawn where their time and price fall, colored by side")
     CHECK(isSell(pixelAt(*pixels, 100, 75, 25)));
     CHECK(isBackground(pixelAt(*pixels, 100, 50, 25)));
     CHECK(isBackground(pixelAt(*pixels, 100, 25, 5)));
+}
+
+TEST_CASE("Insets keep trades and grid lines inside the plot")
+{
+    const auto engine = createOffscreen(100, 50);
+    if (!engine) {
+        return;
+    }
+    // The plot is the top left 80 × 40 pixels.
+    engine->setPlotInsets({ .left = 0, .top = 0, .right = 20, .bottom = 10 });
+    engine->setTrades(buyThenSell());
+    engine->setView(viewOf({ 0, 2 }));
+    engine->setGrid({ .verticalLines = { 0.5f }, .horizontalLines = { 0.25f } });
+    engine->render();
+
+    const auto pixels = readPixels(*engine);
+    if (!pixels) {
+        return;
+    }
+    // A quarter of the plot across and half of it down.
+    CHECK(isBuy(pixelAt(*pixels, 100, 20, 20)));
+    CHECK(isSell(pixelAt(*pixels, 100, 60, 20)));
+    // One pixel wide, at column 40 and, a quarter up from the plot's bottom, row 29.
+    CHECK(isGridLine(pixelAt(*pixels, 100, 40, 5)));
+    CHECK(isBackground(pixelAt(*pixels, 100, 39, 5)));
+    CHECK(isBackground(pixelAt(*pixels, 100, 41, 5)));
+    CHECK(isGridLine(pixelAt(*pixels, 100, 5, 29)));
+    CHECK(isBackground(pixelAt(*pixels, 100, 5, 28)));
+    // Nothing in the margins.
+    CHECK(isBackground(pixelAt(*pixels, 100, 40, 45)));
+    CHECK(isBackground(pixelAt(*pixels, 100, 90, 29)));
 }
 
 TEST_CASE("Only the view's trades are drawn")
@@ -336,8 +373,11 @@ TEST_CASE("Profiling reports CPU times and the GPU time of each pass")
     // timestamp-query.
     CHECK_MESSAGE(stats.gpu, "No GPU timings arrived; the device needs timestamp-query");
     if (stats.gpu) {
-        CHECK(stats.gpu->passes.size() == 1);
-        CHECK(stats.gpu->passes.front().name == "trades");
+        CHECK(stats.gpu->passes.size() == 2);
+        if (stats.gpu->passes.size() == 2) {
+            CHECK(stats.gpu->passes[0].name == "grid");
+            CHECK(stats.gpu->passes[1].name == "trades");
+        }
     }
 }
 

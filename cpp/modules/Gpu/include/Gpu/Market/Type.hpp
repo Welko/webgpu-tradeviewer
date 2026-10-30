@@ -1,7 +1,6 @@
 #pragma once
 
-#include "Core/Data/TimeRange.hpp"
-#include "Core/Data/Trades.hpp"
+#include "Core/Range.hpp"
 
 #include <cstdint>
 
@@ -18,11 +17,11 @@ enum class MarkerScale : std::uint8_t
 struct View
 {
     /** Left to right edge. */
-    Core::Data::TimeRange time;
+    Core::TimeRange time;
     /** Bottom to top edge. */
-    Core::Data::PriceRange price;
+    Core::ValueRange price;
     /** The trades in `time`: the ones drawn. */
-    Core::Data::IndexRange trades;
+    Core::IndexRange trades;
 };
 
 } // namespace Gpu::Market::Type

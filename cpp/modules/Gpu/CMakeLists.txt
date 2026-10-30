@@ -13,11 +13,13 @@ add_library(Gpu STATIC
     src/GrowableBuffer.cpp
     src/Market/Engine.cpp
     src/Market/TradesPass.cpp
+    src/Plot/GridPass.cpp
     src/Profiler.cpp
     src/Readback.cpp
 )
 viewer_setup_target(Gpu)
 gpu_embed_shader(Gpu src/Market/TradesPass.wgsl)
+gpu_embed_shader(Gpu src/Plot/GridPass.wgsl)
 
 target_include_directories(Gpu PUBLIC include)
 target_include_directories(Gpu PRIVATE src/include)

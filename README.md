@@ -9,15 +9,18 @@ Status: scaffold only. The viewer creates a WebGPU device and clears the surface
 ```
 cpp/
   modules/Core       no WebGPU dependency:
-                       Core/Log.hpp   logging
-                       Core/Data/     trades, their CSV parser (Tardis and Binance), time ranges,
-                                      exact totals, synthetic trades
+                       Core/Log.hpp     logging
+                       Core/Range.hpp   time, value and index ranges
+                       Core/Axis.hpp    axis ticks and their labels
+                       Core/Data/       trades, their CSV parser (Tardis and Binance), exact totals,
+                                        synthetic trades
   modules/Gpu        WebGPU rendering and compute. Public API is only Gpu::Market::Engine
-                     (a facade with no WebGPU types). Context (device, surface...) and
-                     passes such as TradesPass are internal (src/include). Design: design/gpu.md
+                     (a facade with no WebGPU types). Context (device, surface...) and the
+                     passes are internal (src/include): Gpu::Plot (plot area, grid) is
+                     generic, Gpu::Market (trades) is about markets. Design: design/gpu.md
   apps/ViewerApp     App (resize/update/render) + entry points:
-                       NativeMain.cpp  GLFW window and loop
-                       WebMain.cpp     embind `Viewer` class, loop driven by JS
+                       NativeMain.cpp   GLFW window and loop
+                       WebMain.cpp      embind `Viewer` class, loop driven by JS
   apps/TradeStatsApp native command line: a time range's trade count and amount, as the viewer computes them
 tools/check_ranges.py  checks TradeStatsApp against an independent calculation
 web/                 Vite + React + TypeScript
@@ -64,7 +67,7 @@ npm run dev        # builds the wasm, then starts Vite on http://localhost:5173
 
 Work happens on `dev`; `main` gets what's ready to publish. `.github/workflows/ci.yml` runs on every push to either (and manually from the Actions tab):
 
-1. **Native:** builds with the `native` preset and runs the tests with `ctest`, then again with profiling compiled out. It then builds and tests the `native-release` preset, a single binary with wgpu-native linked in statically, and packages it with the licenses of what's linked in.
+1. **Native:** builds with the `native` preset and runs the tests with `ctest`, then again with profiling compiled out. It then builds and tests the `native-release` preset, a single binary with wgpu-native linked in statically, and packages it with the licenses of what's linked in. Along the way it checks the visible counts (see [Viewing trades](#viewing-trades)); the table appears on the run's page, signed in to GitHub.
 2. **Web:** installs Emscripten, runs `npm ci` and `npm run build`, which builds the wasm module, type-checks and writes `docs/`. It then runs the same tests compiled to wasm in Node, and the site's smoke tests in Chromium.
 3. **On `main` only, if both jobs pass:** publishes `docs/` to GitHub Pages, and replaces the [`latest` release](../../releases/latest) with the new Linux binary. If anything fails, both keep their previous version.
 
@@ -123,6 +126,8 @@ curl -L -o data/binance_incremental_book_L2_2019-12-01_BTCUSDT.csv.gz https://da
 
 Each trade is a disc: time across, price up, green for buys and red for sells, and larger for bigger amounts. The view opens on 12:00–13:00 UTC of the first trade's day. The price axis fits the trades in view.
 
+The axes tick at round values: prices in steps of 1, 2 or 5 times a power of ten, and times from 1 µs up to whole days. Labels show as much precision as the step needs, and the date at midnight. `Core::Axis` works out the ticks for both platforms. The engine draws them as one-pixel grid lines under the trades, in their own pass (`grid`), and the web page writes the labels in margins the plot leaves free. Natively, the labels will come with the ImGui panel; the grid already shows.
+
 | | Web | Native |
 |---|---|---|
 | Zoom around the pointer | Mouse wheel | Mouse wheel |
@@ -151,7 +156,9 @@ CI runs the same check on Binance's public copy of the day, which has 11 more tr
 python3 tools/check_ranges.py cpp/build/native/apps/TradeStatsApp/TradeStatsApp data/binance_trades_2019-12-01_BTCUSDT.csv.gz
 ```
 
-**On the GPU**, each trade takes 20 bytes in one vertex buffer and is drawn as an instance of a quad:
+### GPU buffer layout
+
+Each trade takes 20 bytes in one vertex buffer and is drawn as an instance of a quad:
 
 | Bytes | Field |
 |---|---|

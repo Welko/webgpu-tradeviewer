@@ -29,8 +29,8 @@ const TwoTrades = gzipSync(
 
 /** What the last drawn frame showed. */
 interface Frame {
-  /** RGBA in the middle of the top row, above the highest trade. */
-  top: number[];
+  /** RGBA in the bottom right corner, in the axis margins: plain background. */
+  corner: number[];
   /** Pixels mostly green or red: buys and sells. */
   buyPixels: number;
   sellPixels: number;
@@ -63,8 +63,8 @@ async function instrument(page: Page) {
             buyPixels += data[i + 1] > data[i] + 50 ? 1 : 0;
             sellPixels += data[i] > data[i + 1] + 50 ? 1 : 0;
           }
-          const top = (canvas.width >> 1) * 4;
-          probe.lastFrame = { top: Array.from(data.slice(top, top + 4)), buyPixels, sellPixels };
+          const corner = (canvas.width * canvas.height - 2) * 4;
+          probe.lastFrame = { corner: Array.from(data.slice(corner, corner + 4)), buyPixels, sellPixels };
         }
       });
     };
@@ -95,9 +95,9 @@ test('starts WebGPU and draws the background and both sides\' trades', async ({ 
   await waitUntilReady(page);
 
   await expect.poll(() => lastFrame(page)).not.toBeNull();
-  const { top, buyPixels, sellPixels } = (await lastFrame(page))!;
+  const { corner, buyPixels, sellPixels } = (await lastFrame(page))!;
   // The engine's background, (0.07, 0.08, 0.10), in 8-bit RGBA.
-  const [red, green, blue, alpha] = top;
+  const [red, green, blue, alpha] = corner;
   expect(Math.abs(red - 18)).toBeLessThanOrEqual(2);
   expect(Math.abs(green - 20)).toBeLessThanOrEqual(2);
   expect(Math.abs(blue - 26)).toBeLessThanOrEqual(2);
@@ -115,6 +115,10 @@ test('the wheel zooms, dragging pans, and the buttons jump back', async ({ page 
   const range = page.getByTestId('view-range');
   const hour = '2019-12-01 12:00:00.000 UTC – 2019-12-01 13:00:00.000 UTC';
   await expect(range).toHaveText(hour);
+  const timeLabels = page.getByTestId('time-label');
+  await expect(timeLabels.first()).toHaveText('12:00');
+  await expect(timeLabels.filter({ hasText: /^12:30$/ })).toHaveCount(1);
+  expect(await page.getByTestId('price-label').count()).toBeGreaterThan(2);
 
   // Zooming in around the middle keeps 12:30 in the middle.
   const box = (await page.locator('canvas').boundingBox())!;
@@ -138,6 +142,7 @@ test('the wheel zooms, dragging pans, and the buttons jump back', async ({ page 
   await expect(page.getByTestId('view-count')).toHaveText('0');
   await page.getByRole('button', { name: 'Whole day' }).click();
   await expect(range).toHaveText('2019-12-01 00:00:00.000 UTC – 2019-12-02 00:00:00.000 UTC');
+  await expect(timeLabels.first()).toHaveText('2019-12-01');
   await expect(page.getByTestId('view-count')).toHaveText('2');
   await expect(page.getByTestId('view-amount')).toHaveText('1.539741');
   await page.getByRole('button', { name: '12:00–13:00' }).click();

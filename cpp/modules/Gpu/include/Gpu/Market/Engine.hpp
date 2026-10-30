@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Gpu/Market/Type.hpp"
+#include "Gpu/Plot/Type.hpp"
 #include "Gpu/Type.hpp"
 
 #include "Core/Data/Trades.hpp"
@@ -46,6 +47,12 @@ public:
 
     /** Physical pixels per CSS or window pixel, which marker sizes are given in. */
     void setPixelRatio(float ratio);
+
+    /** Space to leave around the plot for axis labels. None by default. */
+    void setPlotInsets(Plot::Type::Insets insets);
+
+    /** Where to draw grid lines, usually at the axis ticks. */
+    void setGrid(const Plot::Type::Grid& grid);
 
     /** Replaces the trades, which must be in time order. */
     void setTrades(const Core::Data::Trades& trades);

@@ -1,5 +1,6 @@
 # No WebGPU dependency.
 add_library(Core STATIC
+    src/Axis.cpp
     src/Data/Synthetic.cpp
     src/Data/TradeParser.cpp
 )

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/Data/TimeRange.hpp"
+#include "Core/Range.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -71,18 +71,6 @@ inline TradeSummary summarize(const Trades& trades)
     };
 }
 
-/** Positions [first, last) in a Trades. */
-struct IndexRange
-{
-    std::size_t first;
-    std::size_t last;
-
-    [[nodiscard]] std::size_t size() const { return last - first; }
-    [[nodiscard]] bool empty() const { return first == last; }
-
-    bool operator==(const IndexRange&) const = default;
-};
-
 /** Where the trades in `range` are, start inclusive and end exclusive. */
 inline IndexRange getTradesIn(const Trades& trades, TimeRange range)
 {
@@ -115,14 +103,8 @@ private:
     std::vector<std::int64_t> mRunning{ 0 };  // mRunning[i]: the first i trades' total
 };
 
-struct PriceRange
-{
-    double low;
-    double high;
-};
-
 /** The lowest and highest price of the trades in `indices`, or nothing if there are none. Reads every one. */
-inline std::optional<PriceRange> getPriceRange(const Trades& trades, IndexRange indices)
+inline std::optional<ValueRange> getPriceRange(const Trades& trades, IndexRange indices)
 {
     if (indices.empty()) {
         return std::nullopt;
@@ -130,7 +112,7 @@ inline std::optional<PriceRange> getPriceRange(const Trades& trades, IndexRange 
     const auto begin = trades.price.begin();
     const auto [low, high] = std::minmax_element(begin + static_cast<std::ptrdiff_t>(indices.first),
         begin + static_cast<std::ptrdiff_t>(indices.last));
-    return PriceRange{ .low = *low, .high = *high };
+    return ValueRange{ .low = *low, .high = *high };
 }
 
 } // namespace Core::Data

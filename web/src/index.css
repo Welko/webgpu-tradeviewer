@@ -51,12 +51,21 @@ body,
 }
 
 .viewer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The canvas and, over its margins, the axis labels. */
+.plot {
   position: relative;
   flex: 1;
   min-height: 0;
 }
 
-.viewer canvas {
+.plot canvas {
   display: block;
   width: 100%;
   height: 100%;
@@ -65,23 +74,48 @@ body,
   cursor: grab;
 }
 
-.viewer canvas:active {
+.plot canvas:active {
   cursor: grabbing;
 }
 
 .view-controls {
-  position: absolute;
-  top: 0.5rem;
-  left: 0.5rem;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem 0.6rem;
   padding: 0.35rem 0.5rem;
-  border-radius: 6px;
-  background: rgb(17 19 24 / 85%);
+  border-bottom: 1px solid #2a2e37;
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
+}
+
+.axis-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  color: #9aa1ad;
+}
+
+/* The plot's right and bottom edges, along the axes. */
+.plot-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  border-right: 1px solid #3a3f4b;
+  border-bottom: 1px solid #3a3f4b;
+}
+
+.time-label,
+.price-label {
+  position: absolute;
+  white-space: nowrap;
+}
+
+.price-label {
+  transform: translateY(-50%);
 }
 
 .view-controls label {

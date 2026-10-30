@@ -2,6 +2,18 @@ import createViewerModule, { type MainModule, type TimeRange, type TradeSummary,
 
 export type { TimeRange, TradeSummary, Viewer };
 
+/** A tick on an axis: where along it (0 at the left or bottom, 1 at the other end), and its label. */
+export interface AxisTick {
+  fraction: number;
+  label: string;
+}
+
+/** What Viewer.axes() returns. */
+export interface Axes {
+  times: AxisTick[];
+  prices: AxisTick[];
+}
+
 /** Same values as WebGPU's GPUPowerPreference, plus 'default' for no hint. */
 export type PowerPreference = 'default' | 'low-power' | 'high-performance';
 
