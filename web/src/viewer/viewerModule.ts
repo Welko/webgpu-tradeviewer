@@ -30,6 +30,21 @@ export interface Theme {
   sell: Color;
   /** Of every marker, over the background. */
   markerOpacity: number;
+  /** Of the ring around the trade under the pointer. */
+  cursor: Color;
+}
+
+/** What Viewer.pickedTrade() returns: the trade under the pointer. */
+export interface PickedTrade {
+  /** Microseconds since 1970, UTC. */
+  timeUs: number;
+  price: number;
+  /** In BTC. */
+  amount: number;
+  side: 'buy' | 'sell';
+  /** Its marker's centre, in physical pixels from the canvas's top left corner. */
+  x: number;
+  y: number;
 }
 
 /** One marker size in a legend. Where the scale stops growing, a size also stands for all amounts past it. */

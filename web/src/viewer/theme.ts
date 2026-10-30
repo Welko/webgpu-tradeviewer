@@ -11,8 +11,8 @@ function parseColor(css: string, property: string): Color {
 
 /**
  * The viewer's colours from the CSS custom properties that apply to `element`
- * (--plot-background, --plot-grid, --buy, --sell, --marker-opacity), so the
- * stylesheet styles the plot along with the page. `element` must be able to
+ * (--plot-background, --plot-grid, --buy, --sell, --cursor, --marker-opacity),
+ * so the stylesheet styles the plot along with the page. `element` must be able to
  * hold a child, so not the canvas itself.
  */
 export function readTheme(element: Element): Theme {
@@ -36,6 +36,7 @@ export function readTheme(element: Element): Theme {
       grid: color('--plot-grid'),
       buy: color('--buy'),
       sell: color('--sell'),
+      cursor: color('--cursor'),
       markerOpacity: Number.isFinite(opacity) ? opacity : 1,
     };
   } finally {

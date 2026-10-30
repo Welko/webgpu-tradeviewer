@@ -14,12 +14,14 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace Gpu::Market {
 
 /**
  * Draws each trade in the view as a disc, over the grid and inside the plot:
- * time across, price up, colored by side, sized by amount.
+ * time across, price up, colored by side, sized by amount. A ring marks the
+ * highlighted trade, on top of the rest.
  *
  * Each trade is one instance of a quad, 20 bytes in a vertex buffer:
  * time in microseconds as two u32 halves, price and amount as f32, and side.
@@ -45,6 +47,9 @@ public:
     void setMarkerScale(Type::MarkerScale scale) { mMarkerScale = scale; }
     void setTheme(const Type::Theme& theme) { mTheme = theme; }
 
+    /** The trade to ring, by its position among those appended; none for nothing. */
+    void setHighlight(std::optional<std::size_t> index) { mHighlight = index; }
+
     /** Physical pixels per CSS or window pixel, which marker sizes are given in. */
     void setPixelRatio(float ratio) { mPixelRatio = ratio; }
 
@@ -54,6 +59,7 @@ public:
 private:
     const Context* mContext;
     Handle<WGPURenderPipeline> mPipeline;
+    Handle<WGPURenderPipeline> mRingPipeline;
     Handle<WGPUBuffer> mUniforms;
     Handle<WGPUBindGroup> mBindGroup;
     GrowableBuffer mTrades;
@@ -61,6 +67,7 @@ private:
     Type::View mView{};
     Type::MarkerScale mMarkerScale = Type::MarkerScale::Area;
     Type::Theme mTheme;
+    std::optional<std::size_t> mHighlight;
     float mPixelRatio = 1.0f;
 };
 

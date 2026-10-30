@@ -196,6 +196,45 @@ test('the legend shows both sides and the sizes of the chosen scale', async ({ p
   expect(errors).toEqual([]);
 });
 
+test('pointing at a trade shows its time, price, amount and side', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/');
+  await waitUntilReady(page);
+  await page.locator('input[type=file]').setInputFiles({ name: 'trades.csv.gz', mimeType: 'application/gzip', buffer: TwoTrades });
+  await expect(page.getByTestId('trade-count')).toHaveText('2');
+  await page.getByRole('button', { name: 'Whole day' }).click();
+  await expect(page.getByTestId('view-count')).toHaveText('2');
+
+  // Both trades are 3.5 s into the day, at the left edge. The price axis fits
+  // them with 5% of a price's 0.001% on either side: the buy (7540.79) is 53%
+  // of the way up the plot, the sell (7540.78) 47%.
+  const box = (await page.locator('canvas').boundingBox())!;
+  const plotHeight = box.height - 22;  // AxisMargins.bottom
+  const heightOf = (fraction: number) => box.y + plotHeight * (1 - fraction);
+  const tooltip = page.getByTestId('trade-tooltip');
+
+  await page.mouse.move(box.x + 2, heightOf(0.53));
+  await expect(tooltip.getByTestId('trade-side')).toHaveText('Buy');
+  await expect(tooltip.getByTestId('trade-time')).toHaveText('2019-12-01 00:00:03.579000 UTC');
+  await expect(tooltip.getByTestId('trade-price')).toHaveText('7,540.79');
+  await expect(tooltip.getByTestId('trade-amount')).toHaveText('1.5');
+
+  await page.mouse.move(box.x + 2, heightOf(0.47));
+  await expect(tooltip.getByTestId('trade-side')).toHaveText('Sell');
+  await expect(tooltip.getByTestId('trade-time')).toHaveText('2019-12-01 00:00:03.572000 UTC');
+  await expect(tooltip.getByTestId('trade-amount')).toHaveText('0.039741');
+
+  // Nothing within 24 pixels, then off the canvas.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(tooltip).toHaveCount(0);
+  await page.mouse.move(box.x + 2, heightOf(0.53));
+  await expect(tooltip).toHaveCount(1);
+  await page.mouse.move(box.x - 5, box.y - 5);
+  await expect(tooltip).toHaveCount(0);
+
+  expect(errors).toEqual([]);
+});
+
 test('an idle page requests no frames, and a resize draws again', async ({ page }) => {
   await instrument(page);
   await page.goto('/');

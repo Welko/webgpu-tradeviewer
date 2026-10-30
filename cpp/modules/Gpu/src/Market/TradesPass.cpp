@@ -37,9 +37,11 @@ struct GpuMarkers
     float areaRadiusAt1Btc;
     float logLowest;
     float logHighest;
-    std::array<float, 3> padding;  // uniform structs are sized in 16-byte steps
+    std::array<float, 3> padding;  // cursorColor starts on 16 bytes
+    std::array<float, 3> cursorColor;
+    float padding2;  // uniform structs are sized in 16-byte steps
 };
-static_assert(sizeof(GpuMarkers) == 64);
+static_assert(sizeof(GpuMarkers) == 80);
 
 /** The shader's View uniform (TradesPass.wgsl). */
 struct Uniforms
@@ -54,7 +56,7 @@ struct Uniforms
     float pixelRatio;
     GpuMarkers markers;
 };
-static_assert(sizeof(Uniforms) == 96);
+static_assert(sizeof(Uniforms) == 112);
 
 std::array<float, 3> toGpu(Gpu::Type::Color color)
 {
@@ -62,15 +64,34 @@ std::array<float, 3> toGpu(Gpu::Type::Color color)
 }
 
 
-Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat format)
+/** The uniforms, for both pipelines; WebGPU's derived layouts would differ per pipeline. */
+Handle<WGPUBindGroupLayout> createBindGroupLayout(WGPUDevice device)
+{
+    WGPUBindGroupLayoutEntry entry{};
+    entry.binding = 0;
+    entry.visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
+    entry.buffer.type = WGPUBufferBindingType_Uniform;
+    entry.buffer.minBindingSize = sizeof(Uniforms);
+    WGPUBindGroupLayoutDescriptor descriptor{};
+    descriptor.entryCount = 1;
+    descriptor.entries = &entry;
+    return Handle(wgpuDeviceCreateBindGroupLayout(device, &descriptor));
+}
+
+Handle<WGPUShaderModule> createShaderModule(WGPUDevice device)
 {
     WGPUShaderSourceWGSL source{};
     source.chain.sType = WGPUSType_ShaderSourceWGSL;
     source.code = Convert::ToWgpu::stringView(Shaders::TradesPass);
-    WGPUShaderModuleDescriptor moduleDescriptor{};
-    moduleDescriptor.nextInChain = &source.chain;
-    const Handle module(wgpuDeviceCreateShaderModule(device, &moduleDescriptor));
+    WGPUShaderModuleDescriptor descriptor{};
+    descriptor.nextInChain = &source.chain;
+    return Handle(wgpuDeviceCreateShaderModule(device, &descriptor));
+}
 
+/** Draws each trade instance with the shader's `vertexEntry` and `fragmentEntry`. */
+Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat format, WGPUShaderModule module,
+                                          WGPUBindGroupLayout bindGroupLayout, const char* vertexEntry, const char* fragmentEntry)
+{
     std::array<WGPUVertexAttribute, 4> attributes{};
     attributes[0].format = WGPUVertexFormat_Uint32x2;
     attributes[0].offset = offsetof(GpuTrade, timeHigh);
@@ -103,21 +124,26 @@ Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat f
     target.writeMask = WGPUColorWriteMask_All;
 
     WGPUFragmentState fragment{};
-    fragment.module = module.get();
-    fragment.entryPoint = Convert::ToWgpu::stringView("fragmentMain");
+    fragment.module = module;
+    fragment.entryPoint = Convert::ToWgpu::stringView(fragmentEntry);
     fragment.targetCount = 1;
     fragment.targets = &target;
 
+    WGPUPipelineLayoutDescriptor layoutDescriptor{};
+    layoutDescriptor.bindGroupLayoutCount = 1;
+    layoutDescriptor.bindGroupLayouts = &bindGroupLayout;
+    const Handle layout(wgpuDeviceCreatePipelineLayout(device, &layoutDescriptor));
+
     WGPURenderPipelineDescriptor descriptor{};
-    descriptor.vertex.module = module.get();
-    descriptor.vertex.entryPoint = Convert::ToWgpu::stringView("vertexMain");
+    descriptor.layout = layout.get();
+    descriptor.vertex.module = module;
+    descriptor.vertex.entryPoint = Convert::ToWgpu::stringView(vertexEntry);
     descriptor.vertex.bufferCount = 1;
     descriptor.vertex.buffers = &trades;
     descriptor.primitive.topology = WGPUPrimitiveTopology_TriangleList;
     descriptor.multisample.count = 1;
     descriptor.multisample.mask = ~0u;
     descriptor.fragment = &fragment;
-    // No layout: WebGPU derives it from the shader.
     return Handle(wgpuDeviceCreateRenderPipeline(device, &descriptor));
 }
 
@@ -125,15 +151,19 @@ Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat f
 
 TradesPass::TradesPass(const Context& context, Resource::Stats& stats, WGPUTextureFormat format)
     : mContext(&context),
-      mPipeline(createPipeline(context.device.get(), format)),
       mTrades(context, stats, WGPUBufferUsage_Vertex)
 {
+    const WGPUDevice device = context.device.get();
+    const auto layout = createBindGroupLayout(device);
+    const auto module = createShaderModule(device);
+    mPipeline = createPipeline(device, format, module.get(), layout.get(), "vertexMain", "fragmentMain");
+    mRingPipeline = createPipeline(device, format, module.get(), layout.get(), "ringVertex", "ringFragment");
+
     WGPUBufferDescriptor uniformsDescriptor{};
     uniformsDescriptor.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
     uniformsDescriptor.size = sizeof(Uniforms);
     mUniforms = Handle<WGPUBuffer>(wgpuDeviceCreateBuffer(context.device.get(), &uniformsDescriptor), stats, sizeof(Uniforms));
 
-    const Handle layout(wgpuRenderPipelineGetBindGroupLayout(mPipeline.get(), 0));
     WGPUBindGroupEntry entry{};
     entry.binding = 0;
     entry.buffer = mUniforms.get();
@@ -194,6 +224,8 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot
             .logLowest = Marker::LogLowest,
             .logHighest = Marker::LogHighest,
             .padding = {},
+            .cursorColor = toGpu(mTheme.cursor),
+            .padding2 = 0.0f,
         },
     };
     wgpuQueueWriteBuffer(mContext->queue.get(), mUniforms.get(), 0, &uniforms, sizeof(uniforms));
@@ -221,6 +253,11 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot
         wgpuRenderPassEncoderSetBindGroup(pass.get(), 0, mBindGroup.get(), 0, nullptr);
         wgpuRenderPassEncoderSetVertexBuffer(pass.get(), 0, mTrades.get(), 0, mTrades.size());
         wgpuRenderPassEncoderDraw(pass.get(), 6, static_cast<std::uint32_t>(count), 0, static_cast<std::uint32_t>(first));
+        // On top of every trade.
+        if (mHighlight && *mHighlight < uploaded) {
+            wgpuRenderPassEncoderSetPipeline(pass.get(), mRingPipeline.get());
+            wgpuRenderPassEncoderDraw(pass.get(), 6, 1, 0, static_cast<std::uint32_t>(*mHighlight));
+        }
     }
     wgpuRenderPassEncoderEnd(pass.get());
 }

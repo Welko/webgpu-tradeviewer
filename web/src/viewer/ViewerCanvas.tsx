@@ -2,8 +2,9 @@ import { useEffect, useId, useRef, useState } from 'react';
 import type { GpuInfo } from './gpuInfo';
 import { AxisLabels, AxisMargins } from './AxisLabels';
 import { readTheme } from './theme';
+import { TradeTooltip } from './TradeTooltip';
 import { ViewControls } from './ViewControls';
-import { createViewer, type Axes, type Legend, type PowerPreference, type TimeRange, type TradeSummary, type Viewer } from './viewerModule';
+import { createViewer, type Axes, type Legend, type PickedTrade, type PowerPreference, type TimeRange, type TradeSummary, type Viewer } from './viewerModule';
 
 export type ViewerStatus =
   | { kind: 'loading' }
@@ -34,7 +35,8 @@ interface ViewerCanvasProps {
 
 /**
  * Hosts the C++ viewer. React owns the frame loop and the canvas size, and
- * forwards input: the wheel zooms around the pointer, dragging pans.
+ * forwards input: the wheel zooms around the pointer, dragging pans, and the
+ * pointer picks the trade it shows details of.
  * Frames are requested only while the viewer needs them, so an idle page
  * schedules nothing.
  */
@@ -49,8 +51,11 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
     viewSummary: TradeSummary;
     axes: Axes;
     legend: Legend;
+    picked: PickedTrade | null;
     /** The canvas in CSS pixels. */
     size: { width: number; height: number };
+    /** CSS pixels per physical pixel. */
+    scale: number;
     refresh: () => void;
   } | null>(null);
 
@@ -101,7 +106,9 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
             viewSummary: created.viewSummary(),
             axes: created.axes() as Axes,
             legend: created.legend() as Legend,
+            picked: created.pickedTrade() as PickedTrade | null,
             size,
+            scale: canvas.width > 0 ? canvas.clientWidth / canvas.width : 1,
             refresh,
           });
         };
@@ -135,8 +142,17 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
             if (dragX !== null) {
               created.panBy(toPixels(event.clientX - dragX));
               dragX = event.clientX;
-              refresh();
             }
+            created.setPointer(toPixels(event.offsetX), toPixels(event.offsetY));
+            refresh();
+          },
+          listen,
+        );
+        canvas.addEventListener(
+          'pointerleave',
+          () => {
+            created.clearPointer();
+            refresh();
           },
           listen,
         );
@@ -198,6 +214,9 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
       <div className="plot">
         <canvas id={canvasId} ref={canvasRef} />
         {shown && <AxisLabels axes={shown.axes} width={shown.size.width} height={shown.size.height} />}
+        {shown?.picked && (
+          <TradeTooltip trade={shown.picked} scale={shown.scale} width={shown.size.width} height={shown.size.height} />
+        )}
       </div>
     </div>
   );

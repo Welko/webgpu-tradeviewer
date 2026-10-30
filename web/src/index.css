@@ -10,6 +10,8 @@
   --buy: #33cc73;
   --sell: #f24d4d;
   --marker-opacity: 0.6;
+  /* The ring around the trade under the pointer. */
+  --cursor: #ffffff;
 }
 
 html,
@@ -115,6 +117,31 @@ body,
 
 .legend-sizes {
   gap: 0.25rem 0.6rem;
+}
+
+.trade-tooltip {
+  position: absolute;
+  pointer-events: none;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid #3a3f4b;
+  border-radius: 4px;
+  background: rgb(28 31 38 / 92%);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.trade-side {
+  font-weight: 600;
+}
+
+.trade-side.buy {
+  color: var(--buy);
+}
+
+.trade-side.sell {
+  color: var(--sell);
 }
 
 .axis-labels {

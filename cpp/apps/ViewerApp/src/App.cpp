@@ -1,5 +1,6 @@
 #include "Viewer/App.hpp"
 
+#include "Core/Data/Pick.hpp"
 #include "Core/Data/Synthetic.hpp"
 #include "Gpu/Market/Marker.hpp"
 
@@ -22,6 +23,9 @@ constexpr std::int64_t MaxViewUs = 7 * DayUs;
 
 // Space above and below the visible trades, as a share of their price range.
 constexpr double PricePadding = 0.05;
+
+// How far from the pointer a trade's centre can be picked, in CSS or window pixels.
+constexpr double PickRadius = 24.0;
 
 // The closest axis ticks get, in CSS or window pixels, so their labels fit.
 constexpr double TimeTickSpacing = 120.0;
@@ -113,6 +117,7 @@ void App::setMarkerScale(Gpu::Market::Type::MarkerScale scale)
 {
     mMarkerScale = scale;
     mEngine->setMarkerScale(scale);
+    updatePick();
 }
 
 void App::setTheme(const Gpu::Market::Type::Theme& theme)
@@ -131,6 +136,7 @@ void App::setPixelRatio(float ratio)
     mLayout.pixelRatio = ratio;
     mEngine->setPixelRatio(ratio);
     updateAxes();
+    updatePick();
 }
 
 void App::setPlotInsets(Gpu::Plot::Type::Insets insets)
@@ -138,6 +144,7 @@ void App::setPlotInsets(Gpu::Plot::Type::Insets insets)
     mLayout.insets = insets;
     mEngine->setPlotInsets(insets);
     updateAxes();
+    updatePick();
 }
 
 double App::getPlotWidth() const
@@ -181,6 +188,56 @@ void App::applyView()
     }
     mEngine->setView({ .time = mView.time, .price = mView.price, .trades = mView.trades });
     updateAxes();
+    updatePick();
+}
+
+void App::setPointer(double x, double y)
+{
+    mCursor.onSurface = true;
+    mCursor.x = x;
+    mCursor.y = y;
+    updatePick();
+}
+
+void App::clearPointer()
+{
+    mCursor.onSurface = false;
+    updatePick();
+}
+
+std::optional<App::PickedTrade> App::getPickedTrade() const
+{
+    if (!mCursor.trade) {
+        return std::nullopt;
+    }
+    const std::size_t i = *mCursor.trade;
+    const Core::Data::PlotMapping plot{ .time = mView.time, .price = mView.price, .width = getPlotWidth(), .height = getPlotHeight() };
+    return PickedTrade{
+        .index = i,
+        .timeUs = mData.trades.timeUs[i],
+        .price = mData.trades.price[i],
+        .amount = mData.trades.amount[i],
+        .side = mData.trades.side[i],
+        .x = mLayout.insets.left + plot.getX(mData.trades.timeUs[i]),
+        .y = mLayout.insets.top + plot.getY(mData.trades.price[i]),
+    };
+}
+
+void App::updatePick()
+{
+    std::optional<std::size_t> picked;
+    if (mCursor.onSurface) {
+        const double ratio = mLayout.pixelRatio;
+        const Core::Data::PlotMapping plot{ .time = mView.time, .price = mView.price, .width = getPlotWidth(), .height = getPlotHeight() };
+        const Core::Data::PickRule rule{ .pickRadius = PickRadius * ratio, .maxMarkerRadius = Gpu::Market::Marker::MaxRadius * ratio };
+        picked = Core::Data::pickTrade(mData.trades, mView.trades, plot, mCursor.x - mLayout.insets.left,
+                                       mCursor.y - mLayout.insets.top, rule,
+                                       [&](double amount) { return Gpu::Market::Marker::getRadius(amount, mMarkerScale) * ratio; });
+    }
+    if (picked != mCursor.trade) {
+        mCursor.trade = picked;
+        mEngine->setHighlightedTrade(picked);
+    }
 }
 
 const Gpu::Type::Info& App::getInfo() const
@@ -194,6 +251,7 @@ void App::resize(std::uint32_t width, std::uint32_t height)
     mLayout.height = height;
     mEngine->resize(width, height);
     updateAxes();
+    updatePick();
 }
 
 void App::update(double nowMs)

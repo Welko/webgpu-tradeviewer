@@ -1,6 +1,7 @@
 viewer_add_test(CoreTests
     AxisTests.cpp
     LogTests.cpp
+    PickTests.cpp
     ProfilingTests.cpp
     RangeTests.cpp
     RingQueueTests.cpp

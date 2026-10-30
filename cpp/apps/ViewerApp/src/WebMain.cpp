@@ -193,7 +193,7 @@ public:
         return result;
     }
 
-    /** Takes { background, grid, buy, sell, markerOpacity }, each colour a { red, green, blue } from 0 to 1. */
+    /** Takes { background, grid, buy, sell, cursor, markerOpacity }, each colour a { red, green, blue } from 0 to 1. */
     void setTheme(const val& theme)
     {
         if (*mApp) {
@@ -202,8 +202,46 @@ public:
                 .buy = toColor(theme["buy"]),
                 .sell = toColor(theme["sell"]),
                 .markerOpacity = theme["markerOpacity"].as<float>(),
+                .cursor = toColor(theme["cursor"]),
             });
         }
+    }
+
+    /** `x` and `y` in physical pixels from the canvas's top left corner. */
+    void setPointer(double x, double y)
+    {
+        if (*mApp) {
+            (*mApp)->setPointer(x, y);
+        }
+    }
+
+    void clearPointer()
+    {
+        if (*mApp) {
+            (*mApp)->clearPointer();
+        }
+    }
+
+    /**
+     * The trade the cursor picks, as { timeUs, price, amount, side, x, y }, or
+     * null. `side` is "buy" or "sell"; `x` and `y` place its marker's centre
+     * in physical pixels from the canvas's top left corner.
+     */
+    val getPickedTrade() const
+    {
+        const auto picked = *mApp ? (*mApp)->getPickedTrade() : std::nullopt;
+        if (!picked) {
+            return val::null();
+        }
+        val result = val::object();
+        // Exact: microseconds since 1970 stay below 2^53 for another 250 years.
+        result.set("timeUs", static_cast<double>(picked->timeUs));
+        result.set("price", picked->price);
+        result.set("amount", picked->amount);
+        result.set("side", picked->side == Core::Data::Side::Buy ? "buy" : "sell");
+        result.set("x", picked->x);
+        result.set("y", picked->y);
+        return result;
     }
 
     /** What markers look like at the current marker scale, for a legend; null before init() succeeds. */
@@ -350,6 +388,9 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("axes", &WebViewer::getAxes)
         .function("legend", &WebViewer::getLegend)
         .function("setTheme", &WebViewer::setTheme)
+        .function("setPointer", &WebViewer::setPointer)
+        .function("clearPointer", &WebViewer::clearPointer)
+        .function("pickedTrade", &WebViewer::getPickedTrade)
         .function("setPlotInsets", &WebViewer::setPlotInsets)
         .function("resetView", &WebViewer::resetView)
         .function("showDay", &WebViewer::showDay)

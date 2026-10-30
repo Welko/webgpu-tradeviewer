@@ -78,11 +78,18 @@ void connectInput(GLFWwindow* window)
         }
     });
 
-    glfwSetCursorPosCallback(window, [](GLFWwindow* moved, double x, double) {
+    glfwSetCursorPosCallback(window, [](GLFWwindow* moved, double x, double y) {
         auto& state = getState(moved);
         if (state.dragging) {
             state.app->panBy(toPixels(moved, x - state.lastX));
             state.lastX = x;
+        }
+        state.app->setPointer(toPixels(moved, x), toPixels(moved, y));
+    });
+
+    glfwSetCursorEnterCallback(window, [](GLFWwindow* crossed, int entered) {
+        if (!entered) {
+            getState(crossed).app->clearPointer();
         }
     });
 
@@ -162,9 +169,17 @@ std::string formatUtc(std::int64_t timeUs)
     return std::format("{:%F %T}", std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(timeUs / 1000)));
 }
 
-/** The view's range and what it holds, so the window always says what it shows. */
+/**
+ * The trade under the pointer, until the native UI can show it beside its
+ * marker. Otherwise the view's range and what it holds.
+ */
 std::string getWindowTitle(const Viewer::App& app)
 {
+    if (const auto picked = app.getPickedTrade()) {
+        const auto ms = picked->timeUs / 1000 - (picked->timeUs % 1000 < 0 ? 1 : 0);
+        return std::format("Trade Viewer · {} {} BTC at {} USDT · {}{:03} UTC", picked->side == Core::Data::Side::Buy ? "Buy" : "Sell",
+                           picked->amount, picked->price, formatUtc(ms * 1000), picked->timeUs - ms * 1000);
+    }
     const auto view = app.getView();
     const auto summary = app.getViewSummary();
     return std::format("Trade Viewer · {} to {} UTC · {} trades, {:.8f} BTC", formatUtc(view.startUs), formatUtc(view.endUs),
@@ -234,7 +249,7 @@ int main(int argc, char** argv)
     float contentScale = 1.0f;
     glfwGetWindowContentScale(window, &contentScale, nullptr);
     app->setPixelRatio(contentScale);
-    Core::Log::info("Scroll to zoom, drag to pan; R: 12:00-13:00, D: whole day, M: marker size by area or log");
+    Core::Log::info("Scroll to zoom, drag to pan, point at a trade for its details (in the title); R: 12:00-13:00, D: whole day, M: marker size by area or log");
     logLegend(*app, state.markerScale);
 
     while (!glfwWindowShouldClose(window)) {

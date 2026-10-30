@@ -451,6 +451,12 @@ void Engine::setMarkerScale(Type::MarkerScale scale)
     mImpl->dirty = true;
 }
 
+void Engine::setHighlightedTrade(std::optional<std::size_t> index)
+{
+    mImpl->passes->trades.setHighlight(index);
+    mImpl->dirty = true;
+}
+
 void Engine::setTheme(const Type::Theme& theme)
 {
     mImpl->passes->grid.setTheme(theme.plot);

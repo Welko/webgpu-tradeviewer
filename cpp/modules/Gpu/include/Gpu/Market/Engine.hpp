@@ -11,6 +11,7 @@
 #include <expected>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -71,6 +72,9 @@ public:
     void setView(const Type::View& view);
 
     void setMarkerScale(Type::MarkerScale scale);
+
+    /** Rings the trade at `index` among those set, such as the one under the cursor; none for nothing. */
+    void setHighlightedTrade(std::optional<std::size_t> index);
 
     /** The colours of everything drawn. Type::Theme's defaults until called. */
     void setTheme(const Type::Theme& theme);

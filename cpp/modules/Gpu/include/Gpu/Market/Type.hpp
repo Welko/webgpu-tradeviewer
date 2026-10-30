@@ -25,6 +25,8 @@ struct Theme
     Gpu::Type::Color sell{ .red = 0.95f, .green = 0.30f, .blue = 0.30f };
     /** Of every marker, over the background. */
     float markerOpacity = 0.6f;
+    /** Of the ring around the trade under the cursor. */
+    Gpu::Type::Color cursor{ .red = 1.0f, .green = 1.0f, .blue = 1.0f };
 };
 
 /** One marker size a legend shows. */

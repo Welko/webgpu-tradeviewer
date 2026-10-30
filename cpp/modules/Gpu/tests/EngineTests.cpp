@@ -312,6 +312,41 @@ TEST_CASE("Markers have the legend's colours, at its opacity")
     }
 }
 
+TEST_CASE("The highlighted trade gets a ring in the cursor colour, just outside its marker")
+{
+    const auto engine = createOffscreen(100, 100);
+    if (!engine) {
+        return;
+    }
+    // A marker of radius 6 centred at (50, 50); the ring runs from 7.5 to 9.5 pixels out.
+    const auto plain = drawOne(*engine, 1.0, Side::Buy, MarkerScale::Area, 1.0f);
+    if (!plain) {
+        return;
+    }
+    CHECK(isBackground(pixelAt(*plain, 100, 58, 50)));
+
+    engine->setHighlightedTrade(0);
+    engine->render();
+    const auto ringed = readPixels(*engine);
+    if (!ringed) {
+        return;
+    }
+    const Rgba ring = pixelAt(*ringed, 100, 58, 50);
+    CHECK(ring.red >= 250);
+    CHECK(ring.green >= 250);
+    CHECK(ring.blue >= 250);
+    CHECK(isBuy(pixelAt(*ringed, 100, 52, 50)));  // the marker itself is unchanged
+    CHECK(isBackground(pixelAt(*ringed, 100, 62, 50)));
+
+    engine->setHighlightedTrade(std::nullopt);
+    engine->render();
+    const auto cleared = readPixels(*engine);
+    if (!cleared) {
+        return;
+    }
+    CHECK(isBackground(pixelAt(*cleared, 100, 58, 50)));
+}
+
 TEST_CASE("A theme sets the background, grid and marker colours")
 {
     const auto engine = createOffscreen(100, 100);

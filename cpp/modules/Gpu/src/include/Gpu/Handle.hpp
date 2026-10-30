@@ -134,6 +134,7 @@ GPU_HANDLE_TRAITS(WGPURenderPassEncoder, wgpuRenderPassEncoderRelease)
 GPU_HANDLE_TRAITS(WGPUShaderModule, wgpuShaderModuleRelease)
 GPU_HANDLE_TRAITS(WGPURenderPipeline, wgpuRenderPipelineRelease)
 GPU_HANDLE_TRAITS(WGPUBindGroupLayout, wgpuBindGroupLayoutRelease)
+GPU_HANDLE_TRAITS(WGPUPipelineLayout, wgpuPipelineLayoutRelease)
 GPU_HANDLE_TRAITS(WGPUBindGroup, wgpuBindGroupRelease)
 
 GPU_TRACKED_HANDLE_TRAITS(WGPUBuffer, wgpuBufferRelease, Resource::Kind::Buffer)

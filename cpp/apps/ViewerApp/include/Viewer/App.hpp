@@ -13,6 +13,7 @@
 #include <expected>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -86,6 +87,32 @@ public:
     /** Physical pixels per CSS or window pixel. Pointer positions are in physical pixels. */
     void setPixelRatio(float ratio);
 
+    /** A trade the cursor points at, and where it's drawn. */
+    struct PickedTrade
+    {
+        std::size_t index;
+        std::int64_t timeUs;
+        double price;
+        double amount;
+        Core::Data::Side side;
+        /** Its marker's centre, in physical pixels from the surface's top left corner. */
+        double x;
+        double y;
+    };
+
+    /**
+     * Moves the cursor to (`x`, `y`), in physical pixels from the surface's
+     * top left corner, and picks the trade it points at: the nearest centre
+     * within 24 CSS or window pixels, else a marker under the pointer (see
+     * Core::Data::pickTrade). Zooming and panning pick again.
+     */
+    void setPointer(double x, double y);
+
+    /** The pointer left the surface, so nothing is picked. */
+    void clearPointer();
+
+    [[nodiscard]] std::optional<PickedTrade> getPickedTrade() const;
+
     /** The GPU in use. */
     [[nodiscard]] const Gpu::Type::Info& getInfo() const;
 
@@ -119,6 +146,9 @@ private:
     /** Ticks and grid lines for the current view and plot size. */
     void updateAxes();
 
+    /** Picks the trade at the cursor again, after it or the view moved, and highlights it. */
+    void updatePick();
+
     /** The plot's size in physical pixels: the surface less the insets. */
     [[nodiscard]] double getPlotWidth() const;
     [[nodiscard]] double getPlotHeight() const;
@@ -149,10 +179,20 @@ private:
         Gpu::Plot::Type::Insets insets{};
     };
 
+    /** Where the pointer is, and the trade it picks. */
+    struct Cursor
+    {
+        bool onSurface = false;
+        double x = 0.0;  // physical pixels from the surface's top left corner
+        double y = 0.0;
+        std::optional<std::size_t> trade;
+    };
+
     std::unique_ptr<Gpu::Market::Engine> mEngine;
     TradeData mData;
     View mView;
     Layout mLayout;
+    Cursor mCursor;
     Gpu::Market::Type::MarkerScale mMarkerScale = Gpu::Market::Type::MarkerScale::Area;
     Gpu::Market::Type::Theme mTheme;
 };

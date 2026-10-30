@@ -1,5 +1,6 @@
 // Trades as discs: time across, price up, colored by side, sized by amount.
 // One instance per trade; layouts must match GpuTrade and Uniforms in TradesPass.cpp.
+// A second pipeline rings the highlighted trade, with the same placement.
 
 // How markers look: colours from the theme, sizes from Gpu/Market/Marker.hpp.
 struct Markers {
@@ -14,6 +15,7 @@ struct Markers {
     // The log scale grows from minRadius at logLowest BTC to maxRadius at logHighest BTC.
     logLowest: f32,
     logHighest: f32,
+    cursorColor: vec3f,  // of the ring around the highlighted trade
 };
 
 struct View {
@@ -64,14 +66,13 @@ fn markerRadius(amount: f32) -> f32 {
     return clamp(radius, markers.minRadius, markers.maxRadius) * view.pixelRatio;
 }
 
-@vertex
-fn vertexMain(trade: Trade, @builtin(vertex_index) corner: u32) -> Marker {
+/** A corner of the square around the trade's marker, `margin` pixels wider than it on each side. */
+fn placeMarker(trade: Trade, corner: u32, margin: f32) -> Marker {
     var corners = array(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0),
                         vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0));
     let centre = vec2f(sinceStartUs(trade.time) / view.lengthUs, (trade.price - view.priceLow) / view.priceSpan) * 2.0 - 1.0;
     let radius = markerRadius(trade.amount);
-    // One pixel more than the radius, for the smoothed edge.
-    let pixel = corners[corner] * (radius + 1.0);
+    let pixel = corners[corner] * (radius + margin);
 
     var marker: Marker;
     marker.position = vec4f(centre + pixel * 2.0 / vec2f(view.width, view.height), 0.0, 1.0);
@@ -81,10 +82,36 @@ fn vertexMain(trade: Trade, @builtin(vertex_index) corner: u32) -> Marker {
     return marker;
 }
 
+@vertex
+fn vertexMain(trade: Trade, @builtin(vertex_index) corner: u32) -> Marker {
+    // One pixel more than the radius, for the smoothed edge.
+    return placeMarker(trade, corner, 1.0);
+}
+
 @fragment
 fn fragmentMain(marker: Marker) -> @location(0) vec4f {
     // How much of this pixel the disc covers.
     let coverage = clamp(marker.radius + 0.5 - length(marker.pixel), 0.0, 1.0);
     let alpha = coverage * view.markers.opacity;
     return vec4f(marker.color * alpha, alpha);  // premultiplied
+}
+
+// The ring around the highlighted trade, in CSS or window pixels: a gap
+// outside its marker, then the ring.
+const RingGap = 1.5;
+const RingWidth = 2.0;
+
+@vertex
+fn ringVertex(trade: Trade, @builtin(vertex_index) corner: u32) -> Marker {
+    return placeMarker(trade, corner, (RingGap + RingWidth) * view.pixelRatio + 1.0);
+}
+
+@fragment
+fn ringFragment(marker: Marker) -> @location(0) vec4f {
+    let inner = marker.radius + RingGap * view.pixelRatio;
+    let outer = inner + RingWidth * view.pixelRatio;
+    let distance = length(marker.pixel);
+    // How much of this pixel the ring covers, smoothed at both edges.
+    let coverage = clamp(min(distance - inner, outer - distance) + 0.5, 0.0, 1.0);
+    return vec4f(view.markers.cursorColor * coverage, coverage);  // premultiplied
 }
