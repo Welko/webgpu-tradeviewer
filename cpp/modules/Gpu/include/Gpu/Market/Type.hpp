@@ -17,7 +17,7 @@ enum class MarkerScale : std::uint8_t
     Log,   ///< Radius growing with the amount's logarithm, which separates small trades better.
 };
 
-/** Colours of the plot and the trades. */
+/** Colors of the plot and the trades. */
 struct Theme
 {
     Plot::Type::Theme plot;
@@ -52,6 +52,27 @@ struct Legend
     Gpu::Type::Color sell;
     float opacity = 1.0f;  // of every marker, over the background
     std::vector<LegendSize> sizes;  // smallest first
+};
+
+/** The trades in one column of the plot, summed up, to draw as a bar instead of their markers. */
+struct Column
+{
+    std::uint32_t index;  // of Columns::across, from the plot's left
+    Core::ValueRange price;  // lowest and highest traded
+    double buyAmount;
+    double sellAmount;
+};
+
+/**
+ * Summaries to draw instead of the view's trades. The plot is split into
+ * `across` columns of equal width, which places each one; only those with
+ * trades are listed, so `columns.size()` can be smaller than `across`, with
+ * gaps where nothing traded.
+ */
+struct Columns
+{
+    std::uint32_t across = 0;
+    std::vector<Column> columns;  // in any order
 };
 
 /** The part of the trades on screen. */

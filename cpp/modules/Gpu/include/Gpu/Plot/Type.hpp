@@ -23,7 +23,7 @@ struct Grid
     std::vector<float> horizontalLines;
 };
 
-/** The plot's colours. */
+/** The plot's colors. */
 struct Theme
 {
     Gpu::Type::Color background{ .red = 0.07f, .green = 0.08f, .blue = 0.10f };

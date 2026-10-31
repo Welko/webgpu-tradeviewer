@@ -1,6 +1,6 @@
-import createViewerModule, { type MainModule, type TimeRange, type TradeSummary, type Viewer } from '../wasm/ViewerApp.js';
+import createViewerModule, { type MainModule, type TimeRange, type TradeStats, type Viewer } from '../wasm/ViewerApp.js';
 
-export type { TimeRange, TradeSummary, Viewer };
+export type { TimeRange, TradeStats, Viewer };
 
 /** A tick on an axis: where along it (0 at the left or bottom, 1 at the other end), and its label. */
 export interface AxisTick {
@@ -14,14 +14,14 @@ export interface Axes {
   prices: AxisTick[];
 }
 
-/** A colour, each channel from 0 to 1. */
+/** A color, each channel from 0 to 1. */
 export interface Color {
   red: number;
   green: number;
   blue: number;
 }
 
-/** The colours the viewer draws with. */
+/** The colors the viewer draws with. */
 export interface Theme {
   background: Color;
   /** Of the grid lines, which are opaque. */
@@ -34,6 +34,32 @@ export interface Theme {
   cursor: Color;
 }
 
+/** What Viewer.pickedColumn() returns: the column summary under the pointer. */
+export interface PickedColumn {
+  /** The column's time range in microseconds since 1970, UTC, start inclusive and end exclusive. */
+  startUs: number;
+  endUs: number;
+  count: number;
+  buyCount: number;
+  /** In BTC. */
+  buyAmount: number;
+  sellAmount: number;
+  priceLow: number;
+  priceHigh: number;
+  /** Its bar's center across, top and bottom, in physical pixels from the canvas's top left corner. */
+  centerX: number;
+  top: number;
+  bottom: number;
+}
+
+/** What Viewer.summaries() returns while the view is crowded enough to show column summaries. */
+export interface Summaries {
+  /** Columns across the plot, one per CSS pixel. */
+  across: number;
+  /** Those with trades: the bars drawn. */
+  withTrades: number;
+}
+
 /** What Viewer.pickedTrade() returns: the trade under the pointer. */
 export interface PickedTrade {
   /** Microseconds since 1970, UTC. */
@@ -42,9 +68,9 @@ export interface PickedTrade {
   /** In BTC. */
   amount: number;
   side: 'buy' | 'sell';
-  /** Its marker's centre, in physical pixels from the canvas's top left corner. */
-  x: number;
-  y: number;
+  /** Its marker's center, in physical pixels from the canvas's top left corner. */
+  centerX: number;
+  centerY: number;
 }
 
 /** One marker size in a legend. Where the scale stops growing, a size also stands for all amounts past it. */

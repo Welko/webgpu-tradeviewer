@@ -1,6 +1,6 @@
 #include "Viewer/App.hpp"
 
-#include "Core/Axis.hpp"
+#include "Core/Plot/Axis.hpp"
 #include "Core/Data/TradeParser.hpp"
 
 #include <emscripten/bind.h>
@@ -29,8 +29,8 @@ Gpu::Type::PowerPreference parsePowerPreference(const std::string& value)
     return Gpu::Type::PowerPreference::Default;
 }
 
-/** Core::Data::TradeSummary in numbers JavaScript reads exactly, with times in milliseconds for Date. */
-struct WebTradeSummary
+/** Core::Data::TradeStats in numbers JavaScript reads exactly, with times in milliseconds for Date. */
+struct WebTradeStats
 {
     double count;
     double firstMs;
@@ -39,7 +39,7 @@ struct WebTradeSummary
 };
 
 /** Ticks as a JavaScript array of { fraction, label }. */
-val toWeb(const std::vector<Core::Axis::Tick>& ticks)
+val toWeb(const std::vector<Core::Plot::Axis::Tick>& ticks)
 {
     val array = val::array();
     for (const auto& tick : ticks) {
@@ -51,7 +51,7 @@ val toWeb(const std::vector<Core::Axis::Tick>& ticks)
     return array;
 }
 
-/** A colour as a JavaScript { red, green, blue }, each from 0 to 1. */
+/** A color as a JavaScript { red, green, blue }, each from 0 to 1. */
 val toWeb(Gpu::Type::Color color)
 {
     val object = val::object();
@@ -87,13 +87,13 @@ Gpu::Type::Color toColor(const val& color)
     return { .red = color["red"].as<float>(), .green = color["green"].as<float>(), .blue = color["blue"].as<float>() };
 }
 
-WebTradeSummary toWeb(const Core::Data::TradeSummary& summary)
+WebTradeStats toWeb(const Core::Data::TradeStats& stats)
 {
     return {
-        .count = static_cast<double>(summary.count),
-        .firstMs = static_cast<double>(summary.firstUs) / 1000.0,
-        .lastMs = static_cast<double>(summary.lastUs) / 1000.0,
-        .totalAmount = summary.totalAmount,
+        .count = static_cast<double>(stats.count),
+        .firstMs = static_cast<double>(stats.firstUs) / 1000.0,
+        .lastMs = static_cast<double>(stats.lastUs) / 1000.0,
+        .totalAmount = stats.totalAmount,
     };
 }
 
@@ -175,9 +175,9 @@ public:
     }
 
     /** The trades in view. Empty until init() succeeds. */
-    WebTradeSummary getViewSummary() const
+    WebTradeStats getViewStats() const
     {
-        return *mApp ? toWeb((*mApp)->getViewSummary()) : WebTradeSummary{};
+        return *mApp ? toWeb((*mApp)->getViewStats()) : WebTradeStats{};
     }
 
     /** The axes' ticks as { times, prices }, each an array of { fraction, label }. Null until init() succeeds. */
@@ -193,7 +193,7 @@ public:
         return result;
     }
 
-    /** Takes { background, grid, buy, sell, cursor, markerOpacity }, each colour a { red, green, blue } from 0 to 1. */
+    /** Takes { background, grid, buy, sell, cursor, markerOpacity }, each color a { red, green, blue } from 0 to 1. */
     void setTheme(const val& theme)
     {
         if (*mApp) {
@@ -207,7 +207,7 @@ public:
         }
     }
 
-    /** `x` and `y` in physical pixels from the canvas's top left corner. */
+    /** In physical pixels from the canvas's top left corner. */
     void setPointer(double x, double y)
     {
         if (*mApp) {
@@ -223,9 +223,10 @@ public:
     }
 
     /**
-     * The trade the cursor picks, as { timeUs, price, amount, side, x, y }, or
-     * null. `side` is "buy" or "sell"; `x` and `y` place its marker's centre
-     * in physical pixels from the canvas's top left corner.
+     * The trade the cursor picks, as { timeUs, price, amount, side, centerX,
+     * centerY }, or null. `side` is "buy" or "sell"; `centerX` and `centerY`
+     * place its marker's center in physical pixels from the canvas's top left
+     * corner.
      */
     val getPickedTrade() const
     {
@@ -239,9 +240,70 @@ public:
         result.set("price", picked->price);
         result.set("amount", picked->amount);
         result.set("side", picked->side == Core::Data::Side::Buy ? "buy" : "sell");
-        result.set("x", picked->x);
-        result.set("y", picked->y);
+        result.set("centerX", picked->centerX);
+        result.set("centerY", picked->centerY);
         return result;
+    }
+
+    /**
+     * The column summary the cursor picks, while summaries are shown, as
+     * { startUs, endUs, count, buyCount, buyAmount, sellAmount, priceLow,
+     * priceHigh, centerX, top, bottom }, or null. `centerX`, `top` and
+     * `bottom` place its bar in physical pixels from the canvas's top left
+     * corner.
+     */
+    val getPickedColumn() const
+    {
+        const auto picked = *mApp ? (*mApp)->getPickedColumn() : std::nullopt;
+        if (!picked) {
+            return val::null();
+        }
+        const auto& summary = picked->summary;
+        val result = val::object();
+        result.set("startUs", static_cast<double>(picked->time.startUs));
+        result.set("endUs", static_cast<double>(picked->time.endUs));
+        result.set("count", static_cast<double>(summary.trades.size()));
+        result.set("buyCount", static_cast<double>(summary.buyCount));
+        result.set("buyAmount", summary.buyAmount);
+        result.set("sellAmount", summary.sellAmount);
+        result.set("priceLow", summary.price.low);
+        result.set("priceHigh", summary.price.high);
+        result.set("centerX", picked->centerX);
+        result.set("top", picked->top);
+        result.set("bottom", picked->bottom);
+        return result;
+    }
+
+    /**
+     * While the view shows column summaries, { across, withTrades }: how many
+     * columns split the plot, and how many of those have trades (the bars
+     * drawn). Otherwise null.
+     */
+    val getSummaries() const
+    {
+        if (!*mApp || (*mApp)->getColumnsAcross() == 0) {
+            return val::null();
+        }
+        val result = val::object();
+        result.set("across", (*mApp)->getColumnsAcross());
+        result.set("withTrades", static_cast<double>((*mApp)->getColumns().size()));
+        return result;
+    }
+
+    /** Whether crowded views may show column summaries (the default), or always every trade. */
+    void setSummariesAllowed(bool allowed)
+    {
+        if (*mApp) {
+            (*mApp)->setSummariesAllowed(allowed);
+        }
+    }
+
+    /** Trades per CSS pixel column, on average, above which summaries are shown. 32 by default. */
+    void setSummaryThreshold(double tradesPerColumn)
+    {
+        if (*mApp) {
+            (*mApp)->setSummaryThreshold(tradesPerColumn);
+        }
     }
 
     /** What markers look like at the current marker scale, for a legend; null before init() succeeds. */
@@ -304,9 +366,9 @@ public:
     }
 
     /** The trades on show. Empty until init() succeeds. */
-    WebTradeSummary getTradeSummary() const
+    WebTradeStats getTradeStats() const
     {
-        return *mApp ? toWeb(Core::Data::summarize((*mApp)->getTrades())) : WebTradeSummary{};
+        return *mApp ? toWeb(Core::Data::getStats((*mApp)->getTrades())) : WebTradeStats{};
     }
 
     /** Starts reading a trades file, which appendChunk() then receives piece by piece. */
@@ -365,11 +427,11 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .field("adapter", &Gpu::Type::Info::adapter)
         .field("webglRenderer", &Gpu::Type::Info::webglRenderer);
 
-    emscripten::value_object<WebTradeSummary>("TradeSummary")
-        .field("count", &WebTradeSummary::count)
-        .field("firstMs", &WebTradeSummary::firstMs)
-        .field("lastMs", &WebTradeSummary::lastMs)
-        .field("totalAmount", &WebTradeSummary::totalAmount);
+    emscripten::value_object<WebTradeStats>("TradeStats")
+        .field("count", &WebTradeStats::count)
+        .field("firstMs", &WebTradeStats::firstMs)
+        .field("lastMs", &WebTradeStats::lastMs)
+        .field("totalAmount", &WebTradeStats::totalAmount);
 
     emscripten::value_object<WebTimeRange>("TimeRange")
         .field("startMs", &WebTimeRange::startMs)
@@ -384,13 +446,17 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("needsRender", &WebViewer::needsRender)
         .function("render", &WebViewer::render)
         .function("view", &WebViewer::getView)
-        .function("viewSummary", &WebViewer::getViewSummary)
+        .function("viewStats", &WebViewer::getViewStats)
         .function("axes", &WebViewer::getAxes)
         .function("legend", &WebViewer::getLegend)
         .function("setTheme", &WebViewer::setTheme)
         .function("setPointer", &WebViewer::setPointer)
         .function("clearPointer", &WebViewer::clearPointer)
         .function("pickedTrade", &WebViewer::getPickedTrade)
+        .function("pickedColumn", &WebViewer::getPickedColumn)
+        .function("summaries", &WebViewer::getSummaries)
+        .function("setSummariesAllowed", &WebViewer::setSummariesAllowed)
+        .function("setSummaryThreshold", &WebViewer::setSummaryThreshold)
         .function("setPlotInsets", &WebViewer::setPlotInsets)
         .function("resetView", &WebViewer::resetView)
         .function("showDay", &WebViewer::showDay)
@@ -398,7 +464,7 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("panBy", &WebViewer::panBy)
         .function("setMarkerScale", &WebViewer::setMarkerScale)
         .function("setPixelRatio", &WebViewer::setPixelRatio)
-        .function("tradeSummary", &WebViewer::getTradeSummary)
+        .function("tradeStats", &WebViewer::getTradeStats)
         .function("beginLoad", &WebViewer::beginLoad)
         .function("appendChunk", &WebViewer::appendChunk)
         .function("finishLoad", &WebViewer::finishLoad);

@@ -1,8 +1,10 @@
 # No WebGPU dependency.
 add_library(Core STATIC
-    src/Axis.cpp
+    src/Data/Columns.cpp
+    src/Data/PriceTree.cpp
     src/Data/Synthetic.cpp
     src/Data/TradeParser.cpp
+    src/Plot/Axis.cpp
 )
 viewer_setup_target(Core)
 

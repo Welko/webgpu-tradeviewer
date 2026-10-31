@@ -131,11 +131,11 @@ TEST_CASE("A summary counts the trades, their time range and amount")
     const auto trades = parse(Tardis);
     CHECK(trades);
     if (trades) {
-        const auto summary = Core::Data::summarize(*trades);
+        const auto summary = Core::Data::getStats(*trades);
         CHECK(summary.count == 2);
         CHECK(summary.firstUs == 1575158403572000);
         CHECK(summary.lastUs == 1575158403579000);
         CHECK(summary.totalAmount == doctest::Approx(1.539741));
     }
-    CHECK(Core::Data::summarize(Trades{}).count == 0);
+    CHECK(Core::Data::getStats(Trades{}).count == 0);
 }

@@ -23,10 +23,10 @@ namespace Gpu::Market {
  * time across, price up, colored by side, sized by amount. A ring marks the
  * highlighted trade, on top of the rest.
  *
- * Each trade is one instance of a quad, 20 bytes in a vertex buffer:
- * time in microseconds as two u32 halves, price and amount as f32, and side.
- * The shader subtracts the view's start in 64-bit integer math before
- * converting to f32, so positions stay exact at any zoom.
+ * Each trade is one instance of a triangle around its disc, 20 bytes in a
+ * vertex buffer: time in microseconds as two u32 halves, price and amount as
+ * f32, and side. The shader subtracts the view's start in 64-bit integer math
+ * before converting to f32, so positions stay exact at any zoom.
  */
 class TradesPass
 {

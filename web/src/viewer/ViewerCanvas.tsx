@@ -2,9 +2,16 @@ import { useEffect, useId, useRef, useState } from 'react';
 import type { GpuInfo } from './gpuInfo';
 import { AxisLabels, AxisMargins } from './AxisLabels';
 import { readTheme } from './theme';
-import { TradeTooltip } from './TradeTooltip';
+import { ColumnTooltip, TradeTooltip } from './Tooltip';
 import { ViewControls } from './ViewControls';
-import { createViewer, type Axes, type Legend, type PickedTrade, type PowerPreference, type TimeRange, type TradeSummary, type Viewer } from './viewerModule';
+import {
+  createViewer,
+  type Axes,
+  type Legend,
+  type PickedColumn,
+  type PickedTrade,
+  type PowerPreference,
+  type Summaries, type TimeRange, type TradeStats, type Viewer } from './viewerModule';
 
 export type ViewerStatus =
   | { kind: 'loading' }
@@ -36,7 +43,7 @@ interface ViewerCanvasProps {
 /**
  * Hosts the C++ viewer. React owns the frame loop and the canvas size, and
  * forwards input: the wheel zooms around the pointer, dragging pans, and the
- * pointer picks the trade it shows details of.
+ * pointer picks the trade, or column summary, it shows details of.
  * Frames are requested only while the viewer needs them, so an idle page
  * schedules nothing.
  */
@@ -48,14 +55,15 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
   const [shown, setShown] = useState<{
     viewer: Viewer;
     view: TimeRange;
-    viewSummary: TradeSummary;
+    viewStats: TradeStats;
     axes: Axes;
     legend: Legend;
     picked: PickedTrade | null;
+    pickedColumn: PickedColumn | null;
+    summaries: Summaries | null;
     /** The canvas in CSS pixels. */
     size: { width: number; height: number };
-    /** CSS pixels per physical pixel. */
-    scale: number;
+    cssPixelsPerPixel: number;
     refresh: () => void;
   } | null>(null);
 
@@ -103,12 +111,14 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
           setShown({
             viewer: created,
             view: created.view(),
-            viewSummary: created.viewSummary(),
+            viewStats: created.viewStats(),
             axes: created.axes() as Axes,
             legend: created.legend() as Legend,
             picked: created.pickedTrade() as PickedTrade | null,
+            pickedColumn: created.pickedColumn() as PickedColumn | null,
+            summaries: created.summaries() as Summaries | null,
             size,
-            scale: canvas.width > 0 ? canvas.clientWidth / canvas.width : 1,
+            cssPixelsPerPixel: canvas.width > 0 ? canvas.clientWidth / canvas.width : 1,
             refresh,
           });
         };
@@ -173,8 +183,13 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
           }
           // Also changes when the page is zoomed or moved to another screen, which resizes the canvas in pixels.
           created.setPixelRatio(devicePixelRatio);
-          const scale = width / Math.max(1, entry.contentRect.width);
-          created.setPlotInsets(0, 0, Math.round(AxisMargins.right * scale), Math.round(AxisMargins.bottom * scale));
+          const pixelsPerCssPixel = width / Math.max(1, entry.contentRect.width);
+          created.setPlotInsets(
+            0,
+            0,
+            Math.round(AxisMargins.right * pixelsPerCssPixel),
+            Math.round(AxisMargins.bottom * pixelsPerCssPixel),
+          );
           created.resize(width, height);
           size = { width: entry.contentRect.width, height: entry.contentRect.height };
           refresh();
@@ -206,16 +221,30 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
         <ViewControls
           viewer={shown.viewer}
           view={shown.view}
-          viewSummary={shown.viewSummary}
+          viewStats={shown.viewStats}
           legend={shown.legend}
+          summaries={shown.summaries}
           onChange={shown.refresh}
         />
       )}
       <div className="plot">
         <canvas id={canvasId} ref={canvasRef} />
-        {shown && <AxisLabels axes={shown.axes} width={shown.size.width} height={shown.size.height} />}
+        {shown && <AxisLabels axes={shown.axes} canvasWidth={shown.size.width} canvasHeight={shown.size.height} />}
         {shown?.picked && (
-          <TradeTooltip trade={shown.picked} scale={shown.scale} width={shown.size.width} height={shown.size.height} />
+          <TradeTooltip
+            trade={shown.picked}
+            cssPixelsPerPixel={shown.cssPixelsPerPixel}
+            canvasWidth={shown.size.width}
+            canvasHeight={shown.size.height}
+          />
+        )}
+        {shown?.pickedColumn && (
+          <ColumnTooltip
+            column={shown.pickedColumn}
+            cssPixelsPerPixel={shown.cssPixelsPerPixel}
+            canvasWidth={shown.size.width}
+            canvasHeight={shown.size.height}
+          />
         )}
       </div>
     </div>

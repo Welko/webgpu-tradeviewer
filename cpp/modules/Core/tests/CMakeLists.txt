@@ -1,5 +1,6 @@
 viewer_add_test(CoreTests
     AxisTests.cpp
+    ColumnsTests.cpp
     LogTests.cpp
     PickTests.cpp
     ProfilingTests.cpp

@@ -1,5 +1,5 @@
 import { useEffect, useState, type DragEvent } from 'react';
-import type { TradeSummary, Viewer } from '../viewer/viewerModule';
+import type { TradeStats, Viewer } from '../viewer/viewerModule';
 import { utc } from '../utc';
 import { BinanceSampleUrl, loadBinanceSample, loadFile, type OnProgress } from './loadTrades';
 
@@ -18,13 +18,13 @@ function megabytes(bytes: number): string {
 /** What's loaded, ways to load real data, and why the site doesn't host it. */
 export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTradesChanged: () => void }) {
   const [source, setSource] = useState(Synthetic);
-  const [summary, setSummary] = useState<TradeSummary>(() => viewer.tradeSummary());
+  const [stats, setStats] = useState<TradeStats>(() => viewer.tradeStats());
   const [load, setLoad] = useState<LoadState>({ kind: 'idle' });
 
   // A new viewer, for another GPU, starts again from synthetic data.
   useEffect(() => {
     setSource(Synthetic);
-    setSummary(viewer.tradeSummary());
+    setStats(viewer.tradeStats());
     setLoad({ kind: 'idle' });
   }, [viewer]);
 
@@ -33,7 +33,7 @@ export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTrade
     try {
       await loading((loaded, total) => setLoad({ kind: 'loading', what, loaded, total }));
       setSource(what);
-      setSummary(viewer.tradeSummary());
+      setStats(viewer.tradeStats());
       onTradesChanged();
       setLoad({ kind: 'idle' });
     } catch (error) {
@@ -59,13 +59,13 @@ export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTrade
       </p>
       <dl>
         <dt>Trades</dt>
-        <dd data-testid="trade-count">{summary.count.toLocaleString('en-US')}</dd>
+        <dd data-testid="trade-count">{stats.count.toLocaleString('en-US')}</dd>
         <dt>From</dt>
-        <dd>{utc(summary.firstMs)}</dd>
+        <dd>{utc(stats.firstMs)}</dd>
         <dt>To</dt>
-        <dd>{utc(summary.lastMs)}</dd>
+        <dd>{utc(stats.lastMs)}</dd>
         <dt>Traded</dt>
-        <dd>{summary.totalAmount.toLocaleString('en-US', { maximumFractionDigits: 6 })} BTC</dd>
+        <dd>{stats.totalAmount.toLocaleString('en-US', { maximumFractionDigits: 6 })} BTC</dd>
       </dl>
 
       {load.kind === 'loading' && (

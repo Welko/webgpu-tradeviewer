@@ -109,11 +109,19 @@ int main(int argc, char** argv)
     app->setStatsCallback([&reported](const Gpu::Type::FrameStats& stats) { reported.push_back(stats); });
     app->setProfiling(true);
 
+    // Each view says whether crowded views may be summarized, so none depends on the one before.
+    const auto show = [](bool summaries, auto view) {
+        return [summaries, view](Viewer::App& viewer) {
+            viewer.setSummariesAllowed(summaries);
+            view(viewer);
+        };
+    };
     const std::vector<Case> cases{
-        { "Whole day", [](Viewer::App& viewer) { viewer.showDay(); } },
-        { "12:00–13:00", [](Viewer::App& viewer) { viewer.resetView(); } },
-        { "1 minute", [](Viewer::App& viewer) { viewer.resetView(); viewer.zoomAt(Width / 2.0, 1.0 / 60.0); } },
-        { "1 second", [](Viewer::App& viewer) { viewer.resetView(); viewer.zoomAt(Width / 2.0, 1.0 / 3600.0); } },
+        { "Whole day, every trade", show(false, [](Viewer::App& viewer) { viewer.showDay(); }) },
+        { "Whole day", show(true, [](Viewer::App& viewer) { viewer.showDay(); }) },
+        { "12:00–13:00", show(true, [](Viewer::App& viewer) { viewer.resetView(); }) },
+        { "1 minute", show(true, [](Viewer::App& viewer) { viewer.resetView(); viewer.zoomAt(Width / 2.0, 1.0 / 60.0); }) },
+        { "1 second", show(true, [](Viewer::App& viewer) { viewer.resetView(); viewer.zoomAt(Width / 2.0, 1.0 / 3600.0); }) },
     };
 
     std::vector<Samples> results;
@@ -134,7 +142,7 @@ int main(int argc, char** argv)
                 return 1;
             }
         }
-        samples.tradesDrawn = app->getViewSummary().count;
+        samples.tradesDrawn = app->getViewStats().count;
         for (std::size_t i = firstMeasured; i < firstMeasured + MeasuredFrames; ++i) {
             const auto& stats = reported[i];
             if (!stats.cpu || !stats.gpu) {
@@ -155,6 +163,16 @@ int main(int argc, char** argv)
         results.push_back(std::move(samples));
     }
 
+    // Views can draw different passes: crowded ones summarize trades in columns.
+    std::vector<std::string> passNames;
+    for (const auto& samples : results) {
+        for (const auto& pass : samples.passOrder) {
+            if (std::ranges::find(passNames, pass) == passNames.end()) {
+                passNames.push_back(pass);
+            }
+        }
+    }
+
     std::ofstream table(argv[1]);
     const auto print = [&table](const std::string& text) { table << text; };
     const auto& info = app->getInfo();
@@ -162,11 +180,11 @@ int main(int argc, char** argv)
                       "Milliseconds: median (95th percentile).\n\n",
                       info.device, info.backend, info.adapter, Width, Height, MeasuredFrames, WarmUpFrames));
     print("| View | Trades drawn | View update (CPU) | Acquire (CPU) | Encode (CPU) | Submit (CPU) |");
-    for (const auto& pass : results.front().passOrder) {
+    for (const auto& pass : passNames) {
         print(std::format(" GPU: {} |", pass));
     }
     print(" GPU total |\n|---|--:|--:|--:|--:|--:|");
-    for (std::size_t i = 0; i < results.front().passOrder.size(); ++i) {
+    for (std::size_t i = 0; i < passNames.size(); ++i) {
         print("--:|");
     }
     print("--:|\n");
@@ -174,7 +192,7 @@ int main(int argc, char** argv)
         const auto& samples = results[i];
         print(std::format("| {} | {} | {} | {} | {} | {} |", cases[i].name, samples.tradesDrawn, describe(samples.viewUpdate),
                           describe(samples.acquire), describe(samples.encode), describe(samples.submit)));
-        for (const auto& pass : results.front().passOrder) {
+        for (const auto& pass : passNames) {
             const auto found = samples.passes.find(pass);
             print(std::format(" {} |", found != samples.passes.end() ? describe(found->second) : "–"));
         }

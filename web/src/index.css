@@ -4,7 +4,7 @@
   background: #111318;
   color: #e6e8ec;
 
-  /* The viewer's colours: it reads these when it starts (see viewer/theme.ts). Colours in hex or rgb(). */
+  /* The viewer's colors: it reads these when it starts (see viewer/theme.ts). Colors in hex or rgb(). */
   --plot-background: #12141a;
   --plot-grid: #25282b;
   --buy: #33cc73;
@@ -119,7 +119,7 @@ body,
   gap: 0.25rem 0.6rem;
 }
 
-.trade-tooltip {
+.plot-tooltip {
   position: absolute;
   pointer-events: none;
   padding: 0.3rem 0.5rem;
@@ -142,6 +142,13 @@ body,
 
 .trade-side.sell {
   color: var(--sell);
+}
+
+.summaries {
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  background: #2a2e37;
+  color: #e6e8ec;
 }
 
 .axis-labels {

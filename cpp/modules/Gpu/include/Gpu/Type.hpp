@@ -9,7 +9,7 @@
 
 namespace Gpu::Type {
 
-/** A colour as CSS gives it: sRGB, each channel from 0 to 1. */
+/** A color as CSS gives it: sRGB, each channel from 0 to 1. */
 struct Color
 {
     float red = 0.0f;

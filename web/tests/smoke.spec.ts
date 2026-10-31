@@ -151,7 +151,7 @@ test('the wheel zooms, dragging pans, and the buttons jump back', async ({ page 
   expect(errors).toEqual([]);
 });
 
-test('the stylesheet sets the plot\'s colours, and the legend follows', async ({ page }) => {
+test('the stylesheet sets the plot\'s colors, and the legend follows', async ({ page }) => {
   const errors = collectErrors(page);
   await instrument(page);
   await page.addInitScript(() => {
@@ -231,6 +231,45 @@ test('pointing at a trade shows its time, price, amount and side', async ({ page
   await expect(tooltip).toHaveCount(1);
   await page.mouse.move(box.x - 5, box.y - 5);
   await expect(tooltip).toHaveCount(0);
+
+  expect(errors).toEqual([]);
+});
+
+test('a crowded view is summarized, says so, and can show every trade instead', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/');
+  await waitUntilReady(page);
+  const summaries = page.getByTestId('summaries');
+  // About 20 synthetic trades per pixel column in the hour: below the threshold of 32.
+  await expect(summaries).toHaveCount(0);
+  await expect(page.getByTestId('legend-size').first()).toBeVisible();
+
+  await page.getByRole('button', { name: 'Whole day' }).click();
+  await expect(summaries).toHaveText(/^Summarized: [\d,]+ bars, ~\d+ trades each$/);
+  await expect(page.getByTestId('legend-bars')).toBeVisible();
+  await expect(page.getByTestId('legend-size')).toHaveCount(0);
+
+  // Down the middle of the plot until a bar is within reach.
+  const box = (await page.locator('canvas').boundingBox())!;
+  const tooltip = page.getByTestId('column-tooltip');
+  for (let y = box.y + 5; y < box.y + box.height - 25 && (await tooltip.count()) === 0; y += 10) {
+    await page.mouse.move(box.x + box.width / 2, y);
+  }
+  await expect(tooltip.getByTestId('column-count')).toHaveText(/^[\d,]+ trades: [\d,]+ buys, [\d,]+ sells$/);
+  await expect(tooltip.getByTestId('column-time')).toContainText('2019-12-01 ');
+  await page.mouse.move(box.x - 5, box.y - 5);
+  await expect(tooltip).toHaveCount(0);
+
+  // Narrow, the hour is crowded too, and quick to draw in full: SwiftShader
+  // takes seconds over every trade of the day, delaying the next tests.
+  await page.getByRole('button', { name: '12:00–13:00' }).click();
+  await page.setViewportSize({ width: 500, height: 600 });
+  await expect(summaries).toHaveCount(1);
+  await page.getByLabel('Every trade').check();
+  await expect(summaries).toHaveCount(0);
+  await expect(page.getByTestId('legend-size').first()).toBeVisible();
+  await page.getByLabel('Every trade').uncheck();
+  await expect(summaries).toHaveCount(1);
 
   expect(errors).toEqual([]);
 });

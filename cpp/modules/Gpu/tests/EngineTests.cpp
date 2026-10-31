@@ -1,5 +1,5 @@
 #include "Gpu/Market/Engine.hpp"
-#include "Gpu/Market/Marker.hpp"
+#include "Gpu/Market/Style.hpp"
 
 #include "Core/Data/Trades.hpp"
 #include "Core/Profiling.hpp"
@@ -127,7 +127,7 @@ bool isBackground(Rgba pixel)
     return std::abs(pixel.red - 18) <= 1 && std::abs(pixel.green - 20) <= 1 && std::abs(pixel.blue - 26) <= 1;
 }
 
-/** A faint grey grid line over the background. */
+/** A faint gray grid line over the background. */
 bool isGridLine(Rgba pixel)
 {
     return pixel.red > 25 && pixel.red < 50 && std::abs(pixel.red - pixel.green) <= 3;
@@ -232,7 +232,7 @@ namespace {
 
 using Gpu::Market::Type::MarkerScale;
 using Gpu::Market::Type::Theme;
-namespace Marker = Gpu::Market::Marker;
+namespace Style = Gpu::Market::Style;
 
 constexpr Rgba BackgroundColor{ .red = 18, .green = 20, .blue = 26, .alpha = 255 };
 const Theme DefaultTheme;
@@ -276,7 +276,7 @@ TEST_CASE("Markers are drawn at the legend's sizes, scaled by the pixel ratio")
         return;
     }
     for (const auto scale : { MarkerScale::Area, MarkerScale::Log }) {
-        for (const auto& size : Marker::getLegend(scale, DefaultTheme).sizes) {
+        for (const auto& size : Style::getLegend(scale, DefaultTheme).sizes) {
             for (const float pixelRatio : { 1.0f, 2.0f }) {
                 CAPTURE(scale);
                 CAPTURE(size.amount);
@@ -291,13 +291,13 @@ TEST_CASE("Markers are drawn at the legend's sizes, scaled by the pixel ratio")
     }
 }
 
-TEST_CASE("Markers have the legend's colours, at its opacity")
+TEST_CASE("Markers have the legend's colors, at its opacity")
 {
     const auto engine = createOffscreen(100, 100);
     if (!engine) {
         return;
     }
-    const auto legend = Marker::getLegend(MarkerScale::Area, DefaultTheme);
+    const auto legend = Style::getLegend(MarkerScale::Area, DefaultTheme);
     for (const auto side : { Side::Buy, Side::Sell }) {
         CAPTURE(side == Side::Buy ? "buy" : "sell");
         const auto pixels = drawOne(*engine, 1.0, side, MarkerScale::Area, 1.0f);
@@ -312,13 +312,13 @@ TEST_CASE("Markers have the legend's colours, at its opacity")
     }
 }
 
-TEST_CASE("The highlighted trade gets a ring in the cursor colour, just outside its marker")
+TEST_CASE("The highlighted trade gets a ring in the cursor color, just outside its marker")
 {
     const auto engine = createOffscreen(100, 100);
     if (!engine) {
         return;
     }
-    // A marker of radius 6 centred at (50, 50); the ring runs from 7.5 to 9.5 pixels out.
+    // A marker of radius 6 centered at (50, 50); the ring runs from 7.5 to 9.5 pixels out.
     const auto plain = drawOne(*engine, 1.0, Side::Buy, MarkerScale::Area, 1.0f);
     if (!plain) {
         return;
@@ -347,7 +347,63 @@ TEST_CASE("The highlighted trade gets a ring in the cursor colour, just outside 
     CHECK(isBackground(pixelAt(*cleared, 100, 58, 50)));
 }
 
-TEST_CASE("A theme sets the background, grid and marker colours")
+TEST_CASE("Columns are drawn instead of trades, as bars over their price range, colored by side")
+{
+    const auto engine = createOffscreen(100, 100);
+    if (!engine) {
+        return;
+    }
+    Trades trades;
+    add(trades, NoonUs + 50, 100.0, 1.0, Side::Buy);  // drawn at (50, 50) when trades show
+    engine->setTrades(trades);
+    engine->setView(viewOf({ 0, 1 }));
+    // 10 columns of 10 pixels. Prices 99 to 101 fill the height, top down.
+    engine->setColumns(Gpu::Market::Type::Columns{
+        .across = 10,
+        .columns = {
+            { .index = 2, .price = { .low = 99.5, .high = 100.5 }, .buyAmount = 2.0, .sellAmount = 0.0 },  // rows 25 to 75
+            { .index = 7, .price = { .low = 100.0, .high = 100.0 }, .buyAmount = 0.0, .sellAmount = 2.0 },  // 2 pixels around row 50
+        },
+    });
+    engine->render();
+    const auto pixels = readPixels(*engine);
+    if (!pixels) {
+        return;
+    }
+    // Each traded as much as the most, so both are opaque.
+    const auto isExactly = [](Rgba pixel, Gpu::Type::Color color) {
+        return std::abs(pixel.red - color.red * 255.0) <= 1.0 && std::abs(pixel.green - color.green * 255.0) <= 1.0
+               && std::abs(pixel.blue - color.blue * 255.0) <= 1.0;
+    };
+    CHECK(isExactly(pixelAt(*pixels, 100, 25, 50), DefaultTheme.buy));
+    CHECK(isExactly(pixelAt(*pixels, 100, 25, 26), DefaultTheme.buy));
+    CHECK(isBackground(pixelAt(*pixels, 100, 25, 20)));
+    CHECK(isBackground(pixelAt(*pixels, 100, 31, 50)));
+    CHECK(isExactly(pixelAt(*pixels, 100, 75, 49), DefaultTheme.sell));
+    CHECK(isExactly(pixelAt(*pixels, 100, 75, 50), DefaultTheme.sell));
+    CHECK(isBackground(pixelAt(*pixels, 100, 75, 46)));
+    CHECK(isBackground(pixelAt(*pixels, 100, 50, 50)));  // the trade isn't drawn
+
+    engine->setHighlightedColumn(1);
+    engine->render();
+    const auto highlighted = readPixels(*engine);
+    if (!highlighted) {
+        return;
+    }
+    CHECK(isExactly(pixelAt(*highlighted, 100, 75, 50), DefaultTheme.cursor));
+    CHECK(isExactly(pixelAt(*highlighted, 100, 25, 50), DefaultTheme.buy));
+
+    engine->setColumns(std::nullopt);
+    engine->render();
+    const auto tradesAgain = readPixels(*engine);
+    if (!tradesAgain) {
+        return;
+    }
+    CHECK(isBuy(pixelAt(*tradesAgain, 100, 50, 50)));
+    CHECK(isBackground(pixelAt(*tradesAgain, 100, 25, 30)));
+}
+
+TEST_CASE("A theme sets the background, grid and marker colors")
 {
     const auto engine = createOffscreen(100, 100);
     if (!engine) {

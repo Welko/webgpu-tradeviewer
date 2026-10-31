@@ -15,14 +15,16 @@ FetchContent_MakeAvailable(webgpu)
 add_library(Gpu STATIC
     src/Context.cpp
     src/GrowableBuffer.cpp
+    src/Market/ColumnsPass.cpp
     src/Market/Engine.cpp
-    src/Market/Marker.cpp
+    src/Market/Style.cpp
     src/Market/TradesPass.cpp
     src/Plot/GridPass.cpp
     src/Profiler.cpp
     src/Readback.cpp
 )
 viewer_setup_target(Gpu)
+gpu_embed_shader(Gpu src/Market/ColumnsPass.wgsl)
 gpu_embed_shader(Gpu src/Market/TradesPass.wgsl)
 gpu_embed_shader(Gpu src/Plot/GridPass.wgsl)
 

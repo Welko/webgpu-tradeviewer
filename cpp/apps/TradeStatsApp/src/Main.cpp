@@ -45,7 +45,7 @@ int main(int argc, char** argv)
     }
 
     const auto indices = Core::Data::getTradesIn(*trades, { .startUs = *startUs, .endUs = *endUs });
-    const std::int64_t units = Core::Data::AmountTotals(*trades).getUnits(indices);
+    const std::int64_t units = Core::Data::RunningTotals(*trades).getUnits(indices);
     constexpr std::int64_t UnitsPerWhole = 100'000'000;  // 1 / Core::Data::AmountUnit
     std::fputs(std::format("{} {}.{:08}\n", indices.size(), units / UnitsPerWhole, units % UnitsPerWhole).c_str(), stdout);
     return 0;

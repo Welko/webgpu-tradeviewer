@@ -1,4 +1,4 @@
-#include "Core/Axis.hpp"
+#include "Core/Plot/Axis.hpp"
 
 #include <algorithm>
 #include <array>
@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <format>
 
-namespace Core::Axis {
+namespace Core::Plot::Axis {
 
 namespace {
 
@@ -57,7 +57,7 @@ std::vector<Tick> getTimeTicks(TimeRange range, std::size_t maxCount)
     }
     // The smallest round step that keeps the count down; whole days beyond the table.
     const std::int64_t wanted = (length + static_cast<std::int64_t>(maxCount) - 1) / static_cast<std::int64_t>(maxCount);
-    const auto found = std::ranges::find_if(TimeSteps, [&](std::int64_t step) { return step >= wanted; });
+    const auto *const found = std::ranges::find_if(TimeSteps, [&](std::int64_t step) { return step >= wanted; });
     const std::int64_t step = found != TimeSteps.end() ? *found : (wanted + Day - 1) / Day * Day;
 
     // The first multiple of the step at or after the start, also before 1970.
@@ -86,7 +86,7 @@ std::vector<Tick> getNumberTicks(ValueRange range, std::size_t maxCount)
     const int exponent = static_cast<int>(std::floor(std::log10(wanted)));
     const double power = std::pow(10.0, exponent);
     const double mantissa = wanted / power;
-    const double step = (mantissa <= 1.0 ? 1.0 : mantissa <= 2.0 ? 2.0 : mantissa <= 5.0 ? 5.0 : 10.0) * power;
+    const double step = (mantissa <= 1.0 ? 1.0 : (mantissa <= 2.0 ? 2.0 : (mantissa <= 5.0 ? 5.0 : 10.0))) * power;
     const int decimals = std::max(0, -static_cast<int>(std::floor(std::log10(step) + 1e-9)));
 
     std::vector<Tick> ticks;
@@ -105,4 +105,4 @@ std::vector<Tick> getNumberTicks(ValueRange range, std::size_t maxCount)
     return ticks;
 }
 
-} // namespace Core::Axis
+} // namespace Core::Plot::Axis

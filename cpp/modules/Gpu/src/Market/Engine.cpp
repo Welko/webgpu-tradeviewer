@@ -3,6 +3,7 @@
 #include "Gpu/Context.hpp"
 #include "Gpu/Convert.hpp"
 #include "Gpu/Handle.hpp"
+#include "Gpu/Market/ColumnsPass.hpp"
 #include "Gpu/Market/TradesPass.hpp"
 #include "Gpu/Plot/Area.hpp"
 #include "Gpu/Plot/GridPass.hpp"
@@ -35,7 +36,7 @@ constexpr std::uint64_t OffscreenBytesPerPixel = 4;
 constexpr std::size_t MaxWaitingFrames = 16;
 
 /**
- * The first format that stores colours as given. Theme colours are sRGB
+ * The first format that stores colors as given. Theme colors are sRGB
  * values, as CSS gives them; an sRGB format would convert them again and
  * draw them lighter than the page around them. Native surfaces often list
  * one first, browsers' canvases don't.
@@ -141,6 +142,7 @@ struct Engine::Impl
     {
         Plot::GridPass grid;
         TradesPass trades;
+        ColumnsPass columns;  // instead of trades, while showColumns
     };
 
     // Declared first so it is destroyed last, after every tracked handle.
@@ -153,6 +155,7 @@ struct Engine::Impl
     std::optional<Passes> passes;  // set once the output format is known
 
     Plot::Type::Insets insets{};
+    bool showColumns = false;  // summaries instead of trades
     double nowMs = 0.0;  // the time frames show, for time-based effects
     bool dirty = true;
 };
@@ -196,6 +199,7 @@ void Engine::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPrefer
         impl->passes.emplace(Impl::Passes{
             .grid = Plot::GridPass(impl->context, impl->resources, impl->output.format),
             .trades = TradesPass(impl->context, impl->resources, impl->output.format),
+            .columns = ColumnsPass(impl->context, impl->resources, impl->output.format),
         });
         impl->profiling.profiler = Profiler::create(impl->context,
             [&statsQueue = impl->profiling.statsQueue](std::uint64_t frame, Profiler::Times times) {
@@ -360,7 +364,11 @@ void Engine::Impl::render()
         const Core::Profiling::Scope scope(encodeMs, timed);
         const auto plot = Plot::Area::within(output.width, output.height, insets);
         passes->grid.encode(encoder.get(), image->view.get(), plot, *profiling.profiler);
-        passes->trades.encode(encoder.get(), image->view.get(), plot, *profiling.profiler);
+        if (showColumns) {
+            passes->columns.encode(encoder.get(), image->view.get(), plot, *profiling.profiler);
+        } else {
+            passes->trades.encode(encoder.get(), image->view.get(), plot, *profiling.profiler);
+        }
         profiling.profiler->endPasses(encoder.get());
     }
     {
@@ -405,6 +413,7 @@ void Engine::resize(std::uint32_t width, std::uint32_t height)
 void Engine::setPixelRatio(float ratio)
 {
     mImpl->passes->trades.setPixelRatio(ratio);
+    mImpl->passes->columns.setPixelRatio(ratio);
     mImpl->dirty = true;
 }
 
@@ -442,6 +451,7 @@ void Engine::reserveTrades(std::size_t count)
 void Engine::setView(const Type::View& view)
 {
     mImpl->passes->trades.setView(view);
+    mImpl->passes->columns.setView(view);
     mImpl->dirty = true;
 }
 
@@ -457,10 +467,26 @@ void Engine::setHighlightedTrade(std::optional<std::size_t> index)
     mImpl->dirty = true;
 }
 
+void Engine::setColumns(const std::optional<Type::Columns>& columns)
+{
+    mImpl->showColumns = columns.has_value();
+    if (columns) {
+        mImpl->passes->columns.setColumns(*columns);
+    }
+    mImpl->dirty = true;
+}
+
+void Engine::setHighlightedColumn(std::optional<std::size_t> position)
+{
+    mImpl->passes->columns.setHighlight(position);
+    mImpl->dirty = true;
+}
+
 void Engine::setTheme(const Type::Theme& theme)
 {
     mImpl->passes->grid.setTheme(theme.plot);
     mImpl->passes->trades.setTheme(theme);
+    mImpl->passes->columns.setTheme(theme);
     mImpl->dirty = true;
 }
 

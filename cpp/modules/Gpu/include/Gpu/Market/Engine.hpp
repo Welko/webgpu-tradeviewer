@@ -73,10 +73,19 @@ public:
 
     void setMarkerScale(Type::MarkerScale scale);
 
+    /**
+     * Draws these summaries instead of the view's trades, until called with
+     * nothing. For views too crowded to show every trade.
+     */
+    void setColumns(const std::optional<Type::Columns>& columns);
+
+    /** Draws the column at `position` in those set in the cursor color; none for nothing. */
+    void setHighlightedColumn(std::optional<std::size_t> position);
+
     /** Rings the trade at `index` among those set, such as the one under the cursor; none for nothing. */
     void setHighlightedTrade(std::optional<std::size_t> index);
 
-    /** The colours of everything drawn. Type::Theme's defaults until called. */
+    /** The colors of everything drawn. Type::Theme's defaults until called. */
     void setTheme(const Type::Theme& theme);
 
     /** Advances the engine's state to `nowMs`. */

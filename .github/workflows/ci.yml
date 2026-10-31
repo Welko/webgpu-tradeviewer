@@ -96,7 +96,7 @@ jobs:
           cmake --build --preset native-release -j "$(nproc)"
           ctest --test-dir build/native-release --output-on-failure --no-tests=error
 
-      # Frame times at four zoom levels, from the profiler: the CPU phases and
+      # Frame times at four zoom levels, and the whole day without summaries, from the profiler: the CPU phases and
       # each GPU pass. lavapipe runs on the CPU, so compare runs with each
       # other, not with real GPUs. Shown on the run's page and kept as a file.
       - name: Benchmark

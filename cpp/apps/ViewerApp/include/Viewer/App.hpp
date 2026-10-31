@@ -1,7 +1,10 @@
 #pragma once
 
-#include "Core/Axis.hpp"
+#include "Core/Plot/Axis.hpp"
 #include "Core/Range.hpp"
+#include "Core/Data/Columns.hpp"
+#include "Core/Plot/Pick.hpp"
+#include "Core/Data/PriceTree.hpp"
 #include "Core/Data/Trades.hpp"
 #include "Gpu/Market/Engine.hpp"
 #include "Gpu/Market/Type.hpp"
@@ -44,7 +47,7 @@ public:
     void setTrades(Core::Data::Trades trades);
 
     /** The trades in the time range on screen, start inclusive and end exclusive. */
-    [[nodiscard]] Core::Data::TradeSummary getViewSummary() const;
+    [[nodiscard]] Core::Data::TradeStats getViewStats() const;
 
     /** The time range on screen, left edge to right edge. */
     [[nodiscard]] Core::TimeRange getView() const { return mView.time; }
@@ -58,8 +61,8 @@ public:
     /** Ticks for the axes of the current view, also drawn as grid lines. */
     struct Axes
     {
-        std::vector<Core::Axis::Tick> times;
-        std::vector<Core::Axis::Tick> prices;
+        std::vector<Core::Plot::Axis::Tick> times;
+        std::vector<Core::Plot::Axis::Tick> prices;
     };
 
     [[nodiscard]] const Axes& getAxes() const { return mView.axes; }
@@ -78,10 +81,10 @@ public:
 
     void setMarkerScale(Gpu::Market::Type::MarkerScale scale);
 
-    /** The colours of the plot and the trades. */
+    /** The colors of the plot and the trades. */
     void setTheme(const Gpu::Market::Type::Theme& theme);
 
-    /** Colours and reference sizes of the markers, at the current marker scale and theme. */
+    /** Colors and reference sizes of the markers, at the current marker scale and theme. */
     [[nodiscard]] Gpu::Market::Type::Legend getLegend() const;
 
     /** Physical pixels per CSS or window pixel. Pointer positions are in physical pixels. */
@@ -95,16 +98,18 @@ public:
         double price;
         double amount;
         Core::Data::Side side;
-        /** Its marker's centre, in physical pixels from the surface's top left corner. */
-        double x;
-        double y;
+        /** Its marker's center, in physical pixels from the surface's top left corner. */
+        double centerX;
+        double centerY;
     };
 
     /**
-     * Moves the cursor to (`x`, `y`), in physical pixels from the surface's
-     * top left corner, and picks the trade it points at: the nearest centre
-     * within 24 CSS or window pixels, else a marker under the pointer (see
-     * Core::Data::pickTrade). Zooming and panning pick again.
+     * Moves the cursor to (`x`, `y`), in physical pixels from
+     * the surface's top left corner, and picks the trade it points at: the
+     * nearest center within 24 CSS or window pixels, else a marker under the
+     * pointer (see Core::Plot::pickTrade). While the view is summarized, it
+     * picks the nearest column's bar instead (Core::Plot::pickColumn).
+     * Zooming and panning pick again.
      */
     void setPointer(double x, double y);
 
@@ -112,6 +117,44 @@ public:
     void clearPointer();
 
     [[nodiscard]] std::optional<PickedTrade> getPickedTrade() const;
+
+    /** A column summary the cursor points at, while summaries are shown, and where it's drawn. */
+    struct PickedColumn
+    {
+        Core::Data::ColumnSummary summary;
+        Core::TimeRange time;  // the column's, start inclusive and end exclusive
+        /** Its bar's center across, and its top and bottom, in physical pixels from the surface's top left corner. */
+        double centerX;
+        double top;
+        double bottom;
+    };
+
+    [[nodiscard]] std::optional<PickedColumn> getPickedColumn() const;
+
+    /**
+     * Whether a crowded view may show column summaries instead of its trades
+     * (the default), or always every trade, however slow.
+     */
+    void setSummariesAllowed(bool allowed);
+
+    /**
+     * How crowded a view must be for summaries: more trades than this per CSS
+     * or window pixel column of the plot, on average. 32 by default.
+     */
+    void setSummaryThreshold(double tradesPerColumn);
+
+    /**
+     * The column summaries on show, while the view is summarized: those with
+     * trades, of getColumnsAcross(). Empty while trades are shown.
+     */
+    [[nodiscard]] const std::vector<Core::Data::ColumnSummary>& getColumns() const { return mSummaries.columns; }
+
+    /**
+     * How many columns split the plot while the view is summarized, one per
+     * CSS or window pixel, including those without trades; 0 while trades
+     * are shown.
+     */
+    [[nodiscard]] std::uint32_t getColumnsAcross() const { return mSummaries.across; }
 
     /** The GPU in use. */
     [[nodiscard]] const Gpu::Type::Info& getInfo() const;
@@ -146,8 +189,14 @@ private:
     /** Ticks and grid lines for the current view and plot size. */
     void updateAxes();
 
-    /** Picks the trade at the cursor again, after it or the view moved, and highlights it. */
+    /** Shows column summaries or trades, whichever the view's crowding calls for. */
+    void updateSummaries();
+
+    /** Picks the trade or column at the cursor again, after it or the view moved, and highlights it. */
     void updatePick();
+
+    /** Where the view's trades are drawn, in physical pixels within the plot. */
+    [[nodiscard]] Core::Plot::Mapping getPlotMapping() const;
 
     /** The plot's size in physical pixels: the surface less the insets. */
     [[nodiscard]] double getPlotWidth() const;
@@ -157,7 +206,8 @@ private:
     struct TradeData
     {
         Core::Data::Trades trades;
-        Core::Data::AmountTotals totals;
+        Core::Data::RunningTotals totals;
+        Core::Data::PriceTree prices;
         std::int64_t dayStartUs = 0;  // midnight UTC before the first trade
     };
 
@@ -173,8 +223,8 @@ private:
     /** The surface, and the plot inside it. */
     struct Layout
     {
-        std::uint32_t width = 0;
-        std::uint32_t height = 0;
+        std::uint32_t surfaceWidth = 0;  // physical pixels
+        std::uint32_t surfaceHeight = 0;
         float pixelRatio = 1.0f;
         Gpu::Plot::Type::Insets insets{};
     };
@@ -186,6 +236,16 @@ private:
         double x = 0.0;  // physical pixels from the surface's top left corner
         double y = 0.0;
         std::optional<std::size_t> trade;
+        std::optional<std::size_t> column;  // by position in mSummaries.columns
+    };
+
+    /** Whether the view shows column summaries, when it's crowded, instead of its trades. */
+    struct Summaries
+    {
+        bool allowed = true;
+        double threshold = 32.0;  // trades per CSS or window pixel column, on average
+        std::uint32_t across = 0;  // columns splitting the plot while shown, 0 while trades are
+        std::vector<Core::Data::ColumnSummary> columns;  // those with trades, so up to `across`
     };
 
     std::unique_ptr<Gpu::Market::Engine> mEngine;
@@ -193,6 +253,7 @@ private:
     View mView;
     Layout mLayout;
     Cursor mCursor;
+    Summaries mSummaries;
     Gpu::Market::Type::MarkerScale mMarkerScale = Gpu::Market::Type::MarkerScale::Area;
     Gpu::Market::Type::Theme mTheme;
 };

@@ -1,7 +1,7 @@
 #include "Gpu/Market/TradesPass.hpp"
 
 #include "Gpu/Convert.hpp"
-#include "Gpu/Market/Marker.hpp"
+#include "Gpu/Market/Style.hpp"
 #include "Gpu/Shaders/TradesPass.hpp"
 
 #include <algorithm>
@@ -51,8 +51,8 @@ struct Uniforms
     float lengthUs;
     float priceLow;
     float priceSpan;
-    float width;
-    float height;
+    float plotWidth;
+    float plotHeight;
     float pixelRatio;
     GpuMarkers markers;
 };
@@ -210,19 +210,19 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot
         .lengthUs = static_cast<float>(mView.time.getLengthUs()),
         .priceLow = static_cast<float>(mView.price.low),
         .priceSpan = static_cast<float>(mView.price.high - mView.price.low),
-        .width = static_cast<float>(plot.width),
-        .height = static_cast<float>(plot.height),
+        .plotWidth = static_cast<float>(plot.width),
+        .plotHeight = static_cast<float>(plot.height),
         .pixelRatio = mPixelRatio,
         .markers = {
             .buyColor = toGpu(mTheme.buy),
             .opacity = mTheme.markerOpacity,
             .sellColor = toGpu(mTheme.sell),
             .scale = mMarkerScale == Type::MarkerScale::Area ? 0u : 1u,
-            .minRadius = Marker::MinRadius,
-            .maxRadius = Marker::MaxRadius,
-            .areaRadiusAt1Btc = Marker::AreaRadiusAt1Btc,
-            .logLowest = Marker::LogLowest,
-            .logHighest = Marker::LogHighest,
+            .minRadius = Style::MarkerMinRadius,
+            .maxRadius = Style::MarkerMaxRadius,
+            .areaRadiusAt1Btc = Style::MarkerAreaRadiusAt1Btc,
+            .logLowest = Style::MarkerLogLowest,
+            .logHighest = Style::MarkerLogHighest,
             .padding = {},
             .cursorColor = toGpu(mTheme.cursor),
             .padding2 = 0.0f,
@@ -252,11 +252,11 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot
         wgpuRenderPassEncoderSetPipeline(pass.get(), mPipeline.get());
         wgpuRenderPassEncoderSetBindGroup(pass.get(), 0, mBindGroup.get(), 0, nullptr);
         wgpuRenderPassEncoderSetVertexBuffer(pass.get(), 0, mTrades.get(), 0, mTrades.size());
-        wgpuRenderPassEncoderDraw(pass.get(), 6, static_cast<std::uint32_t>(count), 0, static_cast<std::uint32_t>(first));
+        wgpuRenderPassEncoderDraw(pass.get(), 3, static_cast<std::uint32_t>(count), 0, static_cast<std::uint32_t>(first));
         // On top of every trade.
         if (mHighlight && *mHighlight < uploaded) {
             wgpuRenderPassEncoderSetPipeline(pass.get(), mRingPipeline.get());
-            wgpuRenderPassEncoderDraw(pass.get(), 6, 1, 0, static_cast<std::uint32_t>(*mHighlight));
+            wgpuRenderPassEncoderDraw(pass.get(), 3, 1, 0, static_cast<std::uint32_t>(*mHighlight));
         }
     }
     wgpuRenderPassEncoderEnd(pass.get());

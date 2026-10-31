@@ -29,6 +29,7 @@ struct WindowState
     bool dragging = false;
     double lastX = 0.0;  // window coordinates
     Gpu::Market::Type::MarkerScale markerScale = Gpu::Market::Type::MarkerScale::Area;
+    bool summariesAllowed = true;
 };
 
 WindowState& getState(GLFWwindow* window)
@@ -111,6 +112,11 @@ void connectInput(GLFWwindow* window)
             state.app->setMarkerScale(state.markerScale);
             logLegend(*state.app, state.markerScale);
             break;
+        case GLFW_KEY_S:
+            state.summariesAllowed = !state.summariesAllowed;
+            state.app->setSummariesAllowed(state.summariesAllowed);
+            Core::Log::info("{}", state.summariesAllowed ? "Crowded views show column summaries" : "Every trade is drawn, however crowded");
+            break;
         default:
             break;
         }
@@ -175,15 +181,22 @@ std::string formatUtc(std::int64_t timeUs)
  */
 std::string getWindowTitle(const Viewer::App& app)
 {
+    if (const auto column = app.getPickedColumn()) {
+        const auto& summary = column->summary;
+        return std::format("Trade Viewer · {} to {} UTC · {} trades ({} buys), {} to {} USDT, {:.8f} BTC bought, {:.8f} sold",
+                           formatUtc(column->time.startUs), formatUtc(column->time.endUs), summary.trades.size(), summary.buyCount,
+                           summary.price.low, summary.price.high, summary.buyAmount, summary.sellAmount);
+    }
     if (const auto picked = app.getPickedTrade()) {
         const auto ms = picked->timeUs / 1000 - (picked->timeUs % 1000 < 0 ? 1 : 0);
         return std::format("Trade Viewer · {} {} BTC at {} USDT · {}{:03} UTC", picked->side == Core::Data::Side::Buy ? "Buy" : "Sell",
                            picked->amount, picked->price, formatUtc(ms * 1000), picked->timeUs - ms * 1000);
     }
     const auto view = app.getView();
-    const auto summary = app.getViewSummary();
-    return std::format("Trade Viewer · {} to {} UTC · {} trades, {:.8f} BTC", formatUtc(view.startUs), formatUtc(view.endUs),
-                       summary.count, summary.totalAmount);
+    const auto stats = app.getViewStats();
+    return std::format("Trade Viewer · {} to {} UTC · {} trades, {:.8f} BTC{}", formatUtc(view.startUs), formatUtc(view.endUs),
+                       stats.count, stats.totalAmount,
+                       app.getColumnsAcross() > 0 ? " · summarized: one bar per pixel column" : "");
 }
 
 } // namespace
@@ -239,9 +252,9 @@ int main(int argc, char** argv)
     }
 
     app->setTrades(loaded ? std::move(*loaded) : Viewer::generateSyntheticDay());
-    const auto summary = Core::Data::summarize(app->getTrades());
-    Core::Log::info("{} {} trades from {} to {} UTC, {:.6f} in total", summary.count, loaded ? "loaded" : "synthetic",
-                    formatUtc(summary.firstUs), formatUtc(summary.lastUs), summary.totalAmount);
+    const auto stats = Core::Data::getStats(app->getTrades());
+    Core::Log::info("{} {} trades from {} to {} UTC, {:.6f} in total", stats.count, loaded ? "loaded" : "synthetic",
+                    formatUtc(stats.firstUs), formatUtc(stats.lastUs), stats.totalAmount);
 
     WindowState state{ .app = app.get() };
     glfwSetWindowUserPointer(window, &state);
@@ -249,7 +262,7 @@ int main(int argc, char** argv)
     float contentScale = 1.0f;
     glfwGetWindowContentScale(window, &contentScale, nullptr);
     app->setPixelRatio(contentScale);
-    Core::Log::info("Scroll to zoom, drag to pan, point at a trade for its details (in the title); R: 12:00-13:00, D: whole day, M: marker size by area or log");
+    Core::Log::info("Scroll to zoom, drag to pan, point at a trade for its details (in the title); R: 12:00-13:00, D: whole day, M: marker size by area or log, S: summaries on or off");
     logLegend(*app, state.markerScale);
 
     while (!glfwWindowShouldClose(window)) {

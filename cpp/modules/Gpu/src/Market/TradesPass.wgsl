@@ -2,7 +2,7 @@
 // One instance per trade; layouts must match GpuTrade and Uniforms in TradesPass.cpp.
 // A second pipeline rings the highlighted trade, with the same placement.
 
-// How markers look: colours from the theme, sizes from Gpu/Market/Marker.hpp.
+// How markers look: colors from the theme, sizes from Gpu/Market/Style.hpp.
 struct Markers {
     buyColor: vec3f,
     opacity: f32,
@@ -24,8 +24,8 @@ struct View {
     lengthUs: f32,
     priceLow: f32,
     priceSpan: f32,
-    width: f32,  // pixels
-    height: f32,
+    plotWidth: f32,  // pixels
+    plotHeight: f32,
     pixelRatio: f32,
     markers: Markers,
 };
@@ -40,8 +40,8 @@ struct Trade {
 
 struct Marker {
     @builtin(position) position: vec4f,
-    @location(0) pixel: vec2f,  // from the centre, in pixels
-    @location(1) radius: f32,
+    @location(0) fromCenterPx: vec2f,
+    @location(1) radiusPx: f32,
     @location(2) color: vec3f,
 };
 
@@ -53,7 +53,7 @@ fn sinceStartUs(time: vec2u) -> f32 {
     return f32(high) * 4294967296.0 + f32(low);
 }
 
-/** In physical pixels. Marker::getRadius() computes the same in CSS or window pixels. */
+/** In physical pixels. Style::getMarkerRadius() computes the same in CSS or window pixels. */
 fn markerRadius(amount: f32) -> f32 {
     let markers = view.markers;
     var radius: f32;
@@ -66,18 +66,23 @@ fn markerRadius(amount: f32) -> f32 {
     return clamp(radius, markers.minRadius, markers.maxRadius) * view.pixelRatio;
 }
 
-/** A corner of the square around the trade's marker, `margin` pixels wider than it on each side. */
+/**
+ * A corner of the triangle around the trade's marker, `margin` pixels wider
+ * than it on each side. Equilateral, the smallest triangle around a circle:
+ * one triangle per marker draws the whole day 40% faster than a square of
+ * two (BenchmarkApp, Intel HD 520), as GPUs pay per triangle for tiny ones.
+ */
 fn placeMarker(trade: Trade, corner: u32, margin: f32) -> Marker {
-    var corners = array(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0),
-                        vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0));
-    let centre = vec2f(sinceStartUs(trade.time) / view.lengthUs, (trade.price - view.priceLow) / view.priceSpan) * 2.0 - 1.0;
+    // Each side touches the unit circle.
+    var corners = array(vec2f(0.0, 2.0), vec2f(-1.7320508, -1.0), vec2f(1.7320508, -1.0));
+    let center = vec2f(sinceStartUs(trade.time) / view.lengthUs, (trade.price - view.priceLow) / view.priceSpan) * 2.0 - 1.0;
     let radius = markerRadius(trade.amount);
-    let pixel = corners[corner] * (radius + margin);
+    let fromCenterPx = corners[corner] * (radius + margin);
 
     var marker: Marker;
-    marker.position = vec4f(centre + pixel * 2.0 / vec2f(view.width, view.height), 0.0, 1.0);
-    marker.pixel = pixel;
-    marker.radius = radius;
+    marker.position = vec4f(center + fromCenterPx * 2.0 / vec2f(view.plotWidth, view.plotHeight), 0.0, 1.0);
+    marker.fromCenterPx = fromCenterPx;
+    marker.radiusPx = radius;
     marker.color = select(view.markers.sellColor, view.markers.buyColor, trade.side == 0u);
     return marker;
 }
@@ -91,7 +96,7 @@ fn vertexMain(trade: Trade, @builtin(vertex_index) corner: u32) -> Marker {
 @fragment
 fn fragmentMain(marker: Marker) -> @location(0) vec4f {
     // How much of this pixel the disc covers.
-    let coverage = clamp(marker.radius + 0.5 - length(marker.pixel), 0.0, 1.0);
+    let coverage = clamp(marker.radiusPx + 0.5 - length(marker.fromCenterPx), 0.0, 1.0);
     let alpha = coverage * view.markers.opacity;
     return vec4f(marker.color * alpha, alpha);  // premultiplied
 }
@@ -108,9 +113,9 @@ fn ringVertex(trade: Trade, @builtin(vertex_index) corner: u32) -> Marker {
 
 @fragment
 fn ringFragment(marker: Marker) -> @location(0) vec4f {
-    let inner = marker.radius + RingGap * view.pixelRatio;
+    let inner = marker.radiusPx + RingGap * view.pixelRatio;
     let outer = inner + RingWidth * view.pixelRatio;
-    let distance = length(marker.pixel);
+    let distance = length(marker.fromCenterPx);
     // How much of this pixel the ring covers, smoothed at both edges.
     let coverage = clamp(min(distance - inner, outer - distance) + 0.5, 0.0, 1.0);
     return vec4f(view.markers.cursorColor * coverage, coverage);  // premultiplied

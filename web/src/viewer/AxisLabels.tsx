@@ -17,17 +17,17 @@ function alignAt(x: number, width: number): string {
 interface AxisLabelsProps {
   axes: Axes;
   /** The canvas's size in CSS pixels, margins included. */
-  width: number;
-  height: number;
+  canvasWidth: number;
+  canvasHeight: number;
 }
 
 /**
  * The axes' labels, in the margins the plot leaves free. The viewer draws the
  * matching grid lines, from the same ticks.
  */
-export function AxisLabels({ axes, width, height }: AxisLabelsProps) {
-  const plotWidth = Math.max(0, width - AxisMargins.right);
-  const plotHeight = Math.max(0, height - AxisMargins.bottom);
+export function AxisLabels({ axes, canvasWidth, canvasHeight }: AxisLabelsProps) {
+  const plotWidth = Math.max(0, canvasWidth - AxisMargins.right);
+  const plotHeight = Math.max(0, canvasHeight - AxisMargins.bottom);
   return (
     <div className="axis-labels" aria-hidden="true">
       <div className="plot-frame" style={{ width: plotWidth, height: plotHeight }} />

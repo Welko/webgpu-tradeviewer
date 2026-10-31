@@ -10,7 +10,7 @@
  * Where an axis gets its grid lines and labels: round values, spaced so that
  * at most a given number fit.
  */
-namespace Core::Axis {
+namespace Core::Plot::Axis {
 
 struct Tick
 {
@@ -26,7 +26,7 @@ struct Tick
  */
 [[nodiscard]] std::vector<Tick> getTimeTicks(TimeRange range, std::size_t maxCount);
 
-/** Ticks at multiples of 1, 2 or 5 times a power of ten, labelled with the decimals the step needs. */
+/** Ticks at multiples of 1, 2 or 5 times a power of ten, labeled with the decimals the step needs. */
 [[nodiscard]] std::vector<Tick> getNumberTicks(ValueRange range, std::size_t maxCount);
 
-} // namespace Core::Axis
+} // namespace Core::Plot::Axis

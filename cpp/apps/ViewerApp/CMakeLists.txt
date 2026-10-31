@@ -58,4 +58,6 @@ else()
     endif()
 
     target_copy_webgpu_binaries(ViewerApp)
+
+    add_subdirectory(tests)
 endif()

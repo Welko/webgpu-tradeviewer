@@ -6,7 +6,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <vector>
 
 namespace Core::Data {
@@ -46,7 +45,7 @@ inline std::int64_t toAmountUnits(double amount)
 } // namespace detail
 
 /** How many trades there are, when, and how much they traded. */
-struct TradeSummary
+struct TradeStats
 {
     std::size_t count;
     std::int64_t firstUs;  // 0 without trades
@@ -54,7 +53,7 @@ struct TradeSummary
     double totalAmount;
 };
 
-inline TradeSummary summarize(const Trades& trades)
+inline TradeStats getStats(const Trades& trades)
 {
     if (trades.empty()) {
         return {};
@@ -80,17 +79,26 @@ inline IndexRange getTradesIn(const Trades& trades, TimeRange range)
     return { .first = static_cast<std::size_t>(first - begin), .last = static_cast<std::size_t>(last - begin) };
 }
 
-/** The total amount of any range of trades in constant time: running totals, built once. */
-class AmountTotals
+/**
+ * The total amount of any range of trades in constant time, in all and of
+ * buys alone, and how many were buys: running totals, built once.
+ */
+class RunningTotals
 {
 public:
-    AmountTotals() = default;
+    RunningTotals() = default;
 
-    explicit AmountTotals(const Trades& trades)
+    explicit RunningTotals(const Trades& trades)
     {
         mRunning.reserve(trades.size() + 1);
-        for (const double amount : trades.amount) {
-            mRunning.push_back(mRunning.back() + detail::toAmountUnits(amount));
+        mRunningBuys.reserve(trades.size() + 1);
+        mBuyCounts.reserve(trades.size() + 1);
+        for (std::size_t i = 0; i < trades.size(); ++i) {
+            const std::int64_t units = detail::toAmountUnits(trades.amount[i]);
+            const bool buy = trades.side[i] == Side::Buy;
+            mRunning.push_back(mRunning.back() + units);
+            mRunningBuys.push_back(mRunningBuys.back() + (buy ? units : 0));
+            mBuyCounts.push_back(mBuyCounts.back() + (buy ? 1 : 0));
         }
     }
 
@@ -99,20 +107,19 @@ public:
 
     [[nodiscard]] double getAmount(IndexRange indices) const { return static_cast<double>(getUnits(indices)) * AmountUnit; }
 
-private:
-    std::vector<std::int64_t> mRunning{ 0 };  // mRunning[i]: the first i trades' total
-};
-
-/** The lowest and highest price of the trades in `indices`, or nothing if there are none. Reads every one. */
-inline std::optional<ValueRange> getPriceRange(const Trades& trades, IndexRange indices)
-{
-    if (indices.empty()) {
-        return std::nullopt;
+    /** Of the buys alone, in units of AmountUnit. */
+    [[nodiscard]] std::int64_t getBuyUnits(IndexRange indices) const
+    {
+        return mRunningBuys[indices.last] - mRunningBuys[indices.first];
     }
-    const auto begin = trades.price.begin();
-    const auto [low, high] = std::minmax_element(begin + static_cast<std::ptrdiff_t>(indices.first),
-        begin + static_cast<std::ptrdiff_t>(indices.last));
-    return ValueRange{ .low = *low, .high = *high };
-}
+
+    [[nodiscard]] std::size_t getBuyCount(IndexRange indices) const { return mBuyCounts[indices.last] - mBuyCounts[indices.first]; }
+
+private:
+    // Element i covers the first i trades.
+    std::vector<std::int64_t> mRunning{ 0 };
+    std::vector<std::int64_t> mRunningBuys{ 0 };
+    std::vector<std::uint32_t> mBuyCounts{ 0 };
+};
 
 } // namespace Core::Data
