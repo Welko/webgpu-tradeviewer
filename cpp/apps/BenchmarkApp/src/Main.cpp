@@ -25,8 +25,8 @@
 namespace {
 
 // Task 3's viewport, at a pixel ratio of 1.
-constexpr std::uint32_t Width = 1600;
-constexpr std::uint32_t Height = 900;
+constexpr std::uint32_t WidthPx = 1600;
+constexpr std::uint32_t HeightPx = 900;
 constexpr int WarmUpFrames = 10;
 constexpr int MeasuredFrames = 60;
 
@@ -90,7 +90,7 @@ int main(int argc, char** argv)
     }
 
     std::unique_ptr<Viewer::App> app;
-    Viewer::App::create(Gpu::Type::Target::Offscreen{ .width = Width, .height = Height }, Gpu::Type::PowerPreference::Default,
+    Viewer::App::create(Gpu::Type::Target::Offscreen{ .width = WidthPx, .height = HeightPx }, Gpu::Type::PowerPreference::Default,
         [&](Viewer::App::Result result) {
             if (!result) {
                 std::fputs(std::format("{}\n", result.error()).c_str(), stderr);
@@ -101,7 +101,7 @@ int main(int argc, char** argv)
     if (!app) {
         return 1;
     }
-    app->resize(Width, Height);
+    app->resize(WidthPx, HeightPx);
     app->setPixelRatio(1.0f);
     app->setTrades(std::move(*trades));
 
@@ -120,8 +120,8 @@ int main(int argc, char** argv)
         { "Whole day, every trade", show(false, [](Viewer::App& viewer) { viewer.showDay(); }) },
         { "Whole day", show(true, [](Viewer::App& viewer) { viewer.showDay(); }) },
         { "12:00–13:00", show(true, [](Viewer::App& viewer) { viewer.resetView(); }) },
-        { "1 minute", show(true, [](Viewer::App& viewer) { viewer.resetView(); viewer.zoomAt(Width / 2.0, 1.0 / 60.0); }) },
-        { "1 second", show(true, [](Viewer::App& viewer) { viewer.resetView(); viewer.zoomAt(Width / 2.0, 1.0 / 3600.0); }) },
+        { "1 minute", show(true, [](Viewer::App& viewer) { viewer.resetView(); viewer.zoomAt(WidthPx / 2.0, 1.0 / 60.0); }) },
+        { "1 second", show(true, [](Viewer::App& viewer) { viewer.resetView(); viewer.zoomAt(WidthPx / 2.0, 1.0 / 3600.0); }) },
     };
 
     std::vector<Samples> results;
@@ -178,7 +178,7 @@ int main(int argc, char** argv)
     const auto& info = app->getInfo();
     print(std::format("GPU: {} ({}, {}). {} × {} pixels; {} frames per view after {} to warm up. "
                       "Milliseconds: median (95th percentile).\n\n",
-                      info.device, info.backend, info.adapter, Width, Height, MeasuredFrames, WarmUpFrames));
+                      info.device, info.backend, info.adapter, WidthPx, HeightPx, MeasuredFrames, WarmUpFrames));
     print("| View | Trades drawn | View update (CPU) | Acquire (CPU) | Encode (CPU) | Submit (CPU) |");
     for (const auto& pass : passNames) {
         print(std::format(" GPU: {} |", pass));

@@ -126,7 +126,7 @@ struct Xlib
     std::uint64_t window;
 };
 
-/** A texture instead of a window, for headless tests. */
+/** A texture instead of a window, for headless tests, in physical pixels. */
 struct Offscreen
 {
     std::uint32_t width;

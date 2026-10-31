@@ -209,8 +209,8 @@ test('pointing at a trade shows its time, price, amount and side', async ({ page
   // them with 5% of a price's 0.001% on either side: the buy (7540.79) is 53%
   // of the way up the plot, the sell (7540.78) 47%.
   const box = (await page.locator('canvas').boundingBox())!;
-  const plotHeight = box.height - 22;  // AxisMargins.bottom
-  const heightOf = (fraction: number) => box.y + plotHeight * (1 - fraction);
+  const plotHeightCssPx = box.height - 22;  // AxisMarginsCssPx.bottom
+  const heightOf = (fraction: number) => box.y + plotHeightCssPx * (1 - fraction);
   const tooltip = page.getByTestId('trade-tooltip');
 
   await page.mouse.move(box.x + 2, heightOf(0.53));

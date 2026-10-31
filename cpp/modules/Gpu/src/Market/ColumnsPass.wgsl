@@ -8,11 +8,11 @@ struct View {
     across: f32,  // columns splitting the plot, some without trades
     priceLow: f32,
     priceSpan: f32,
-    plotWidth: f32,  // pixels
-    plotHeight: f32,
+    plotWidthPx: f32,
+    plotHeightPx: f32,
     pixelRatio: f32,
     minOpacity: f32,  // of a column with almost nothing traded
-    minHeight: f32,  // of a bar, in CSS or window pixels, so one of a single price still shows
+    minHeightCssPx: f32,  // of a bar, so one of a single price still shows
     highlight: u32,  // the column to draw in the cursor color; none if past the last
     buyColor: vec3f,
     sellColor: vec3f,
@@ -37,13 +37,13 @@ fn vertexMain(column: Column, @builtin(vertex_index) corner: u32, @builtin(insta
                         vec2f(0.0, 1.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0));
     let unit = corners[corner];
     // Pixels from the plot's bottom left corner.
-    let x = (f32(column.index) + unit.x) * view.plotWidth / view.across;
-    var low = (column.price.x - view.priceLow) / view.priceSpan * view.plotHeight;
-    var high = (column.price.y - view.priceLow) / view.priceSpan * view.plotHeight;
-    let grow = max(0.0, view.minHeight * view.pixelRatio - (high - low)) / 2.0;
-    low -= grow;
-    high += grow;
-    let y = mix(low, high, unit.y);
+    let xPx = (f32(column.index) + unit.x) * view.plotWidthPx / view.across;
+    var lowPx = (column.price.x - view.priceLow) / view.priceSpan * view.plotHeightPx;
+    var highPx = (column.price.y - view.priceLow) / view.priceSpan * view.plotHeightPx;
+    let growPx = max(0.0, view.minHeightCssPx * view.pixelRatio - (highPx - lowPx)) / 2.0;
+    lowPx -= growPx;
+    highPx += growPx;
+    let yPx = mix(lowPx, highPx, unit.y);
 
     var color = mix(view.sellColor, view.buyColor, column.shares.x);
     var alpha = mix(view.minOpacity, 1.0, column.shares.y);
@@ -52,7 +52,7 @@ fn vertexMain(column: Column, @builtin(vertex_index) corner: u32, @builtin(insta
         alpha = 1.0;
     }
     var bar: Bar;
-    bar.position = vec4f(vec2f(x, y) / vec2f(view.plotWidth, view.plotHeight) * 2.0 - 1.0, 0.0, 1.0);
+    bar.position = vec4f(vec2f(xPx, yPx) / vec2f(view.plotWidthPx, view.plotHeightPx) * 2.0 - 1.0, 0.0, 1.0);
     bar.color = vec4f(color * alpha, alpha);
     return bar;
 }

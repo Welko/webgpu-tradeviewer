@@ -33,11 +33,11 @@ struct Uniforms
     float across;
     float priceLow;
     float priceSpan;
-    float plotWidth;
-    float plotHeight;
+    float plotWidthPx;
+    float plotHeightPx;
     float pixelRatio;
     float minOpacity;
-    float minHeight;
+    float minHeightCssPx;
     std::uint32_t highlight;
     std::array<float, 3> padding0;  // vec3f fields start on 16 bytes
     std::array<float, 3> buyColor;
@@ -165,11 +165,11 @@ void ColumnsPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plo
         .across = static_cast<float>(mAcross),
         .priceLow = static_cast<float>(mView.price.low),
         .priceSpan = static_cast<float>(mView.price.high - mView.price.low),
-        .plotWidth = static_cast<float>(plot.width),
-        .plotHeight = static_cast<float>(plot.height),
+        .plotWidthPx = static_cast<float>(plot.width),
+        .plotHeightPx = static_cast<float>(plot.height),
         .pixelRatio = mPixelRatio,
         .minOpacity = Style::ColumnMinOpacity,
-        .minHeight = Style::ColumnMinHeight,
+        .minHeightCssPx = Style::ColumnMinHeightCssPx,
         .highlight = mHighlight ? static_cast<std::uint32_t>(*mHighlight) : std::numeric_limits<std::uint32_t>::max(),
         .padding0 = {},
         .buyColor = toGpu(mTheme.buy),

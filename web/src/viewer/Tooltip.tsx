@@ -3,16 +3,15 @@ import { utc, utcMicroseconds } from '../utc';
 import type { PickedColumn, PickedTrade } from './viewerModule';
 
 // From the anchor to the tooltip's nearest corner, in CSS pixels.
-const Offset = 14;
+const OffsetCssPx = 14;
 // Room a tooltip needs, roughly, before it flips to the other side of its anchor.
-const FlipWidth = 260;
-const FlipHeight = 90;
+const FlipWidthCssPx = 260;
+const FlipHeightCssPx = 90;
 
 interface Placement {
   cssPixelsPerPixel: number;
-  /** In CSS pixels. */
-  canvasWidth: number;
-  canvasHeight: number;
+  canvasWidthCssPx: number;
+  canvasHeightCssPx: number;
 }
 
 function number(value: number): string {
@@ -20,24 +19,24 @@ function number(value: number): string {
 }
 
 /**
- * A box beside the point (`anchorX`, `anchorY`), in physical pixels, below
- * and to the right unless that leaves the canvas.
+ * A box beside the point (`anchorXPx`, `anchorYPx`), below and to the right
+ * unless that leaves the canvas.
  */
 function Tooltip({
-  anchorX,
-  anchorY,
+  anchorXPx,
+  anchorYPx,
   cssPixelsPerPixel,
-  canvasWidth,
-  canvasHeight,
+  canvasWidthCssPx,
+  canvasHeightCssPx,
   testId,
   children,
-}: Placement & { anchorX: number; anchorY: number; testId: string; children: ReactNode }) {
-  const left = anchorX * cssPixelsPerPixel;
-  const top = anchorY * cssPixelsPerPixel;
-  const across = left + Offset + FlipWidth > canvasWidth ? `calc(-100% - ${Offset}px)` : `${Offset}px`;
-  const down = top + Offset + FlipHeight > canvasHeight ? `calc(-100% - ${Offset}px)` : `${Offset}px`;
+}: Placement & { anchorXPx: number; anchorYPx: number; testId: string; children: ReactNode }) {
+  const leftCssPx = anchorXPx * cssPixelsPerPixel;
+  const topCssPx = anchorYPx * cssPixelsPerPixel;
+  const across = leftCssPx + OffsetCssPx + FlipWidthCssPx > canvasWidthCssPx ? `calc(-100% - ${OffsetCssPx}px)` : `${OffsetCssPx}px`;
+  const down = topCssPx + OffsetCssPx + FlipHeightCssPx > canvasHeightCssPx ? `calc(-100% - ${OffsetCssPx}px)` : `${OffsetCssPx}px`;
   return (
-    <div className="plot-tooltip" data-testid={testId} style={{ left, top, transform: `translate(${across}, ${down})` }}>
+    <div className="plot-tooltip" data-testid={testId} style={{ left: leftCssPx, top: topCssPx, transform: `translate(${across}, ${down})` }}>
       {children}
     </div>
   );
@@ -46,7 +45,7 @@ function Tooltip({
 /** The picked trade's time, price, amount and side, beside its marker. */
 export function TradeTooltip({ trade, ...placement }: Placement & { trade: PickedTrade }) {
   return (
-    <Tooltip anchorX={trade.centerX} anchorY={trade.centerY} testId="trade-tooltip" {...placement}>
+    <Tooltip anchorXPx={trade.centerXPx} anchorYPx={trade.centerYPx} testId="trade-tooltip" {...placement}>
       <div className={`trade-side ${trade.side}`} data-testid="trade-side">
         {trade.side === 'buy' ? 'Buy' : 'Sell'}
       </div>
@@ -63,7 +62,7 @@ export function TradeTooltip({ trade, ...placement }: Placement & { trade: Picke
 export function ColumnTooltip({ column, ...placement }: Placement & { column: PickedColumn }) {
   const sells = column.count - column.buyCount;
   return (
-    <Tooltip anchorX={column.centerX} anchorY={column.top} testId="column-tooltip" {...placement}>
+    <Tooltip anchorXPx={column.centerXPx} anchorYPx={column.topPx} testId="column-tooltip" {...placement}>
       <div data-testid="column-time">
         {utc(column.startUs / 1000)} – {utc(column.endUs / 1000)}
       </div>

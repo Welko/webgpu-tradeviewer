@@ -44,7 +44,7 @@ public:
     [[nodiscard]] const Gpu::Type::Info& getInfo() const;
 
     /** Surface size in physical pixels. Zero sizes are ignored. */
-    void resize(std::uint32_t width, std::uint32_t height);
+    void resize(std::uint32_t widthPx, std::uint32_t heightPx);
 
     /** Physical pixels per CSS or window pixel, which marker sizes are given in. */
     void setPixelRatio(float ratio);

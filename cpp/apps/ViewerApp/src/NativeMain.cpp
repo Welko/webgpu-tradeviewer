@@ -27,7 +27,7 @@ struct WindowState
     Viewer::App* app;
     bool repaint = false;  // the window system asked for a repaint
     bool dragging = false;
-    double lastX = 0.0;  // window coordinates
+    double lastXCssPx = 0.0;  // window coordinates
     Gpu::Market::Type::MarkerScale markerScale = Gpu::Market::Type::MarkerScale::Area;
     bool summariesAllowed = true;
 };
@@ -44,19 +44,19 @@ void logLegend(const Viewer::App& app, Gpu::Market::Type::MarkerScale scale)
     std::string sizes;
     for (const auto& size : app.getLegend().sizes) {
         const char* prefix = size.bound == Bound::AtMost ? "<= " : size.bound == Bound::AtLeast ? ">= " : "";
-        sizes += std::format("{}{}{:.4g} BTC {:.3g} px", sizes.empty() ? "" : ", ", prefix, size.amount, size.radius);
+        sizes += std::format("{}{}{:.4g} BTC {:.3g} px", sizes.empty() ? "" : ", ", prefix, size.amount, size.radiusCssPx);
     }
     Core::Log::info("Buys green, sells red; marker radius by {}: {}", scale == Gpu::Market::Type::MarkerScale::Area ? "area" : "log", sizes);
 }
 
 /** Window coordinates in physical pixels, which differ on scaled screens. */
-double toPixels(GLFWwindow* window, double x)
+double toPx(GLFWwindow* window, double cssPx)
 {
-    int windowWidth = 0;
-    int pixelWidth = 0;
-    glfwGetWindowSize(window, &windowWidth, nullptr);
-    glfwGetFramebufferSize(window, &pixelWidth, nullptr);
-    return windowWidth > 0 ? x * pixelWidth / windowWidth : x;
+    int windowWidthCssPx = 0;
+    int windowWidthPx = 0;
+    glfwGetWindowSize(window, &windowWidthCssPx, nullptr);
+    glfwGetFramebufferSize(window, &windowWidthPx, nullptr);
+    return windowWidthCssPx > 0 ? cssPx * windowWidthPx / windowWidthCssPx : cssPx;
 }
 
 /** Forwards the window's input to the app. */
@@ -65,27 +65,27 @@ void connectInput(GLFWwindow* window)
     glfwSetWindowRefreshCallback(window, [](GLFWwindow* refreshed) { getState(refreshed).repaint = true; });
 
     glfwSetScrollCallback(window, [](GLFWwindow* scrolled, double, double steps) {
-        double x = 0.0;
-        glfwGetCursorPos(scrolled, &x, nullptr);
+        double xCssPx = 0.0;
+        glfwGetCursorPos(scrolled, &xCssPx, nullptr);
         // Up zooms in.
-        getState(scrolled).app->zoomAt(toPixels(scrolled, x), std::pow(ZoomPerWheelStep, -steps));
+        getState(scrolled).app->zoomAt(toPx(scrolled, xCssPx), std::pow(ZoomPerWheelStep, -steps));
     });
 
     glfwSetMouseButtonCallback(window, [](GLFWwindow* clicked, int button, int action, int) {
         if (button == GLFW_MOUSE_BUTTON_LEFT) {
             auto& state = getState(clicked);
             state.dragging = action == GLFW_PRESS;
-            glfwGetCursorPos(clicked, &state.lastX, nullptr);
+            glfwGetCursorPos(clicked, &state.lastXCssPx, nullptr);
         }
     });
 
-    glfwSetCursorPosCallback(window, [](GLFWwindow* moved, double x, double y) {
+    glfwSetCursorPosCallback(window, [](GLFWwindow* moved, double xCssPx, double yCssPx) {
         auto& state = getState(moved);
         if (state.dragging) {
-            state.app->panBy(toPixels(moved, x - state.lastX));
-            state.lastX = x;
+            state.app->panBy(toPx(moved, xCssPx - state.lastXCssPx));
+            state.lastXCssPx = xCssPx;
         }
-        state.app->setPointer(toPixels(moved, x), toPixels(moved, y));
+        state.app->setPointer(toPx(moved, xCssPx), toPx(moved, yCssPx));
     });
 
     glfwSetCursorEnterCallback(window, [](GLFWwindow* crossed, int entered) {
@@ -275,10 +275,10 @@ int main(int argc, char** argv)
         }
         app->processEvents();
 
-        int width = 0;
-        int height = 0;
-        glfwGetFramebufferSize(window, &width, &height);
-        app->resize(static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height));
+        int widthPx = 0;
+        int heightPx = 0;
+        glfwGetFramebufferSize(window, &widthPx, &heightPx);
+        app->resize(static_cast<std::uint32_t>(widthPx), static_cast<std::uint32_t>(heightPx));
         app->update(glfwGetTime() * 1000.0);
         if (app->needsRender() || state.repaint) {
             app->render();

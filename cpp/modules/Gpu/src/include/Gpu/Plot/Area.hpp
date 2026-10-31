@@ -8,7 +8,7 @@
 
 namespace Gpu::Plot {
 
-/** The part of the frame that shows trades, inside the axis margins, in pixels from the top left. */
+/** The part of the frame that shows trades, inside the axis margins, in physical pixels from the top left. */
 struct Area
 {
     std::uint32_t x;

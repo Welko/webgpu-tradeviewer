@@ -33,7 +33,7 @@ public:
     void setView(const Type::View& view) { mView = view; }
     void setTheme(const Type::Theme& theme) { mTheme = theme; }
 
-    /** Physical pixels per CSS or window pixel, which Style::ColumnMinHeight is given in. */
+    /** Physical pixels per CSS or window pixel, which Style::ColumnMinHeightCssPx is given in. */
     void setPixelRatio(float ratio) { mPixelRatio = ratio; }
 
     /** The column to draw in the cursor color, by its position among those set; none for nothing. */

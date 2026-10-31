@@ -57,7 +57,7 @@ std::vector<Tick> getTimeTicks(TimeRange range, std::size_t maxCount)
     }
     // The smallest round step that keeps the count down; whole days beyond the table.
     const std::int64_t wanted = (length + static_cast<std::int64_t>(maxCount) - 1) / static_cast<std::int64_t>(maxCount);
-    const auto *const found = std::ranges::find_if(TimeSteps, [&](std::int64_t step) { return step >= wanted; });
+    const auto found = std::ranges::find_if(TimeSteps, [&](std::int64_t step) { return step >= wanted; });
     const std::int64_t step = found != TimeSteps.end() ? *found : (wanted + Day - 1) / Day * Day;
 
     // The first multiple of the step at or after the start, also before 1970.

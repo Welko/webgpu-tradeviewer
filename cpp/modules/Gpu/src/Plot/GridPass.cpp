@@ -23,8 +23,8 @@ static_assert(sizeof(GpuLine) == 8);
 /** The shader's Plot uniform (GridPass.wgsl). */
 struct Uniforms
 {
-    float width;
-    float height;
+    float widthPx;
+    float heightPx;
     std::array<float, 2> padding;  // lineColor starts on 16 bytes
     std::array<float, 3> lineColor;
     float padding2;  // uniform structs are sized in 16-byte steps
@@ -145,8 +145,8 @@ void GridPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Area p
 
     if (mLineCount > 0 && !plot.empty()) {
         const Uniforms uniforms{
-            .width = static_cast<float>(plot.width),
-            .height = static_cast<float>(plot.height),
+            .widthPx = static_cast<float>(plot.width),
+            .heightPx = static_cast<float>(plot.height),
             .padding = {},
             .lineColor = { mTheme.grid.red, mTheme.grid.green, mTheme.grid.blue },
             .padding2 = {},

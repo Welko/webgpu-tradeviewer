@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { GpuInfo } from './gpuInfo';
-import { AxisLabels, AxisMargins } from './AxisLabels';
+import { AxisLabels, AxisMarginsCssPx } from './AxisLabels';
 import { readTheme } from './theme';
 import { ColumnTooltip, TradeTooltip } from './Tooltip';
 import { ViewControls } from './ViewControls';
@@ -19,16 +19,16 @@ export type ViewerStatus =
   | { kind: 'ready'; gpu: GpuInfo; viewer: Viewer; refresh: () => void }
   | { kind: 'error'; message: string };
 
-// Zooming per pixel of wheel scrolling: a usual 100-pixel step zooms by about 1.22.
-const ZoomPerWheelPixel = 0.002;
+// Zooming per CSS pixel of wheel scrolling: a usual 100-pixel step zooms by about 1.22.
+const ZoomPerWheelCssPx = 0.002;
 
-/** A wheel event's vertical scroll in pixels, whatever unit it came in. */
-function wheelPixels(event: WheelEvent, pageHeight: number): number {
+/** A wheel event's vertical scroll in CSS pixels, whatever unit it came in. */
+function wheelCssPx(event: WheelEvent, pageHeightCssPx: number): number {
   switch (event.deltaMode) {
     case WheelEvent.DOM_DELTA_LINE:
       return event.deltaY * 16;
     case WheelEvent.DOM_DELTA_PAGE:
-      return event.deltaY * pageHeight;
+      return event.deltaY * pageHeightCssPx;
     default:
       return event.deltaY;
   }
@@ -62,7 +62,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
     pickedColumn: PickedColumn | null;
     summaries: Summaries | null;
     /** The canvas in CSS pixels. */
-    size: { width: number; height: number };
+    sizeCssPx: { width: number; height: number };
     cssPixelsPerPixel: number;
     refresh: () => void;
   } | null>(null);
@@ -105,7 +105,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
             frame = requestAnimationFrame(tick);
           }
         };
-        let size = { width: canvas.clientWidth, height: canvas.clientHeight };
+        let sizeCssPx = { width: canvas.clientWidth, height: canvas.clientHeight };
         const refresh = () => {
           requestFrame();
           setShown({
@@ -117,31 +117,31 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
             picked: created.pickedTrade() as PickedTrade | null,
             pickedColumn: created.pickedColumn() as PickedColumn | null,
             summaries: created.summaries() as Summaries | null,
-            size,
+            sizeCssPx,
             cssPixelsPerPixel: canvas.width > 0 ? canvas.clientWidth / canvas.width : 1,
             refresh,
           });
         };
 
         // CSS pixels to the canvas's physical pixels, which the viewer works in.
-        const toPixels = (x: number) => (canvas.clientWidth > 0 ? (x * canvas.width) / canvas.clientWidth : x);
+        const toPx = (cssPx: number) => (canvas.clientWidth > 0 ? (cssPx * canvas.width) / canvas.clientWidth : cssPx);
         const listen = { signal: removeInput.signal };
         canvas.addEventListener(
           'wheel',
           (event) => {
             event.preventDefault();
-            created.zoomAt(toPixels(event.offsetX), Math.exp(wheelPixels(event, canvas.clientHeight) * ZoomPerWheelPixel));
+            created.zoomAt(toPx(event.offsetX), Math.exp(wheelCssPx(event, canvas.clientHeight) * ZoomPerWheelCssPx));
             refresh();
           },
           { ...listen, passive: false },
         );
-        let dragX: number | null = null;
+        let dragXCssPx: number | null = null;
         canvas.addEventListener(
           'pointerdown',
           (event) => {
             if (event.button === 0) {
               canvas.setPointerCapture(event.pointerId);
-              dragX = event.clientX;
+              dragXCssPx = event.clientX;
             }
           },
           listen,
@@ -149,11 +149,11 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
         canvas.addEventListener(
           'pointermove',
           (event) => {
-            if (dragX !== null) {
-              created.panBy(toPixels(event.clientX - dragX));
-              dragX = event.clientX;
+            if (dragXCssPx !== null) {
+              created.panBy(toPx(event.clientX - dragXCssPx));
+              dragXCssPx = event.clientX;
             }
-            created.setPointer(toPixels(event.offsetX), toPixels(event.offsetY));
+            created.setPointer(toPx(event.offsetX), toPx(event.offsetY));
             refresh();
           },
           listen,
@@ -167,31 +167,31 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
           listen,
         );
         const endDrag = () => {
-          dragX = null;
+          dragXCssPx = null;
         };
         canvas.addEventListener('pointerup', endDrag, listen);
         canvas.addEventListener('pointercancel', endDrag, listen);
 
         observer = new ResizeObserver(([entry]) => {
           const box = entry.devicePixelContentBoxSize?.[0];
-          const width = box ? box.inlineSize : Math.round(entry.contentRect.width * devicePixelRatio);
-          const height = box ? box.blockSize : Math.round(entry.contentRect.height * devicePixelRatio);
+          const widthPx = box ? box.inlineSize : Math.round(entry.contentRect.width * devicePixelRatio);
+          const heightPx = box ? box.blockSize : Math.round(entry.contentRect.height * devicePixelRatio);
           // Assigning the size clears the canvas, so only do it on a real change.
-          if (canvas.width !== width || canvas.height !== height) {
-            canvas.width = width;
-            canvas.height = height;
+          if (canvas.width !== widthPx || canvas.height !== heightPx) {
+            canvas.width = widthPx;
+            canvas.height = heightPx;
           }
           // Also changes when the page is zoomed or moved to another screen, which resizes the canvas in pixels.
           created.setPixelRatio(devicePixelRatio);
-          const pixelsPerCssPixel = width / Math.max(1, entry.contentRect.width);
+          const pixelsPerCssPixel = widthPx / Math.max(1, entry.contentRect.width);
           created.setPlotInsets(
             0,
             0,
-            Math.round(AxisMargins.right * pixelsPerCssPixel),
-            Math.round(AxisMargins.bottom * pixelsPerCssPixel),
+            Math.round(AxisMarginsCssPx.right * pixelsPerCssPixel),
+            Math.round(AxisMarginsCssPx.bottom * pixelsPerCssPixel),
           );
-          created.resize(width, height);
-          size = { width: entry.contentRect.width, height: entry.contentRect.height };
+          created.resize(widthPx, heightPx);
+          sizeCssPx = { width: entry.contentRect.width, height: entry.contentRect.height };
           refresh();
         });
         observer.observe(canvas);
@@ -229,21 +229,21 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
       )}
       <div className="plot">
         <canvas id={canvasId} ref={canvasRef} />
-        {shown && <AxisLabels axes={shown.axes} canvasWidth={shown.size.width} canvasHeight={shown.size.height} />}
+        {shown && <AxisLabels axes={shown.axes} canvasWidthCssPx={shown.sizeCssPx.width} canvasHeightCssPx={shown.sizeCssPx.height} />}
         {shown?.picked && (
           <TradeTooltip
             trade={shown.picked}
             cssPixelsPerPixel={shown.cssPixelsPerPixel}
-            canvasWidth={shown.size.width}
-            canvasHeight={shown.size.height}
+            canvasWidthCssPx={shown.sizeCssPx.width}
+            canvasHeightCssPx={shown.sizeCssPx.height}
           />
         )}
         {shown?.pickedColumn && (
           <ColumnTooltip
             column={shown.pickedColumn}
             cssPixelsPerPixel={shown.cssPixelsPerPixel}
-            canvasWidth={shown.size.width}
-            canvasHeight={shown.size.height}
+            canvasWidthCssPx={shown.sizeCssPx.width}
+            canvasHeightCssPx={shown.sizeCssPx.height}
           />
         )}
       </div>

@@ -41,7 +41,7 @@ struct LegendSize
     };
 
     double amount = 0.0;  // BTC
-    float radius = 0.0f;  // CSS or window pixels
+    float radiusCssPx = 0.0f;
     Bound bound = Bound::Exact;
 };
 

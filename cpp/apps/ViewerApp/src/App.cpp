@@ -26,11 +26,11 @@ constexpr std::int64_t MaxViewUs = 7 * DayUs;
 constexpr double PricePadding = 0.05;
 
 // How far from the pointer a trade's center can be picked, in CSS or window pixels.
-constexpr double PickRadius = 24.0;
+constexpr double PickRadiusCssPx = 24.0;
 
 // The closest axis ticks get, in CSS or window pixels, so their labels fit.
-constexpr double TimeTickSpacing = 120.0;
-constexpr double PriceTickSpacing = 50.0;
+constexpr double TimeTickSpacingCssPx = 120.0;
+constexpr double PriceTickSpacingCssPx = 50.0;
 
 } // namespace
 
@@ -97,20 +97,20 @@ void App::showDay()
     applyView();
 }
 
-void App::zoomAt(double x, double factor)
+void App::zoomAt(double xPx, double factor)
 {
     const auto length = static_cast<double>(mView.time.getLengthUs());
     const double newLength = std::clamp(length * factor, static_cast<double>(MinViewUs), static_cast<double>(MaxViewUs));
-    const double plotWidth = getPlotWidth();
-    const double anchor = plotWidth > 0.0 ? (x - mLayout.insets.left) / plotWidth : 0.5;
+    const double plotWidthPx = getPlotWidthPx();
+    const double anchor = plotWidthPx > 0.0 ? (xPx - mLayout.insets.left) / plotWidthPx : 0.5;
     mView.time = mView.time.zoomed(anchor, newLength / length);
     applyView();
 }
 
-void App::panBy(double dx)
+void App::panBy(double dxPx)
 {
-    if (const double plotWidth = getPlotWidth(); plotWidth > 0.0) {
-        mView.time = mView.time.panned(-dx / plotWidth);
+    if (const double plotWidthPx = getPlotWidthPx(); plotWidthPx > 0.0) {
+        mView.time = mView.time.panned(-dxPx / plotWidthPx);
         applyView();
     }
 }
@@ -151,25 +151,25 @@ void App::setPlotInsets(Gpu::Plot::Type::Insets insets)
     updatePick();
 }
 
-double App::getPlotWidth() const
+double App::getPlotWidthPx() const
 {
-    return std::max(0.0, static_cast<double>(mLayout.surfaceWidth) - mLayout.insets.left - mLayout.insets.right);
+    return std::max(0.0, static_cast<double>(mLayout.surfaceWidthPx) - mLayout.insets.left - mLayout.insets.right);
 }
 
-double App::getPlotHeight() const
+double App::getPlotHeightPx() const
 {
-    return std::max(0.0, static_cast<double>(mLayout.surfaceHeight) - mLayout.insets.top - mLayout.insets.bottom);
+    return std::max(0.0, static_cast<double>(mLayout.surfaceHeightPx) - mLayout.insets.top - mLayout.insets.bottom);
 }
 
 void App::updateAxes()
 {
     // At least two ticks, so even a small plot shows a scale.
-    const auto countFitting = [&](double length, double spacing) {
-        return std::max<std::size_t>(2, static_cast<std::size_t>(length / (spacing * mLayout.pixelRatio)));
+    const auto countFitting = [&](double lengthPx, double spacingCssPx) {
+        return std::max<std::size_t>(2, static_cast<std::size_t>(lengthPx / (spacingCssPx * mLayout.pixelRatio)));
     };
     mView.axes = {
-        .times = Core::Plot::Axis::getTimeTicks(mView.time, countFitting(getPlotWidth(), TimeTickSpacing)),
-        .prices = Core::Plot::Axis::getNumberTicks(mView.price, countFitting(getPlotHeight(), PriceTickSpacing)),
+        .times = Core::Plot::Axis::getTimeTicks(mView.time, countFitting(getPlotWidthPx(), TimeTickSpacingCssPx)),
+        .prices = Core::Plot::Axis::getNumberTicks(mView.price, countFitting(getPlotHeightPx(), PriceTickSpacingCssPx)),
     };
 
     Gpu::Plot::Type::Grid grid;
@@ -213,7 +213,7 @@ void App::setSummaryThreshold(double tradesPerColumn)
 void App::updateSummaries()
 {
     // One column per CSS or window pixel.
-    const double across = std::round(getPlotWidth() / mLayout.pixelRatio);
+    const double across = std::round(getPlotWidthPx() / mLayout.pixelRatio);
     const bool crowded = mSummaries.allowed && across >= 1.0
                          && static_cast<double>(mView.trades.size()) > mSummaries.threshold * across;
     if (!crowded) {
@@ -242,14 +242,14 @@ void App::updateSummaries()
 
 Core::Plot::Mapping App::getPlotMapping() const
 {
-    return { .time = mView.time, .price = mView.price, .width = getPlotWidth(), .height = getPlotHeight() };
+    return { .time = mView.time, .price = mView.price, .width = getPlotWidthPx(), .height = getPlotHeightPx() };
 }
 
-void App::setPointer(double x, double y)
+void App::setPointer(double xPx, double yPx)
 {
     mCursor.onSurface = true;
-    mCursor.x = x;
-    mCursor.y = y;
+    mCursor.xPx = xPx;
+    mCursor.yPx = yPx;
     updatePick();
 }
 
@@ -272,8 +272,8 @@ std::optional<App::PickedTrade> App::getPickedTrade() const
         .price = mData.trades.price[i],
         .amount = mData.trades.amount[i],
         .side = mData.trades.side[i],
-        .centerX = mLayout.insets.left + plot.getX(mData.trades.timeUs[i]),
-        .centerY = mLayout.insets.top + plot.getY(mData.trades.price[i]),
+        .centerXPx = mLayout.insets.left + plot.getX(mData.trades.timeUs[i]),
+        .centerYPx = mLayout.insets.top + plot.getY(mData.trades.price[i]),
     };
 }
 
@@ -284,16 +284,16 @@ std::optional<App::PickedColumn> App::getPickedColumn() const
     }
     const auto& column = mSummaries.columns[*mCursor.column];
     const auto bar = Core::Plot::getColumnBar(column, mSummaries.across, getPlotMapping(),
-                                              Gpu::Market::Style::ColumnMinHeight * mLayout.pixelRatio);
+                                              Gpu::Market::Style::ColumnMinHeightCssPx * mLayout.pixelRatio);
     const std::int64_t length = mView.time.getLengthUs();
     const auto across = static_cast<std::int64_t>(mSummaries.across);
     const auto index = static_cast<std::int64_t>(column.index);
     return PickedColumn{
         .summary = column,
         .time = { .startUs = mView.time.startUs + index * length / across, .endUs = mView.time.startUs + (index + 1) * length / across },
-        .centerX = mLayout.insets.left + bar.centerX,
-        .top = mLayout.insets.top + bar.top,
-        .bottom = mLayout.insets.top + bar.bottom,
+        .centerXPx = mLayout.insets.left + bar.centerX,
+        .topPx = mLayout.insets.top + bar.top,
+        .bottomPx = mLayout.insets.top + bar.bottom,
     };
 }
 
@@ -304,15 +304,15 @@ void App::updatePick()
     if (mCursor.onSurface) {
         const double ratio = mLayout.pixelRatio;
         const auto plot = getPlotMapping();
-        const double pointerX = mCursor.x - mLayout.insets.left;
-        const double pointerY = mCursor.y - mLayout.insets.top;
+        const double pointerXPx = mCursor.xPx - mLayout.insets.left;
+        const double pointerYPx = mCursor.yPx - mLayout.insets.top;
         if (mSummaries.across > 0) {
-            column = Core::Plot::pickColumn(mSummaries.columns, mSummaries.across, plot, pointerX, pointerY, PickRadius * ratio,
-                                            Gpu::Market::Style::ColumnMinHeight * ratio);
+            column = Core::Plot::pickColumn(mSummaries.columns, mSummaries.across, plot, pointerXPx, pointerYPx, PickRadiusCssPx * ratio,
+                                            Gpu::Market::Style::ColumnMinHeightCssPx * ratio);
         } else {
-            const Core::Plot::PickRule rule{ .pickRadius = PickRadius * ratio, .maxMarkerRadius = Gpu::Market::Style::MarkerMaxRadius * ratio };
-            trade = Core::Plot::pickTrade(mData.trades, mView.trades, plot, pointerX, pointerY, rule,
-                                          [&](double amount) { return Gpu::Market::Style::getMarkerRadius(amount, mMarkerScale) * ratio; });
+            const Core::Plot::PickRule rule{ .pickRadius = PickRadiusCssPx * ratio, .maxMarkerRadius = Gpu::Market::Style::MarkerMaxRadiusCssPx * ratio };
+            trade = Core::Plot::pickTrade(mData.trades, mView.trades, plot, pointerXPx, pointerYPx, rule,
+                                          [&](double amount) { return Gpu::Market::Style::getMarkerRadiusCssPx(amount, mMarkerScale) * ratio; });
         }
     }
     if (trade != mCursor.trade) {
@@ -331,15 +331,15 @@ const Gpu::Type::Info& App::getInfo() const
     return mEngine->getInfo();
 }
 
-void App::resize(std::uint32_t width, std::uint32_t height)
+void App::resize(std::uint32_t widthPx, std::uint32_t heightPx)
 {
     // The native loop calls this every iteration.
-    if (width == mLayout.surfaceWidth && height == mLayout.surfaceHeight) {
+    if (widthPx == mLayout.surfaceWidthPx && heightPx == mLayout.surfaceHeightPx) {
         return;
     }
-    mLayout.surfaceWidth = width;
-    mLayout.surfaceHeight = height;
-    mEngine->resize(width, height);
+    mLayout.surfaceWidthPx = widthPx;
+    mLayout.surfaceHeightPx = heightPx;
+    mEngine->resize(widthPx, heightPx);
     updateAxes();
     updateSummaries();
     updatePick();

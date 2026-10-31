@@ -32,9 +32,9 @@ struct GpuMarkers
     float opacity;
     std::array<float, 3> sellColor;
     std::uint32_t scale;  // 0 area, 1 log
-    float minRadius;
-    float maxRadius;
-    float areaRadiusAt1Btc;
+    float minRadiusCssPx;
+    float maxRadiusCssPx;
+    float areaRadiusAt1BtcCssPx;
     float logLowest;
     float logHighest;
     std::array<float, 3> padding;  // cursorColor starts on 16 bytes
@@ -51,8 +51,8 @@ struct Uniforms
     float lengthUs;
     float priceLow;
     float priceSpan;
-    float plotWidth;
-    float plotHeight;
+    float plotWidthPx;
+    float plotHeightPx;
     float pixelRatio;
     GpuMarkers markers;
 };
@@ -210,17 +210,17 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot
         .lengthUs = static_cast<float>(mView.time.getLengthUs()),
         .priceLow = static_cast<float>(mView.price.low),
         .priceSpan = static_cast<float>(mView.price.high - mView.price.low),
-        .plotWidth = static_cast<float>(plot.width),
-        .plotHeight = static_cast<float>(plot.height),
+        .plotWidthPx = static_cast<float>(plot.width),
+        .plotHeightPx = static_cast<float>(plot.height),
         .pixelRatio = mPixelRatio,
         .markers = {
             .buyColor = toGpu(mTheme.buy),
             .opacity = mTheme.markerOpacity,
             .sellColor = toGpu(mTheme.sell),
             .scale = mMarkerScale == Type::MarkerScale::Area ? 0u : 1u,
-            .minRadius = Style::MarkerMinRadius,
-            .maxRadius = Style::MarkerMaxRadius,
-            .areaRadiusAt1Btc = Style::MarkerAreaRadiusAt1Btc,
+            .minRadiusCssPx = Style::MarkerMinRadiusCssPx,
+            .maxRadiusCssPx = Style::MarkerMaxRadiusCssPx,
+            .areaRadiusAt1BtcCssPx = Style::MarkerAreaRadiusAt1BtcCssPx,
             .logLowest = Style::MarkerLogLowest,
             .logHighest = Style::MarkerLogHighest,
             .padding = {},

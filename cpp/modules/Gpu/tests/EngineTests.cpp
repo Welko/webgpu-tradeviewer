@@ -29,11 +29,11 @@ constexpr std::int64_t NoonUs = 1'575'201'600'000'000;  // 2019-12-01 12:00 UTC
 // Built without exceptions: CHECK and return early, instead of REQUIRE.
 
 /** Null, with a failed check, if no engine could be created. */
-std::unique_ptr<Engine> createOffscreen(std::uint32_t width, std::uint32_t height)
+std::unique_ptr<Engine> createOffscreen(std::uint32_t widthPx, std::uint32_t heightPx)
 {
     std::unique_ptr<Engine> engine;
     bool done = false;
-    Engine::create(Gpu::Type::Target::Offscreen{ .width = width, .height = height }, Gpu::Type::PowerPreference::Default,
+    Engine::create(Gpu::Type::Target::Offscreen{ .width = widthPx, .height = heightPx }, Gpu::Type::PowerPreference::Default,
         [&](Engine::CreatedResult result) {
             done = true;
             CHECK_MESSAGE(result, (result ? "" : result.error()));
@@ -106,9 +106,9 @@ struct Rgba
 };
 
 /** The pixel at column `x` and row `y`, counting rows from the top. */
-Rgba pixelAt(const Pixels& pixels, std::uint32_t width, std::uint32_t x, std::uint32_t y)
+Rgba pixelAt(const Pixels& pixels, std::uint32_t widthPx, std::uint32_t xPx, std::uint32_t yPx)
 {
-    const std::size_t i = (std::size_t{ y } * width + x) * 4;
+    const std::size_t i = (std::size_t{ yPx } * widthPx + xPx) * 4;
     return { pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3] };
 }
 
@@ -285,7 +285,7 @@ TEST_CASE("Markers are drawn at the legend's sizes, scaled by the pixel ratio")
                 if (!pixels) {
                     return;
                 }
-                CHECK(std::abs(measureDiameter(*pixels) - 2.0 * size.radius * pixelRatio) <= 1.0);
+                CHECK(std::abs(measureDiameter(*pixels) - 2.0 * size.radiusCssPx * pixelRatio) <= 1.0);
             }
         }
     }

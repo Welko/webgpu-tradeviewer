@@ -108,7 +108,7 @@ struct Engine::Impl
     /** Configures the surface, or recreates the offscreen texture. */
     void configure();
 
-    void resize(std::uint32_t newWidth, std::uint32_t newHeight);
+    void resize(std::uint32_t newWidthPx, std::uint32_t newHeightPx);
 
     /** This frame's image, or nothing to skip it (zero size, or the surface was reconfigured). */
     [[nodiscard]] std::optional<Image> acquire();
@@ -124,7 +124,7 @@ struct Engine::Impl
         Handle<WGPUSurface> surface;  // set for a window or canvas
         Handle<WGPUTexture> offscreen;  // set for an offscreen target
         WGPUTextureFormat format = WGPUTextureFormat_Undefined;
-        std::uint32_t width = 0;
+        std::uint32_t width = 0;  // physical pixels
         std::uint32_t height = 0;
     };
 
@@ -287,13 +287,13 @@ void Engine::Impl::configure()
     wgpuSurfaceConfigure(output.surface.get(), &configuration);
 }
 
-void Engine::Impl::resize(std::uint32_t newWidth, std::uint32_t newHeight)
+void Engine::Impl::resize(std::uint32_t newWidthPx, std::uint32_t newHeightPx)
 {
-    if (newWidth == 0 || newHeight == 0 || (newWidth == output.width && newHeight == output.height)) {
+    if (newWidthPx == 0 || newHeightPx == 0 || (newWidthPx == output.width && newHeightPx == output.height)) {
         return;
     }
-    output.width = newWidth;
-    output.height = newHeight;
+    output.width = newWidthPx;
+    output.height = newHeightPx;
     configure();
     dirty = true;
 }
@@ -405,9 +405,9 @@ const Gpu::Type::Info& Engine::getInfo() const
     return mImpl->context.info;
 }
 
-void Engine::resize(std::uint32_t width, std::uint32_t height)
+void Engine::resize(std::uint32_t widthPx, std::uint32_t heightPx)
 {
-    mImpl->resize(width, height);
+    mImpl->resize(widthPx, heightPx);
 }
 
 void Engine::setPixelRatio(float ratio)

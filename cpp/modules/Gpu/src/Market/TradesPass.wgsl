@@ -9,10 +9,11 @@ struct Markers {
     sellColor: vec3f,
     scale: u32,  // 0 area, 1 log
     // Radii in CSS or window pixels.
-    minRadius: f32,
-    maxRadius: f32,
-    areaRadiusAt1Btc: f32,
-    // The log scale grows from minRadius at logLowest BTC to maxRadius at logHighest BTC.
+    minRadiusCssPx: f32,
+    maxRadiusCssPx: f32,
+    areaRadiusAt1BtcCssPx: f32,
+    // The log scale grows from minRadiusCssPx at logLowest BTC to
+    // maxRadiusCssPx at logHighest BTC.
     logLowest: f32,
     logHighest: f32,
     cursorColor: vec3f,  // of the ring around the highlighted trade
@@ -24,8 +25,8 @@ struct View {
     lengthUs: f32,
     priceLow: f32,
     priceSpan: f32,
-    plotWidth: f32,  // pixels
-    plotHeight: f32,
+    plotWidthPx: f32,
+    plotHeightPx: f32,
     pixelRatio: f32,
     markers: Markers,
 };
@@ -53,36 +54,36 @@ fn sinceStartUs(time: vec2u) -> f32 {
     return f32(high) * 4294967296.0 + f32(low);
 }
 
-/** In physical pixels. Style::getMarkerRadius() computes the same in CSS or window pixels. */
-fn markerRadius(amount: f32) -> f32 {
+/** In physical pixels. Style::getMarkerRadiusCssPx() computes the same in CSS or window pixels. */
+fn markerRadiusPx(amount: f32) -> f32 {
     let markers = view.markers;
-    var radius: f32;
+    var radiusCssPx: f32;
     if (markers.scale == 0u) {
-        radius = markers.areaRadiusAt1Btc * sqrt(amount);
+        radiusCssPx = markers.areaRadiusAt1BtcCssPx * sqrt(amount);
     } else {
         let along = log2(amount / markers.logLowest) / log2(markers.logHighest / markers.logLowest);
-        radius = mix(markers.minRadius, markers.maxRadius, along);
+        radiusCssPx = mix(markers.minRadiusCssPx, markers.maxRadiusCssPx, along);
     }
-    return clamp(radius, markers.minRadius, markers.maxRadius) * view.pixelRatio;
+    return clamp(radiusCssPx, markers.minRadiusCssPx, markers.maxRadiusCssPx) * view.pixelRatio;
 }
 
 /**
- * A corner of the triangle around the trade's marker, `margin` pixels wider
+ * A corner of the triangle around the trade's marker, `marginPx` pixels wider
  * than it on each side. Equilateral, the smallest triangle around a circle:
  * one triangle per marker draws the whole day 40% faster than a square of
  * two (BenchmarkApp, Intel HD 520), as GPUs pay per triangle for tiny ones.
  */
-fn placeMarker(trade: Trade, corner: u32, margin: f32) -> Marker {
+fn placeMarker(trade: Trade, corner: u32, marginPx: f32) -> Marker {
     // Each side touches the unit circle.
     var corners = array(vec2f(0.0, 2.0), vec2f(-1.7320508, -1.0), vec2f(1.7320508, -1.0));
     let center = vec2f(sinceStartUs(trade.time) / view.lengthUs, (trade.price - view.priceLow) / view.priceSpan) * 2.0 - 1.0;
-    let radius = markerRadius(trade.amount);
-    let fromCenterPx = corners[corner] * (radius + margin);
+    let radiusPx = markerRadiusPx(trade.amount);
+    let fromCenterPx = corners[corner] * (radiusPx + marginPx);
 
     var marker: Marker;
-    marker.position = vec4f(center + fromCenterPx * 2.0 / vec2f(view.plotWidth, view.plotHeight), 0.0, 1.0);
+    marker.position = vec4f(center + fromCenterPx * 2.0 / vec2f(view.plotWidthPx, view.plotHeightPx), 0.0, 1.0);
     marker.fromCenterPx = fromCenterPx;
-    marker.radiusPx = radius;
+    marker.radiusPx = radiusPx;
     marker.color = select(view.markers.sellColor, view.markers.buyColor, trade.side == 0u);
     return marker;
 }
@@ -103,20 +104,20 @@ fn fragmentMain(marker: Marker) -> @location(0) vec4f {
 
 // The ring around the highlighted trade, in CSS or window pixels: a gap
 // outside its marker, then the ring.
-const RingGap = 1.5;
-const RingWidth = 2.0;
+const RingGapCssPx = 1.5;
+const RingWidthCssPx = 2.0;
 
 @vertex
 fn ringVertex(trade: Trade, @builtin(vertex_index) corner: u32) -> Marker {
-    return placeMarker(trade, corner, (RingGap + RingWidth) * view.pixelRatio + 1.0);
+    return placeMarker(trade, corner, (RingGapCssPx + RingWidthCssPx) * view.pixelRatio + 1.0);
 }
 
 @fragment
 fn ringFragment(marker: Marker) -> @location(0) vec4f {
-    let inner = marker.radiusPx + RingGap * view.pixelRatio;
-    let outer = inner + RingWidth * view.pixelRatio;
-    let distance = length(marker.fromCenterPx);
+    let innerPx = marker.radiusPx + RingGapCssPx * view.pixelRatio;
+    let outerPx = innerPx + RingWidthCssPx * view.pixelRatio;
+    let distancePx = length(marker.fromCenterPx);
     // How much of this pixel the ring covers, smoothed at both edges.
-    let coverage = clamp(min(distance - inner, outer - distance) + 0.5, 0.0, 1.0);
+    let coverage = clamp(min(distancePx - innerPx, outerPx - distancePx) + 0.5, 0.0, 1.0);
     return vec4f(view.markers.cursorColor * coverage, coverage);  // premultiplied
 }

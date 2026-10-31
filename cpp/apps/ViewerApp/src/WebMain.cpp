@@ -61,7 +61,10 @@ val toWeb(Gpu::Type::Color color)
     return object;
 }
 
-/** A legend as { buy, sell, opacity, sizes: [{ amount, radius, bound }] }, `bound` being "exact", "atMost" or "atLeast". */
+/**
+ * A legend as { buy, sell, opacity, sizes: [{ amount, radiusCssPx, bound }] },
+ * `bound` being "exact", "atMost" or "atLeast".
+ */
 val toWeb(const Gpu::Market::Type::Legend& legend)
 {
     using Bound = Gpu::Market::Type::LegendSize::Bound;
@@ -69,7 +72,7 @@ val toWeb(const Gpu::Market::Type::Legend& legend)
     for (const auto& size : legend.sizes) {
         val object = val::object();
         object.set("amount", size.amount);
-        object.set("radius", size.radius);
+        object.set("radiusCssPx", size.radiusCssPx);
         object.set("bound", size.bound == Bound::AtMost ? "atMost" : size.bound == Bound::AtLeast ? "atLeast" : "exact");
         sizes.call<void>("push", object);
     }
@@ -138,10 +141,10 @@ public:
         return *mApp ? (*mApp)->getInfo() : Gpu::Type::Info{};
     }
 
-    void resize(std::uint32_t width, std::uint32_t height)
+    void resize(std::uint32_t widthPx, std::uint32_t heightPx)
     {
         if (*mApp) {
-            (*mApp)->resize(width, height);
+            (*mApp)->resize(widthPx, heightPx);
         }
     }
 
@@ -207,11 +210,11 @@ public:
         }
     }
 
-    /** In physical pixels from the canvas's top left corner. */
-    void setPointer(double x, double y)
+    /** From the canvas's top left corner. */
+    void setPointer(double xPx, double yPx)
     {
         if (*mApp) {
-            (*mApp)->setPointer(x, y);
+            (*mApp)->setPointer(xPx, yPx);
         }
     }
 
@@ -223,10 +226,9 @@ public:
     }
 
     /**
-     * The trade the cursor picks, as { timeUs, price, amount, side, centerX,
-     * centerY }, or null. `side` is "buy" or "sell"; `centerX` and `centerY`
-     * place its marker's center in physical pixels from the canvas's top left
-     * corner.
+     * The trade the cursor picks, as { timeUs, price, amount, side, centerXPx,
+     * centerYPx }, or null. `side` is "buy" or "sell"; `centerXPx` and
+     * `centerYPx` place its marker's center from the canvas's top left corner.
      */
     val getPickedTrade() const
     {
@@ -240,17 +242,16 @@ public:
         result.set("price", picked->price);
         result.set("amount", picked->amount);
         result.set("side", picked->side == Core::Data::Side::Buy ? "buy" : "sell");
-        result.set("centerX", picked->centerX);
-        result.set("centerY", picked->centerY);
+        result.set("centerXPx", picked->centerXPx);
+        result.set("centerYPx", picked->centerYPx);
         return result;
     }
 
     /**
      * The column summary the cursor picks, while summaries are shown, as
      * { startUs, endUs, count, buyCount, buyAmount, sellAmount, priceLow,
-     * priceHigh, centerX, top, bottom }, or null. `centerX`, `top` and
-     * `bottom` place its bar in physical pixels from the canvas's top left
-     * corner.
+     * priceHigh, centerXPx, topPx, bottomPx }, or null. `centerXPx`, `topPx`
+     * and `bottomPx` place its bar from the canvas's top left corner.
      */
     val getPickedColumn() const
     {
@@ -268,9 +269,9 @@ public:
         result.set("sellAmount", summary.sellAmount);
         result.set("priceLow", summary.price.low);
         result.set("priceHigh", summary.price.high);
-        result.set("centerX", picked->centerX);
-        result.set("top", picked->top);
-        result.set("bottom", picked->bottom);
+        result.set("centerXPx", picked->centerXPx);
+        result.set("topPx", picked->topPx);
+        result.set("bottomPx", picked->bottomPx);
         return result;
     }
 
@@ -312,11 +313,11 @@ public:
         return *mApp ? toWeb((*mApp)->getLegend()) : val::null();
     }
 
-    /** Space around the plot for axis labels, in physical pixels. */
-    void setPlotInsets(std::uint32_t left, std::uint32_t top, std::uint32_t right, std::uint32_t bottom)
+    /** Space around the plot for axis labels. */
+    void setPlotInsets(std::uint32_t leftPx, std::uint32_t topPx, std::uint32_t rightPx, std::uint32_t bottomPx)
     {
         if (*mApp) {
-            (*mApp)->setPlotInsets({ .left = left, .top = top, .right = right, .bottom = bottom });
+            (*mApp)->setPlotInsets({ .left = leftPx, .top = topPx, .right = rightPx, .bottom = bottomPx });
         }
     }
 
@@ -334,19 +335,18 @@ public:
         }
     }
 
-    /** `x` in physical pixels from the canvas's left edge; a `factor` above 1 zooms out. */
-    void zoomAt(double x, double factor)
+    /** `xPx` from the canvas's left edge; a `factor` above 1 zooms out. */
+    void zoomAt(double xPx, double factor)
     {
         if (*mApp) {
-            (*mApp)->zoomAt(x, factor);
+            (*mApp)->zoomAt(xPx, factor);
         }
     }
 
-    /** `dx` in physical pixels. */
-    void panBy(double dx)
+    void panBy(double dxPx)
     {
         if (*mApp) {
-            (*mApp)->panBy(dx);
+            (*mApp)->panBy(dxPx);
         }
     }
 

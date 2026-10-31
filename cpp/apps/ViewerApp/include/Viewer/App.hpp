@@ -72,12 +72,12 @@ public:
 
     /**
      * Scales the time range by `factor` (above 1 zooms out), keeping the time
-     * at `x` pixels from the surface's left edge in place.
+     * `xPx` from the surface's left edge in place.
      */
-    void zoomAt(double x, double factor);
+    void zoomAt(double xPx, double factor);
 
-    /** Follows a drag of `dx` pixels: dragging right shows earlier trades. */
-    void panBy(double dx);
+    /** Follows a drag of `dxPx`: dragging right shows earlier trades. */
+    void panBy(double dxPx);
 
     void setMarkerScale(Gpu::Market::Type::MarkerScale scale);
 
@@ -99,19 +99,19 @@ public:
         double amount;
         Core::Data::Side side;
         /** Its marker's center, in physical pixels from the surface's top left corner. */
-        double centerX;
-        double centerY;
+        double centerXPx;
+        double centerYPx;
     };
 
     /**
-     * Moves the cursor to (`x`, `y`), in physical pixels from
-     * the surface's top left corner, and picks the trade it points at: the
-     * nearest center within 24 CSS or window pixels, else a marker under the
-     * pointer (see Core::Plot::pickTrade). While the view is summarized, it
-     * picks the nearest column's bar instead (Core::Plot::pickColumn).
-     * Zooming and panning pick again.
+     * Moves the cursor to (`xPx`, `yPx`), from the surface's top
+     * left corner, and picks the trade it points at: the nearest center within
+     * 24 CSS or window pixels, else a marker under the pointer (see
+     * Core::Plot::pickTrade). While the view is summarized, it picks the
+     * nearest column's bar instead (Core::Plot::pickColumn). Zooming and
+     * panning pick again.
      */
-    void setPointer(double x, double y);
+    void setPointer(double xPx, double yPx);
 
     /** The pointer left the surface, so nothing is picked. */
     void clearPointer();
@@ -124,9 +124,9 @@ public:
         Core::Data::ColumnSummary summary;
         Core::TimeRange time;  // the column's, start inclusive and end exclusive
         /** Its bar's center across, and its top and bottom, in physical pixels from the surface's top left corner. */
-        double centerX;
-        double top;
-        double bottom;
+        double centerXPx;
+        double topPx;
+        double bottomPx;
     };
 
     [[nodiscard]] std::optional<PickedColumn> getPickedColumn() const;
@@ -160,7 +160,7 @@ public:
     [[nodiscard]] const Gpu::Type::Info& getInfo() const;
 
     /** Surface size in physical pixels. */
-    void resize(std::uint32_t width, std::uint32_t height);
+    void resize(std::uint32_t widthPx, std::uint32_t heightPx);
 
     /** Advances the app's state to `nowMs`. */
     void update(double nowMs);
@@ -199,8 +199,8 @@ private:
     [[nodiscard]] Core::Plot::Mapping getPlotMapping() const;
 
     /** The plot's size in physical pixels: the surface less the insets. */
-    [[nodiscard]] double getPlotWidth() const;
-    [[nodiscard]] double getPlotHeight() const;
+    [[nodiscard]] double getPlotWidthPx() const;
+    [[nodiscard]] double getPlotHeightPx() const;
 
     /** The trades, and what's worked out from them when they're set. */
     struct TradeData
@@ -223,8 +223,8 @@ private:
     /** The surface, and the plot inside it. */
     struct Layout
     {
-        std::uint32_t surfaceWidth = 0;  // physical pixels
-        std::uint32_t surfaceHeight = 0;
+        std::uint32_t surfaceWidthPx = 0;  // physical pixels
+        std::uint32_t surfaceHeightPx = 0;
         float pixelRatio = 1.0f;
         Gpu::Plot::Type::Insets insets{};
     };
@@ -233,8 +233,8 @@ private:
     struct Cursor
     {
         bool onSurface = false;
-        double x = 0.0;  // physical pixels from the surface's top left corner
-        double y = 0.0;
+        double xPx = 0.0;  // physical pixels from the surface's top left corner
+        double yPx = 0.0;
         std::optional<std::size_t> trade;
         std::optional<std::size_t> column;  // by position in mSummaries.columns
     };

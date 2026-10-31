@@ -1,7 +1,7 @@
 import { useId } from 'react';
 import type { Color, Legend as LegendData, LegendSize } from './viewerModule';
 
-const SwatchRadius = 5;
+const SwatchRadiusCssPx = 5;
 
 function toCss(color: Color): string {
   const channel = (value: number) => Math.round(value * 255);
@@ -14,14 +14,19 @@ function formatAmount(size: LegendSize): string {
 }
 
 /**
- * A marker as the viewer draws it: a disc of `radius` CSS pixels in `color`
+ * A marker as the viewer draws it: a disc of `radiusCssPx` in `color`
  * (the text color if none), at the markers' opacity.
  */
-function Disc({ radius, color, opacity }: { radius: number; color?: Color; opacity: number }) {
-  const half = Math.ceil(radius) + 1;
+function Disc({ radiusCssPx, color, opacity }: { radiusCssPx: number; color?: Color; opacity: number }) {
+  const halfCssPx = Math.ceil(radiusCssPx) + 1;
   return (
-    <svg width={2 * half} height={2 * half} viewBox={`${-half} ${-half} ${2 * half} ${2 * half}`} aria-hidden="true">
-      <circle r={radius} fill={color ? toCss(color) : 'currentColor'} fillOpacity={opacity} />
+    <svg
+      width={2 * halfCssPx}
+      height={2 * halfCssPx}
+      viewBox={`${-halfCssPx} ${-halfCssPx} ${2 * halfCssPx} ${2 * halfCssPx}`}
+      aria-hidden="true"
+    >
+      <circle r={radiusCssPx} fill={color ? toCss(color) : 'currentColor'} fillOpacity={opacity} />
     </svg>
   );
 }
@@ -36,11 +41,11 @@ export function Legend({ legend, summarized }: { legend: LegendData; summarized:
   return (
     <div className="legend" data-testid="legend">
       <span className="legend-entry">
-        <Disc radius={SwatchRadius} color={legend.buy} opacity={legend.opacity} />
+        <Disc radiusCssPx={SwatchRadiusCssPx} color={legend.buy} opacity={legend.opacity} />
         Buy
       </span>
       <span className="legend-entry">
-        <Disc radius={SwatchRadius} color={legend.sell} opacity={legend.opacity} />
+        <Disc radiusCssPx={SwatchRadiusCssPx} color={legend.sell} opacity={legend.opacity} />
         Sell
       </span>
       {summarized ? (
@@ -65,7 +70,7 @@ export function Legend({ legend, summarized }: { legend: LegendData; summarized:
           {legend.sizes.map((size) => (
             <span key={`${size.bound} ${size.amount}`} className="legend-entry" data-testid="legend-size">
               {/* Sizes are for either side, so they take the text's gray. */}
-              <Disc radius={size.radius} opacity={legend.opacity} />
+              <Disc radiusCssPx={size.radiusCssPx} opacity={legend.opacity} />
               {formatAmount(size)}
             </span>
           ))}

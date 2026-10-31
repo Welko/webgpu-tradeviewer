@@ -13,7 +13,11 @@
 
 namespace Core::Plot {
 
-/** Where trades are drawn: the view's ranges stretched over a plot `width` × `height` pixels, price up. */
+/**
+ * Where trades are drawn: the view's ranges stretched over a plot `width` ×
+ * `height` pixels, price up. Core::Plot works in whichever pixels its caller
+ * uses, so its names carry no Px or CssPx; the app passes physical ones.
+ */
 struct Mapping
 {
     TimeRange time;

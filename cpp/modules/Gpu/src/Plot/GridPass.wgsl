@@ -2,7 +2,7 @@
 // One instance per line; the layout must match GpuLine in GridPass.cpp.
 
 struct Plot {
-    size: vec2f,  // pixels
+    sizePx: vec2f,
     lineColor: vec3f,
 };
 @group(0) @binding(0) var<uniform> plot: Plot;
@@ -18,13 +18,13 @@ fn vertexMain(line: Line, @builtin(vertex_index) corner: u32) -> @builtin(positi
                         vec2f(0.0, 1.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0));
     let unit = corners[corner];
     // Pixels from the plot's bottom left corner.
-    var pixel: vec2f;
+    var positionPx: vec2f;
     if (line.vertical == 1u) {
-        pixel = vec2f(floor(line.position * plot.size.x) + unit.x, unit.y * plot.size.y);
+        positionPx = vec2f(floor(line.position * plot.sizePx.x) + unit.x, unit.y * plot.sizePx.y);
     } else {
-        pixel = vec2f(unit.x * plot.size.x, floor(line.position * plot.size.y) + unit.y);
+        positionPx = vec2f(unit.x * plot.sizePx.x, floor(line.position * plot.sizePx.y) + unit.y);
     }
-    return vec4f(pixel / plot.size * 2.0 - 1.0, 0.0, 1.0);
+    return vec4f(positionPx / plot.sizePx * 2.0 - 1.0, 0.0, 1.0);
 }
 
 @fragment

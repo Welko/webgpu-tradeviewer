@@ -46,10 +46,10 @@ export interface PickedColumn {
   sellAmount: number;
   priceLow: number;
   priceHigh: number;
-  /** Its bar's center across, top and bottom, in physical pixels from the canvas's top left corner. */
-  centerX: number;
-  top: number;
-  bottom: number;
+  /** Its bar's center across, top and bottom, from the canvas's top left corner. */
+  centerXPx: number;
+  topPx: number;
+  bottomPx: number;
 }
 
 /** What Viewer.summaries() returns while the view is crowded enough to show column summaries. */
@@ -68,17 +68,16 @@ export interface PickedTrade {
   /** In BTC. */
   amount: number;
   side: 'buy' | 'sell';
-  /** Its marker's center, in physical pixels from the canvas's top left corner. */
-  centerX: number;
-  centerY: number;
+  /** Its marker's center, from the canvas's top left corner. */
+  centerXPx: number;
+  centerYPx: number;
 }
 
 /** One marker size in a legend. Where the scale stops growing, a size also stands for all amounts past it. */
 export interface LegendSize {
   /** In BTC. */
   amount: number;
-  /** In CSS pixels. */
-  radius: number;
+  radiusCssPx: number;
   bound: 'exact' | 'atMost' | 'atLeast';
 }
 

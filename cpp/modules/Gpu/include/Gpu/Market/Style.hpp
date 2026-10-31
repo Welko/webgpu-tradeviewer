@@ -8,23 +8,23 @@ namespace Gpu::Market::Style {
 // The passes give these to their shaders, so a legend built from them matches
 // what's on screen. Colors are in Type::Theme.
 
-// Marker radii in CSS or window pixels. Every scale stays between these.
-inline constexpr float MarkerMinRadius = 1.5f;
-inline constexpr float MarkerMaxRadius = 16.0f;
-inline constexpr float MarkerAreaRadiusAt1Btc = 6.0f;
-// The log scale grows from MarkerMinRadius at MarkerLogLowest BTC to
-// MarkerMaxRadius at MarkerLogHighest BTC.
+// Marker radii. Every scale stays between these.
+inline constexpr float MarkerMinRadiusCssPx = 1.5f;
+inline constexpr float MarkerMaxRadiusCssPx = 16.0f;
+inline constexpr float MarkerAreaRadiusAt1BtcCssPx = 6.0f;
+// The log scale grows from MarkerMinRadiusCssPx at MarkerLogLowest BTC to
+// MarkerMaxRadiusCssPx at MarkerLogHighest BTC.
 inline constexpr float MarkerLogLowest = 1e-4f;
 inline constexpr float MarkerLogHighest = 100.0f;
 
 // Column summaries, drawn instead of markers in crowded views: bars at least
-// this tall, in CSS or window pixels, so a column of one price still shows,
-// and this opaque for the column with the least traded (the most is opaque).
-inline constexpr float ColumnMinHeight = 2.0f;
+// this tall, so a column of one price still shows, and this opaque for the
+// column with the least traded (the most is opaque).
+inline constexpr float ColumnMinHeightCssPx = 2.0f;
 inline constexpr float ColumnMinOpacity = 0.35f;
 
-/** The radius of a marker for `amount` BTC, in CSS or window pixels, as the shader computes it. */
-[[nodiscard]] float getMarkerRadius(double amount, Type::MarkerScale scale);
+/** The radius of a marker for `amount` BTC, as the shader computes it. */
+[[nodiscard]] float getMarkerRadiusCssPx(double amount, Type::MarkerScale scale);
 
 /**
  * Colors from `theme`, and reference sizes for a legend: where the scale

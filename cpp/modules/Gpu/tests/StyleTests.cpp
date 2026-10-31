@@ -14,27 +14,27 @@ using Bound = Gpu::Market::Type::LegendSize::Bound;
 
 TEST_CASE("On the area scale, four times the amount doubles the radius, within the limits")
 {
-    CHECK(Style::getMarkerRadius(1.0, MarkerScale::Area) == doctest::Approx(Style::MarkerAreaRadiusAt1Btc));
-    CHECK(Style::getMarkerRadius(4.0, MarkerScale::Area) == doctest::Approx(2.0 * Style::MarkerAreaRadiusAt1Btc));
-    CHECK(Style::getMarkerRadius(1e-6, MarkerScale::Area) == Style::MarkerMinRadius);
-    CHECK(Style::getMarkerRadius(1e6, MarkerScale::Area) == Style::MarkerMaxRadius);
+    CHECK(Style::getMarkerRadiusCssPx(1.0, MarkerScale::Area) == doctest::Approx(Style::MarkerAreaRadiusAt1BtcCssPx));
+    CHECK(Style::getMarkerRadiusCssPx(4.0, MarkerScale::Area) == doctest::Approx(2.0 * Style::MarkerAreaRadiusAt1BtcCssPx));
+    CHECK(Style::getMarkerRadiusCssPx(1e-6, MarkerScale::Area) == Style::MarkerMinRadiusCssPx);
+    CHECK(Style::getMarkerRadiusCssPx(1e6, MarkerScale::Area) == Style::MarkerMaxRadiusCssPx);
 }
 
 TEST_CASE("On the log scale, each power of ten adds the same radius, within the limits")
 {
-    const float step = Style::getMarkerRadius(0.1, MarkerScale::Log) - Style::getMarkerRadius(0.01, MarkerScale::Log);
+    const float step = Style::getMarkerRadiusCssPx(0.1, MarkerScale::Log) - Style::getMarkerRadiusCssPx(0.01, MarkerScale::Log);
     CHECK(step > 0.0f);
-    CHECK(Style::getMarkerRadius(10.0, MarkerScale::Log) - Style::getMarkerRadius(1.0, MarkerScale::Log) == doctest::Approx(step));
-    CHECK(Style::getMarkerRadius(Style::MarkerLogLowest, MarkerScale::Log) == doctest::Approx(Style::MarkerMinRadius));
-    CHECK(Style::getMarkerRadius(Style::MarkerLogHighest, MarkerScale::Log) == doctest::Approx(Style::MarkerMaxRadius));
-    CHECK(Style::getMarkerRadius(1e-9, MarkerScale::Log) == Style::MarkerMinRadius);
+    CHECK(Style::getMarkerRadiusCssPx(10.0, MarkerScale::Log) - Style::getMarkerRadiusCssPx(1.0, MarkerScale::Log) == doctest::Approx(step));
+    CHECK(Style::getMarkerRadiusCssPx(Style::MarkerLogLowest, MarkerScale::Log) == doctest::Approx(Style::MarkerMinRadiusCssPx));
+    CHECK(Style::getMarkerRadiusCssPx(Style::MarkerLogHighest, MarkerScale::Log) == doctest::Approx(Style::MarkerMaxRadiusCssPx));
+    CHECK(Style::getMarkerRadiusCssPx(1e-9, MarkerScale::Log) == Style::MarkerMinRadiusCssPx);
 }
 
 TEST_CASE("Amounts of zero or less get the smallest marker")
 {
     for (const auto scale : { MarkerScale::Area, MarkerScale::Log }) {
-        CHECK(Style::getMarkerRadius(0.0, scale) == Style::MarkerMinRadius);
-        CHECK(Style::getMarkerRadius(-1.0, scale) == Style::MarkerMinRadius);
+        CHECK(Style::getMarkerRadiusCssPx(0.0, scale) == Style::MarkerMinRadiusCssPx);
+        CHECK(Style::getMarkerRadiusCssPx(-1.0, scale) == Style::MarkerMinRadiusCssPx);
     }
 }
 
@@ -61,23 +61,23 @@ TEST_CASE("A legend spans the scale from where it stops shrinking to where it st
             continue;
         }
         CHECK(sizes.front().bound == Bound::AtMost);
-        CHECK(sizes.front().radius == Style::MarkerMinRadius);
+        CHECK(sizes.front().radiusCssPx == Style::MarkerMinRadiusCssPx);
         CHECK(sizes.back().bound == Bound::AtLeast);
-        CHECK(sizes.back().radius == Style::MarkerMaxRadius);
+        CHECK(sizes.back().radiusCssPx == Style::MarkerMaxRadiusCssPx);
         for (std::size_t i = 0; i < sizes.size(); ++i) {
             CAPTURE(sizes[i].amount);
             // Each size is what the amount is drawn with.
-            CHECK(Style::getMarkerRadius(sizes[i].amount, scale) == doctest::Approx(sizes[i].radius));
+            CHECK(Style::getMarkerRadiusCssPx(sizes[i].amount, scale) == doctest::Approx(sizes[i].radiusCssPx));
             if (i > 0) {
                 CHECK(sizes[i].amount > sizes[i - 1].amount);
-                CHECK(sizes[i].radius > sizes[i - 1].radius);
+                CHECK(sizes[i].radiusCssPx > sizes[i - 1].radiusCssPx);
             }
             if (i > 0 && i + 1 < sizes.size()) {
                 CHECK(sizes[i].bound == Bound::Exact);
             }
         }
         // Past the ends, sizes stay the same.
-        CHECK(Style::getMarkerRadius(sizes.front().amount / 10.0, scale) == Style::MarkerMinRadius);
-        CHECK(Style::getMarkerRadius(sizes.back().amount * 10.0, scale) == Style::MarkerMaxRadius);
+        CHECK(Style::getMarkerRadiusCssPx(sizes.front().amount / 10.0, scale) == Style::MarkerMinRadiusCssPx);
+        CHECK(Style::getMarkerRadiusCssPx(sizes.back().amount * 10.0, scale) == Style::MarkerMaxRadiusCssPx);
     }
 }

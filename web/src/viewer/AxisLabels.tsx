@@ -1,45 +1,45 @@
 import type { Axes } from './viewerModule';
 
 /** Room for the labels beside and below the plot, in CSS pixels. */
-export const AxisMargins = { right: 64, bottom: 22 };
+export const AxisMarginsCssPx = { right: 64, bottom: 22 };
 
 // Time labels closer than this to an end of the axis align with that end, so they aren't cut off.
-const EdgeDistance = 40;
+const EdgeDistanceCssPx = 40;
 
-/** How to place a time label `x` pixels along an axis `width` pixels long. */
-function alignAt(x: number, width: number): string {
-  if (x < EdgeDistance) {
+/** How to place a time label `xCssPx` along an axis `widthCssPx` long. */
+function alignAt(xCssPx: number, widthCssPx: number): string {
+  if (xCssPx < EdgeDistanceCssPx) {
     return 'translateX(0)';
   }
-  return x > width - EdgeDistance ? 'translateX(-100%)' : 'translateX(-50%)';
+  return xCssPx > widthCssPx - EdgeDistanceCssPx ? 'translateX(-100%)' : 'translateX(-50%)';
 }
 
 interface AxisLabelsProps {
   axes: Axes;
   /** The canvas's size in CSS pixels, margins included. */
-  canvasWidth: number;
-  canvasHeight: number;
+  canvasWidthCssPx: number;
+  canvasHeightCssPx: number;
 }
 
 /**
  * The axes' labels, in the margins the plot leaves free. The viewer draws the
  * matching grid lines, from the same ticks.
  */
-export function AxisLabels({ axes, canvasWidth, canvasHeight }: AxisLabelsProps) {
-  const plotWidth = Math.max(0, canvasWidth - AxisMargins.right);
-  const plotHeight = Math.max(0, canvasHeight - AxisMargins.bottom);
+export function AxisLabels({ axes, canvasWidthCssPx, canvasHeightCssPx }: AxisLabelsProps) {
+  const plotWidthCssPx = Math.max(0, canvasWidthCssPx - AxisMarginsCssPx.right);
+  const plotHeightCssPx = Math.max(0, canvasHeightCssPx - AxisMarginsCssPx.bottom);
   return (
     <div className="axis-labels" aria-hidden="true">
-      <div className="plot-frame" style={{ width: plotWidth, height: plotHeight }} />
+      <div className="plot-frame" style={{ width: plotWidthCssPx, height: plotHeightCssPx }} />
       {axes.times.map((tick) => (
         <span
           key={`time ${tick.label}`}
           className="time-label"
           data-testid="time-label"
           style={{
-            left: tick.fraction * plotWidth,
-            top: plotHeight + 4,
-            transform: alignAt(tick.fraction * plotWidth, plotWidth),
+            left: tick.fraction * plotWidthCssPx,
+            top: plotHeightCssPx + 4,
+            transform: alignAt(tick.fraction * plotWidthCssPx, plotWidthCssPx),
           }}
         >
           {tick.label}
@@ -50,7 +50,7 @@ export function AxisLabels({ axes, canvasWidth, canvasHeight }: AxisLabelsProps)
           key={`price ${tick.label}`}
           className="price-label"
           data-testid="price-label"
-          style={{ left: plotWidth + 6, top: (1 - tick.fraction) * plotHeight }}
+          style={{ left: plotWidthCssPx + 6, top: (1 - tick.fraction) * plotHeightCssPx }}
         >
           {tick.label}
         </span>
