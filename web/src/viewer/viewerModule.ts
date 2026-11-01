@@ -134,7 +134,7 @@ export interface MemoryStats {
   tradesBytes: number;
   /** Derived: amounts and buy counts summed up to each trade, 20 bytes per trade. */
   totalsBytes: number;
-  /** Derived: lowest and highest prices of spans of trades, 32 bytes per trade. */
+  /** Derived: lowest and highest prices of spans of trades, about 2 bytes per trade. */
   priceTreeBytes: number;
   /** Derived: the column summaries on show, while zoomed out. */
   summariesBytes: number;

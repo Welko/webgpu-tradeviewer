@@ -5,6 +5,7 @@
 // Usage: TradeStatsApp <trades.csv[.gz]> <startUs> <endUs>
 // Prints: <count> <amount>, the amount with exactly 8 decimals.
 
+#include "Core/Data/PreprocessedTrades.hpp"
 #include "Core/Data/TradeFile.hpp"
 #include "Core/Data/Trades.hpp"
 
@@ -14,6 +15,7 @@
 #include <format>
 #include <optional>
 #include <string_view>
+#include <utility>
 
 namespace {
 
@@ -38,14 +40,15 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    const auto trades = Core::Data::readTradeFile(argv[1]);
+    auto trades = Core::Data::readTradeFile(argv[1]);
     if (!trades) {
         std::fputs(std::format("{}\n", trades.error()).c_str(), stderr);
         return 1;
     }
 
-    const auto indices = Core::Data::getTradesIn(*trades, { .startUs = *startUs, .endUs = *endUs });
-    const std::int64_t units = Core::Data::RunningTotals(*trades).getUnits(indices);
+    const Core::Data::PreprocessedTrades preprocessed(std::move(*trades));
+    const auto indices = Core::Data::getTradesIn(preprocessed.getTrades(), { .startUs = *startUs, .endUs = *endUs });
+    const std::int64_t units = preprocessed.getUnits(indices);
     constexpr std::int64_t UnitsPerWhole = 100'000'000;  // 1 / Core::Data::AmountUnit
     std::fputs(std::format("{} {}.{:08}\n", indices.size(), units / UnitsPerWhole, units % UnitsPerWhole).c_str(), stdout);
     return 0;

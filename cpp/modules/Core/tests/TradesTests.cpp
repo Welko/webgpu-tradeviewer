@@ -1,13 +1,14 @@
-#include "Core/Data/PriceTree.hpp"
+#include "Core/Data/PreprocessedTrades.hpp"
 #include "Core/Data/Trades.hpp"
 
 #include <doctest/doctest.h>
 
 #include <cstdint>
+#include <utility>
 
 namespace {
 
-using Core::Data::RunningTotals;
+using Core::Data::PreprocessedTrades;
 using Core::IndexRange;
 using Core::Data::Trades;
 
@@ -43,15 +44,15 @@ TEST_CASE("The price range covers only the given trades")
 {
     auto trades = tradesAt({ 1, 2, 3, 4 });
     trades.price = { 50.0, 120.0, 80.0, 10.0 };
-    const Core::Data::PriceTree prices(trades);
+    const PreprocessedTrades preprocessed(std::move(trades));
 
-    const auto middle = prices.getRange({ 1, 3 });
+    const auto middle = preprocessed.getPriceRange({ 1, 3 });
     CHECK(middle);
     if (middle) {
         CHECK(middle->low == 80.0);
         CHECK(middle->high == 120.0);
     }
-    CHECK_FALSE(prices.getRange({ 2, 2 }));
+    CHECK_FALSE(preprocessed.getPriceRange({ 2, 2 }));
 }
 
 TEST_CASE("Totals of amounts are exact for any range")
@@ -59,13 +60,13 @@ TEST_CASE("Totals of amounts are exact for any range")
     auto trades = tradesAt({ 1, 2, 3, 4 });
     // Doubles add 0.1 + 0.2 to 0.30000000000000004; units of 1e-8 don't.
     trades.amount = { 0.1, 0.2, 0.00000001, 12.5 };
-    const RunningTotals totals(trades);
+    const PreprocessedTrades preprocessed(std::move(trades));
 
-    CHECK(totals.getUnits({ 0, 2 }) == 30'000'000);
-    CHECK(totals.getAmount({ 0, 2 }) == 0.3);
-    CHECK(totals.getUnits({ 2, 3 }) == 1);
-    CHECK(totals.getUnits({ 0, 4 }) == 1'280'000'001);
-    CHECK(totals.getUnits({ 3, 3 }) == 0);
-    CHECK(RunningTotals().getUnits({ 0, 0 }) == 0);
-    CHECK(Core::Data::getStats(trades).totalAmount == totals.getAmount({ 0, 4 }));
+    CHECK(preprocessed.getUnits({ 0, 2 }) == 30'000'000);
+    CHECK(preprocessed.getAmount({ 0, 2 }) == 0.3);
+    CHECK(preprocessed.getUnits({ 2, 3 }) == 1);
+    CHECK(preprocessed.getUnits({ 0, 4 }) == 1'280'000'001);
+    CHECK(preprocessed.getUnits({ 3, 3 }) == 0);
+    CHECK(PreprocessedTrades().getUnits({ 0, 0 }) == 0);
+    CHECK(Core::Data::getStats(preprocessed.getTrades()).totalAmount == preprocessed.getAmount({ 0, 4 }));
 }

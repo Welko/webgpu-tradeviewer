@@ -112,7 +112,7 @@ TEST_CASE("While summaries show, the pointer picks columns, not trades")
     CHECK(!app->getPickedColumn());
 }
 
-TEST_CASE("Each trade takes 77 bytes of memory, and 20 on the GPU")
+TEST_CASE("Each trade takes about 47 bytes of memory, and 20 on the GPU")
 {
     auto app = createApp();
     if (!app) {
@@ -122,7 +122,8 @@ TEST_CASE("Each trade takes 77 bytes of memory, and 20 on the GPU")
     const auto memory = app->getMemoryStats();
     CHECK(memory.tradesBytes == 25 * count);
     CHECK(memory.totalsBytes == 20 * (count + 1));  // one more, for none
-    CHECK(memory.priceTreeBytes == 32 * count);
+    // 32 per block of 16 trades: 2 per trade.
+    CHECK(memory.priceTreeBytes == 32 * ((count + 15) / 16));
     CHECK(memory.gpuBytes >= 20 * count);
     // The trades are nearly all of it.
     CHECK(memory.gpuBytes < 20 * count + (1u << 20));

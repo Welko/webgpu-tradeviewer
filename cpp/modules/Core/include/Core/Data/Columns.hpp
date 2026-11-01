@@ -1,7 +1,6 @@
 #pragma once
 
-#include "Core/Data/PriceTree.hpp"
-#include "Core/Data/Trades.hpp"
+#include "Core/Data/PreprocessedTrades.hpp"
 #include "Core/Range.hpp"
 
 #include <cstddef>
@@ -28,9 +27,9 @@ struct ColumnSummary
  *
  * Only columns with trades are returned, so there can be fewer than `across`,
  * with gaps in their indices where nothing traded. Reads O(across · log n)
- * entries, however many trades the columns hold.
+ * entries, and at most 30 prices per column, however many trades the
+ * columns hold.
  */
-[[nodiscard]] std::vector<ColumnSummary> summarizeColumns(const Trades& trades, const RunningTotals& totals,
-                                                          const PriceTree& prices, TimeRange view, std::size_t across);
+[[nodiscard]] std::vector<ColumnSummary> summarizeColumns(const PreprocessedTrades& trades, TimeRange view, std::size_t across);
 
 } // namespace Core::Data

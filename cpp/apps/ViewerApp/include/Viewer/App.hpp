@@ -4,7 +4,7 @@
 #include "Core/Range.hpp"
 #include "Core/Data/Columns.hpp"
 #include "Core/Plot/Pick.hpp"
-#include "Core/Data/PriceTree.hpp"
+#include "Core/Data/PreprocessedTrades.hpp"
 #include "Core/Data/Trades.hpp"
 #include "Gpu/Market/Engine.hpp"
 #include "Gpu/Market/Type.hpp"
@@ -47,9 +47,11 @@ public:
 
     /**
      * Replaces the trades, which must be in time order, and resets the view.
-     * Fails, keeping the old ones, if the GPU can't hold them all.
+     * Takes them, since they're large: pass them with std::move. Fails if the
+     * GPU can't hold them all, keeping the old ones and leaving `trades` as
+     * they were.
      */
-    [[nodiscard]] std::expected<void, std::string> setTrades(Core::Data::Trades trades);
+    [[nodiscard]] std::expected<void, std::string> setTrades(Core::Data::Trades&& trades);
 
     /** The trades in the time range on screen, start inclusive and end exclusive. */
     [[nodiscard]] Core::Data::TradeStats getViewStats() const;
@@ -216,7 +218,7 @@ public:
     {
         std::size_t tradesBytes = 0;  // 25 per trade
         std::size_t totalsBytes = 0;  // running totals, 20 per trade
-        std::size_t priceTreeBytes = 0;  // 32 per trade
+        std::size_t priceTreeBytes = 0;  // about 2 per trade
         std::size_t summariesBytes = 0;  // the column summaries on show
         std::uint64_t gpuBytes = 0;  // buffers and textures: 20 per trade, and the columns'
 
@@ -252,21 +254,15 @@ private:
     /** Gives a new engine everything the old one had. */
     void setUpEngine();
 
+    /** Midnight UTC before the first trade, or the Unix epoch with none. */
+    [[nodiscard]] std::int64_t getDayStartUs() const;
+
     /** Where the view's trades are drawn, in physical pixels within the plot. */
     [[nodiscard]] Core::Plot::Mapping getPlotMapping() const;
 
     /** The plot's size in physical pixels: the surface less the insets. */
     [[nodiscard]] double getPlotWidthPx() const;
     [[nodiscard]] double getPlotHeightPx() const;
-
-    /** The trades, and what's worked out from them when they're set. */
-    struct TradeData
-    {
-        Core::Data::Trades trades;
-        Core::Data::RunningTotals totals;
-        Core::Data::PriceTree prices;
-        std::int64_t dayStartUs = 0;  // midnight UTC before the first trade
-    };
 
     /** What's on screen; applyView() updates it all. */
     struct View
@@ -336,7 +332,7 @@ private:
     // Null only while a new one is being created, after the GPU was lost.
     std::unique_ptr<Gpu::Market::Engine> mEngine;
     EngineSetup mSetup;
-    TradeData mData;
+    Core::Data::PreprocessedTrades mData;
     View mView;
     Layout mLayout;
     Cursor mCursor;

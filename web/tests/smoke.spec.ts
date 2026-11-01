@@ -338,12 +338,12 @@ test('shows synthetic trades until a file is opened', async ({ page }) => {
   await waitUntilReady(page);
   await expect(page.getByTestId('source')).toContainText('Synthetic');
   await expect(page.getByTestId('trade-count')).not.toHaveText('0');
-  // 432,544 trades: 25 bytes each, and 52 derived.
+  // 432,544 trades: 25 bytes each, and 22 derived.
   const memory = page.getByTestId('memory');
-  await expect(memory.locator('summary')).toHaveText('Memory: 31.8 MiB, and 8.3 MiB on the GPU');
+  await expect(memory.locator('summary')).toHaveText('Memory: 19.4 MiB, and 8.3 MiB on the GPU');
   await memory.locator('summary').click();
-  await expect(memory.locator('tr', { hasText: 'Price tree' })).toContainText('32 B');
-  await expect(page.getByTestId('memory-derived')).toContainText('The derived data adds 208% to the trades.');
+  await expect(memory.locator('tr', { hasText: 'Price tree' })).toContainText('2.0 B');
+  await expect(page.getByTestId('memory-derived')).toContainText('The derived data adds 88% to the trades.');
 
   const fileInput = page.locator('input[type=file]');
   await fileInput.setInputFiles({ name: 'trades.csv.gz', mimeType: 'application/gzip', buffer: TwoTrades });

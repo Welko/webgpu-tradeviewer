@@ -61,23 +61,17 @@ App::App(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market::Engine::Param
 
 const Core::Data::Trades& App::getTrades() const
 {
-    return mData.trades;
+    return mData.getTrades();
 }
 
-std::expected<void, std::string> App::setTrades(Core::Data::Trades trades)
+std::expected<void, std::string> App::setTrades(Core::Data::Trades&& trades)
 {
     if (mEngine) {
         if (auto set = mEngine->setTrades(trades); !set) {
             return set;
         }
     }
-    mData.trades = std::move(trades);
-    mData.trades.shrinkToFit();
-    mData.totals = Core::Data::RunningTotals(mData.trades);
-    mData.prices = Core::Data::PriceTree(mData.trades);
-    const std::int64_t firstUs = mData.trades.empty() ? 0 : mData.trades.timeUs.front();
-    // Rounded down, also before 1970.
-    mData.dayStartUs = (firstUs >= 0 ? firstUs : firstUs - DayUs + 1) / DayUs * DayUs;
+    mData = Core::Data::PreprocessedTrades(std::move(trades));
     mView.price = {};
     resetView();
     return {};
@@ -88,23 +82,34 @@ Core::Data::TradeStats App::getViewStats() const
     if (mView.trades.empty()) {
         return {};
     }
+    const auto& timeUs = mData.getTrades().timeUs;
     return {
         .count = mView.trades.size(),
-        .firstUs = mData.trades.timeUs[mView.trades.first],
-        .lastUs = mData.trades.timeUs[mView.trades.last - 1],
-        .totalAmount = mData.totals.getAmount(mView.trades),
+        .firstUs = timeUs[mView.trades.first],
+        .lastUs = timeUs[mView.trades.last - 1],
+        .totalAmount = mData.getAmount(mView.trades),
     };
+}
+
+std::int64_t App::getDayStartUs() const
+{
+    const auto& timeUs = mData.getTrades().timeUs;
+    const std::int64_t firstUs = timeUs.empty() ? 0 : timeUs.front();
+    // Rounded down, also before 1970.
+    return (firstUs >= 0 ? firstUs : firstUs - DayUs + 1) / DayUs * DayUs;
 }
 
 void App::resetView()
 {
-    mView.time = { .startUs = mData.dayStartUs + 12 * HourUs, .endUs = mData.dayStartUs + 13 * HourUs };
+    const std::int64_t dayStartUs = getDayStartUs();
+    mView.time = { .startUs = dayStartUs + 12 * HourUs, .endUs = dayStartUs + 13 * HourUs };
     applyView();
 }
 
 void App::showDay()
 {
-    mView.time = { .startUs = mData.dayStartUs, .endUs = mData.dayStartUs + DayUs };
+    const std::int64_t dayStartUs = getDayStartUs();
+    mView.time = { .startUs = dayStartUs, .endUs = dayStartUs + DayUs };
     applyView();
 }
 
@@ -205,8 +210,8 @@ void App::updateAxes()
 
 void App::applyView()
 {
-    mView.trades = Core::Data::getTradesIn(mData.trades, mView.time);
-    if (const auto price = mData.prices.getRange(mView.trades)) {
+    mView.trades = Core::Data::getTradesIn(mData.getTrades(), mView.time);
+    if (const auto price = mData.getPriceRange(mView.trades)) {
         // Some room even for a single price, so its trades sit mid-height.
         const double padding = std::max((price->high - price->low) * PricePadding, price->high * 1e-5);
         mView.price = { .low = price->low - padding, .high = price->high + padding };
@@ -248,7 +253,7 @@ void App::updateSummaries()
         return;
     }
     mSummaries.across = static_cast<std::uint32_t>(across);
-    mSummaries.columns = Core::Data::summarizeColumns(mData.trades, mData.totals, mData.prices, mView.time, mSummaries.across);
+    mSummaries.columns = Core::Data::summarizeColumns(mData, mView.time, mSummaries.across);
     showColumns();
 }
 
@@ -300,14 +305,15 @@ std::optional<App::PickedTrade> App::getPickedTrade() const
     }
     const std::size_t i = *mCursor.trade;
     const auto plot = getPlotMapping();
+    const auto& trades = mData.getTrades();
     return PickedTrade{
         .index = i,
-        .timeUs = mData.trades.timeUs[i],
-        .price = mData.trades.price[i],
-        .amount = mData.trades.amount[i],
-        .side = mData.trades.side[i],
-        .centerXPx = mLayout.insets.left + plot.getX(mData.trades.timeUs[i]),
-        .centerYPx = mLayout.insets.top + plot.getY(mData.trades.price[i]),
+        .timeUs = trades.timeUs[i],
+        .price = trades.price[i],
+        .amount = trades.amount[i],
+        .side = trades.side[i],
+        .centerXPx = mLayout.insets.left + plot.getX(trades.timeUs[i]),
+        .centerYPx = mLayout.insets.top + plot.getY(trades.price[i]),
     };
 }
 
@@ -345,7 +351,7 @@ void App::updatePick()
                                             Gpu::Market::Style::ColumnMinHeightCssPx * ratio);
         } else {
             const Core::Plot::PickRule rule{ .pickRadius = PickRadiusCssPx * ratio, .maxMarkerRadius = Gpu::Market::Style::MarkerMaxRadiusCssPx * ratio };
-            trade = Core::Plot::pickTrade(mData.trades, mView.trades, plot, pointerXPx, pointerYPx, rule,
+            trade = Core::Plot::pickTrade(mData.getTrades(), mView.trades, plot, pointerXPx, pointerYPx, rule,
                                           [&](double amount) { return Gpu::Market::Style::getMarkerRadiusCssPx(amount, mMarkerScale) * ratio; });
         }
     }
@@ -460,10 +466,11 @@ App::GpuHealth App::getGpuHealth() const
 
 App::MemoryStats App::getMemoryStats() const
 {
+    const auto bytes = mData.getBytes();
     return {
-        .tradesBytes = mData.trades.getBytes(),
-        .totalsBytes = mData.totals.getBytes(),
-        .priceTreeBytes = mData.prices.getBytes(),
+        .tradesBytes = bytes.trades,
+        .totalsBytes = bytes.totals,
+        .priceTreeBytes = bytes.priceTree,
         .summariesBytes = mSummaries.columns.capacity() * sizeof(Core::Data::ColumnSummary),
         .gpuBytes = mEngine ? mEngine->getGpuBytes() : 0,
     };
@@ -521,7 +528,7 @@ void App::setUpEngine()
     mEngine->setPlotInsets(mLayout.insets);
     mEngine->setTheme(mTheme);
     mEngine->setMarkerScale(mMarkerScale);
-    if (auto set = mEngine->setTrades(mData.trades); !set) {
+    if (auto set = mEngine->setTrades(mData.getTrades()); !set) {
         // Only if the new GPU holds fewer than the old one did.
         Core::Log::error("{}", set.error());
         mSetup.gpu = GpuFailed{ .reason = std::move(set.error()) };
