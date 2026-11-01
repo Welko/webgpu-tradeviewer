@@ -9,12 +9,18 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
+#include <nlohmann/json.hpp>
+
+#include <sys/utsname.h>
+
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <expected>
+#include <filesystem>
 #include <format>
+#include <fstream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -218,23 +224,50 @@ std::string getWindowTitle(const Viewer::App& app)
 }
 
 /**
- * Every scene and its known pixels as JSON, for tools/compare-renderings.mjs
- * to check renderings with. Their names and descriptions need no escaping.
+ * `scene` and its known pixels as JSON, written beside its snapshot for
+ * tools/compare-renderings.mjs to check it with, as web/tests/scenes.spec.ts
+ * writes it for the browsers.
  */
-std::string getScenesJson()
+nlohmann::ordered_json getSceneJson(const Viewer::Scene& scene, const std::vector<Viewer::Scene::Patch>& patches)
 {
-    std::string scenes;
-    for (const auto& scene : Viewer::Scene::getScenes()) {
-        std::string patches;
-        for (const auto& patch : scene.patches) {
-            patches += std::format("{}\n      {{ \"what\": \"{}\", \"xPx\": {}, \"yPx\": {}, \"rgba\": [{}, {}, {}, {}], \"tolerance\": {} }}",
-                                   patches.empty() ? "" : ",", patch.what, patch.xPx, patch.yPx, patch.rgba[0], patch.rgba[1],
-                                   patch.rgba[2], patch.rgba[3], patch.tolerance);
-        }
-        scenes += std::format("{}\n  {{\n    \"name\": \"{}\",\n    \"description\": \"{}\",\n    \"widthPx\": {},\n    \"heightPx\": {},\n    \"patches\": [{}\n    ]\n  }}",
-                              scenes.empty() ? "" : ",", scene.name, scene.description, scene.widthPx, scene.heightPx, patches);
+    auto list = nlohmann::ordered_json::array();
+    for (const auto& patch : patches) {
+        list.push_back({ { "what", patch.what },
+                         { "xPx", patch.xPx },
+                         { "yPx", patch.yPx },
+                         { "widthPx", patch.widthPx },
+                         { "heightPx", patch.heightPx },
+                         { "rgba", patch.rgba },
+                         { "tolerance", patch.tolerance } });
     }
-    return std::format("[{}\n]\n", scenes);
+    return { { "name", scene.name },
+             { "description", scene.description },
+             { "widthPx", scene.widthPx },
+             { "heightPx", scene.heightPx },
+             { "patches", std::move(list) } };
+}
+
+/** What the comparison report says about this platform, as web/tests/scenes.spec.ts writes it for the browsers. */
+nlohmann::ordered_json getAboutJson(const Gpu::Type::Info& info)
+{
+    utsname system{};
+    uname(&system);
+    auto scenes = nlohmann::ordered_json::array();
+    for (const auto& scene : Viewer::Scene::getScenes()) {
+        scenes.push_back(scene.name);
+    }
+    return { { "platform", "native" },
+             { "version", std::format("wgpu-native {}, {} {}", TRADEVIEWER_WGPU_VERSION, system.sysname, system.machine) },
+             { "gpu", std::format("{} · {} · {}", info.device, info.backend, info.adapter) },
+             { "scenes", std::move(scenes) } };
+}
+
+/** Writes `json` to `path` as the browsers' tests do: indented by 2, with a final newline. */
+void writeJson(const std::filesystem::path& path, const nlohmann::ordered_json& json)
+{
+    if (!(std::ofstream(path) << json.dump(2) << '\n')) {
+        Core::Log::error("Failed to write {}", path.string());
+    }
 }
 
 /** Where a snapshot goes, and whether it was written. */
@@ -269,15 +302,11 @@ void writeSnapshot(Snapshot& snapshot, std::uint32_t widthPx, std::uint32_t heig
 
 int main(int argc, char** argv)
 {
-    // The image tests' scenes, one name per line, or as JSON with their known pixels, for tools/render-native.sh.
+    // The image tests' scenes, one name per line, for tools/render-native.sh.
     if (getOption(argc, argv, "--list-scenes")) {
         for (const auto& known : Viewer::Scene::getScenes()) {
             std::fputs(std::format("{}\n", known.name).c_str(), stdout);
         }
-        return 0;
-    }
-    if (getOption(argc, argv, "--describe-scenes")) {
-        std::fputs(getScenesJson().c_str(), stdout);
         return 0;
     }
 
@@ -363,8 +392,15 @@ int main(int argc, char** argv)
             Core::Log::warn("The window is {} × {} pixels, not the scene's {} × {}", widthPx, heightPx, scene->widthPx, scene->heightPx);
         }
         // A still picture: no input, and the scene's own size and pixel ratio.
-        Viewer::Scene::show(*scene, *app);
+        const auto patches = Viewer::Scene::show(*scene, *app);
         Core::Log::info("Scene {}: {}", scene->name, scene->description);
+        if (snapshot) {
+            // Beside the PNG: out.png's known pixels go to out.json, and
+            // what drew it to about.json, which every scene's run rewrites.
+            const std::filesystem::path path = snapshot->path;
+            writeJson(std::filesystem::path(path).replace_extension(".json"), getSceneJson(*scene, patches));
+            writeJson(path.parent_path() / "about.json", getAboutJson(app->getInfo()));
+        }
     } else {
         app->setTrades(loaded ? std::move(*loaded) : Viewer::generateSyntheticDay());
         const auto stats = Core::Data::getStats(app->getTrades());

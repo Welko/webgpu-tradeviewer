@@ -1,12 +1,14 @@
 #include "Viewer/Scene.hpp"
 
 #include "Core/Data/Trades.hpp"
+#include "Gpu/Market/Style.hpp"
 #include "Gpu/Market/Type.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <format>
+#include <iterator>
 
 namespace Viewer {
 
@@ -37,23 +39,98 @@ std::array<std::uint8_t, 4> over(Rgb color, Rgb background, float opacity)
     return result;
 }
 
+/**
+ * The margins left for axis labels, right and below the plot, which nothing
+ * is drawn in: all background.
+ */
+std::vector<Scene::Patch> margins(std::uint32_t widthPx, std::uint32_t heightPx, Gpu::Plot::Type::Insets insets,
+                                  std::array<std::uint8_t, 4> background, int tolerance)
+{
+    return {
+        { .what = "right margin", .xPx = widthPx - insets.right, .yPx = 0, .widthPx = insets.right, .heightPx = heightPx,
+          .rgba = background, .tolerance = tolerance },
+        { .what = "bottom margin", .xPx = 0, .yPx = heightPx - insets.bottom, .widthPx = widthPx - insets.right,
+          .heightPx = insets.bottom, .rgba = background, .tolerance = tolerance },
+    };
+}
+
+/** A default theme color in whole 255ths. Some fall halfway, such as 0.1 × 255 = 25.5, so they're checked ±1. */
+std::array<std::uint8_t, 4> toBytes(Gpu::Type::Color color)
+{
+    const auto byte = [](float channel) { return static_cast<std::uint8_t>(std::lround(channel * 255.0f)); };
+    return { byte(color.red), byte(color.green), byte(color.blue), 255 };
+}
+
 // The app's look: synthetic trades in the default colors.
 
 // Room for the axis labels, as the web app leaves it at a pixel ratio of 1.
 constexpr Gpu::Plot::Type::Insets AppInsets{ .left = 0, .top = 0, .right = 64, .bottom = 22 };
 constexpr std::uint32_t AppWidthPx = 960;
 constexpr std::uint32_t AppHeightPx = 540;
+constexpr std::uint32_t AppPlotWidthPx = AppWidthPx - AppInsets.right;
 
-/** The default background, in a corner left for axis labels. 0.1 × 255 is 25.5, so ±1. */
-Scene::Patch appBackground()
+// The price axis leaves 5% of the price range free above the highest trade:
+// 23 pixels here, more than the largest marker's 16. So the plot's top rows
+// show the grid's vertical lines and nothing else.
+constexpr std::uint32_t FreeTopRows = 6;
+
+/** The time axis's grid lines, in the plot's top rows. */
+void findGridLines(const App& app, std::vector<Scene::Patch>& patches)
 {
-    const auto background = Gpu::Market::Type::Theme{}.plot.background;
-    const auto byte = [](float channel) { return static_cast<std::uint8_t>(std::lround(channel * 255.0f)); };
-    return { .what = "background, under the axis labels",
-             .xPx = AppWidthPx - 4,
-             .yPx = AppHeightPx - 4,
-             .rgba = { byte(background.red), byte(background.green), byte(background.blue), 255 },
-             .tolerance = 1 };
+    for (const auto& tick : app.getAxes().times) {
+        // On the pixel column the shader floors it to, in 32-bit floats as it
+        // gets them; a product of two floats rounds the same on every GPU.
+        const float xPx = std::floor(static_cast<float>(tick.fraction) * static_cast<float>(AppPlotWidthPx));
+        if (xPx < 0.0f || xPx >= static_cast<float>(AppPlotWidthPx)) {
+            continue;
+        }
+        patches.push_back({ .what = std::format("grid line at {}", tick.label),
+                            .xPx = static_cast<std::uint32_t>(xPx),
+                            .yPx = 0,
+                            .heightPx = FreeTopRows,
+                            .rgba = toBytes(Gpu::Market::Type::Theme{}.plot.grid),
+                            .tolerance = 1 });
+    }
+}
+
+/**
+ * A pixel the ring around the picked trade fully covers, in the cursor
+ * color: above its center, 2.5 pixels outside its marker (the ring is 2
+ * pixels wide, 1.5 outside the marker). The ring is drawn over every marker.
+ */
+void findRing(const App& app, std::vector<Scene::Patch>& patches)
+{
+    const auto picked = app.getPickedTrade();
+    if (!picked) {
+        return;
+    }
+    const double middlePx = Gpu::Market::Style::getMarkerRadiusCssPx(picked->amount, Gpu::Market::Type::MarkerScale::Area) + 2.5;
+    const double xPx = std::floor(picked->centerXPx);
+    // The row whose center is nearest the middle of the ring: within half a pixel.
+    const double yPx = std::floor(picked->centerYPx - middlePx);
+    const double distancePx = std::hypot(xPx + 0.5 - picked->centerXPx, yPx + 0.5 - picked->centerYPx);
+    if (std::abs(distancePx - middlePx) > 0.45 || yPx < 0) {
+        return;
+    }
+    patches.push_back({ .what = "ring",
+                        .xPx = static_cast<std::uint32_t>(xPx),
+                        .yPx = static_cast<std::uint32_t>(yPx),
+                        .rgba = toBytes(Gpu::Market::Type::Theme{}.cursor),
+                        .tolerance = 0 });
+}
+
+/** The middle of the picked column's bar, drawn opaque in the cursor color. */
+void findHighlightedColumn(const App& app, std::vector<Scene::Patch>& patches)
+{
+    const auto picked = app.getPickedColumn();
+    if (!picked) {
+        return;
+    }
+    patches.push_back({ .what = "highlighted column",
+                        .xPx = static_cast<std::uint32_t>(picked->centerXPx),
+                        .yPx = static_cast<std::uint32_t>((picked->topPx + picked->bottomPx) / 2.0),
+                        .rgba = toBytes(Gpu::Market::Type::Theme{}.cursor),
+                        .tolerance = 0 });
 }
 
 /** Moves the pointer down the middle of the plot until it picks a trade or a column. */
@@ -104,6 +181,13 @@ constexpr std::uint32_t MarkersYPx = 90;
 // covered 18.5 pixels from the center.
 constexpr std::uint32_t RingYPx = MarkersYPx - 19;
 
+/** `patches`, then the color scenes' margins. */
+std::vector<Scene::Patch> withMargins(std::vector<Scene::Patch> patches)
+{
+    std::ranges::move(margins(ColorWidthPx, ColorHeightPx, ColorInsets, opaque(Background), 0), std::back_inserter(patches));
+    return patches;
+}
+
 void setUpColors(App& app, float opacity)
 {
     Core::Data::Trades trades;
@@ -134,8 +218,12 @@ const std::vector<Scene>& getAll()
             .widthPx = AppWidthPx,
             .heightPx = AppHeightPx,
             .insets = AppInsets,
-            .patches = { appBackground() },
+            .patches = margins(AppWidthPx, AppHeightPx, AppInsets, toBytes(Gpu::Market::Type::Theme{}.plot.background), 1),
             .setUp = setUpHour,
+            .findPatches = [](const Scene&, const App& app, std::vector<Scene::Patch>& patches) {
+                findGridLines(app, patches);
+                findRing(app, patches);
+            },
         },
         {
             .name = "day",
@@ -143,8 +231,12 @@ const std::vector<Scene>& getAll()
             .widthPx = AppWidthPx,
             .heightPx = AppHeightPx,
             .insets = AppInsets,
-            .patches = { appBackground() },
+            .patches = margins(AppWidthPx, AppHeightPx, AppInsets, toBytes(Gpu::Market::Type::Theme{}.plot.background), 1),
             .setUp = setUpDay,
+            .findPatches = [](const Scene&, const App& app, std::vector<Scene::Patch>& patches) {
+                findGridLines(app, patches);
+                findHighlightedColumn(app, patches);
+            },
         },
         {
             .name = "opaque",
@@ -152,13 +244,12 @@ const std::vector<Scene>& getAll()
             .widthPx = ColorWidthPx,
             .heightPx = ColorHeightPx,
             .insets = ColorInsets,
-            .patches = {
-                { .what = "background", .xPx = ColorWidthPx - 4, .yPx = ColorHeightPx - 4, .rgba = opaque(Background), .tolerance = 0 },
+            .patches = withMargins({
                 { .what = "buy marker", .xPx = BuyXPx, .yPx = MarkersYPx, .rgba = opaque(Buy), .tolerance = 0 },
                 { .what = "sell marker", .xPx = SellXPx, .yPx = MarkersYPx, .rgba = opaque(Sell), .tolerance = 0 },
                 { .what = "ring", .xPx = BuyXPx, .yPx = RingYPx, .rgba = opaque(Cursor), .tolerance = 0 },
                 { .what = "between the markers", .xPx = (BuyXPx + SellXPx) / 2, .yPx = MarkersYPx, .rgba = opaque(Background), .tolerance = 0 },
-            },
+            }),
             .setUp = [](App& app) {
                 setUpColors(app, 1.0f);
                 app.setPointer(BuyXPx, MarkersYPx);
@@ -170,11 +261,10 @@ const std::vector<Scene>& getAll()
             .widthPx = ColorWidthPx,
             .heightPx = ColorHeightPx,
             .insets = ColorInsets,
-            .patches = {
-                { .what = "background", .xPx = ColorWidthPx - 4, .yPx = ColorHeightPx - 4, .rgba = opaque(Background), .tolerance = 0 },
+            .patches = withMargins({
                 { .what = "buy marker", .xPx = BuyXPx, .yPx = MarkersYPx, .rgba = over(Buy, Background, BlendedOpacity), .tolerance = 1 },
                 { .what = "sell marker", .xPx = SellXPx, .yPx = MarkersYPx, .rgba = over(Sell, Background, BlendedOpacity), .tolerance = 1 },
-            },
+            }),
             .setUp = [](App& app) { setUpColors(app, BlendedOpacity); },
         },
     };
@@ -195,7 +285,7 @@ const Scene* Scene::find(std::string_view name)
     return found != scenes.end() ? &*found : nullptr;
 }
 
-void Scene::show(const Scene& scene, App& app)
+std::vector<Scene::Patch> Scene::show(const Scene& scene, App& app)
 {
     app.resize(scene.widthPx, scene.heightPx);
     app.setPixelRatio(1.0f);
@@ -205,23 +295,41 @@ void Scene::show(const Scene& scene, App& app)
     app.setTheme({});
     app.clearPointer();
     scene.setUp(app);
+
+    std::vector<Patch> patches = scene.patches;
+    if (scene.findPatches) {
+        scene.findPatches(scene, app, patches);
+    }
+    return patches;
 }
 
-std::vector<std::string> Scene::checkPatches(const Scene& scene, std::span<const std::uint8_t> rgba)
+std::vector<std::string> Scene::checkPatches(const Scene& scene, std::span<const Patch> patches, std::span<const std::uint8_t> rgba)
 {
     if (rgba.size() != std::size_t{ scene.widthPx } * scene.heightPx * 4) {
         return { std::format("{} bytes, not {} × {} pixels", rgba.size(), scene.widthPx, scene.heightPx) };
     }
     std::vector<std::string> failures;
-    for (const auto& patch : scene.patches) {
-        const std::size_t i = (std::size_t{ patch.yPx } * scene.widthPx + patch.xPx) * 4;
-        const bool close = std::ranges::all_of(std::array{ 0, 1, 2, 3 }, [&](std::size_t channel) {
-            return std::abs(rgba[i + channel] - patch.rgba[channel]) <= patch.tolerance;
-        });
-        if (!close) {
-            failures.push_back(std::format("{} at ({}, {}): expected ({}, {}, {}, {}) ±{}, got ({}, {}, {}, {})", patch.what,
-                                           patch.xPx, patch.yPx, patch.rgba[0], patch.rgba[1], patch.rgba[2], patch.rgba[3],
-                                           patch.tolerance, rgba[i], rgba[i + 1], rgba[i + 2], rgba[i + 3]));
+    for (const auto& patch : patches) {
+        std::size_t off = 0;
+        std::string first;
+        for (std::uint32_t yPx = patch.yPx; yPx < patch.yPx + patch.heightPx; ++yPx) {
+            for (std::uint32_t xPx = patch.xPx; xPx < patch.xPx + patch.widthPx; ++xPx) {
+                const std::size_t i = (std::size_t{ yPx } * scene.widthPx + xPx) * 4;
+                const bool close = xPx < scene.widthPx && yPx < scene.heightPx
+                    && std::ranges::all_of(std::array{ 0, 1, 2, 3 }, [&](std::size_t channel) {
+                           return std::abs(rgba[i + channel] - patch.rgba[channel]) <= patch.tolerance;
+                       });
+                if (!close && off++ == 0) {
+                    first = xPx < scene.widthPx && yPx < scene.heightPx
+                        ? std::format("({}, {}) is ({}, {}, {}, {})", xPx, yPx, rgba[i], rgba[i + 1], rgba[i + 2], rgba[i + 3])
+                        : std::format("({}, {}) is outside the scene", xPx, yPx);
+                }
+            }
+        }
+        if (off > 0) {
+            failures.push_back(std::format("{}: {} of {} pixels aren't ({}, {}, {}, {}) ±{}; {}", patch.what, off,
+                                           std::size_t{ patch.widthPx } * patch.heightPx, patch.rgba[0], patch.rgba[1],
+                                           patch.rgba[2], patch.rgba[3], patch.tolerance, first));
         }
     }
     return failures;

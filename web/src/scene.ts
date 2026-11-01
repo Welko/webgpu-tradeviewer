@@ -4,13 +4,16 @@
  * the scenes. Once drawn, the body's data-status is "done" or "error" and
  * window.sceneResult holds what the tests read.
  */
-import { createViewer, loadModule, type SceneInfo } from './viewer/viewerModule';
+import { createViewer, loadModule, type SceneInfo, type ScenePatch } from './viewer/viewerModule';
 
 /** What the tests read once the scene is drawn. */
 export interface SceneResult {
   name: string;
+  description: string;
   widthPx: number;
   heightPx: number;
+  /** Its known pixels, for tools/compare-renderings.mjs to check the engine's copy with. */
+  patches: ScenePatch[];
   /** The GPU, as the viewer describes it. */
   gpu: string;
   /** The engine's own copy of the frame, as a PNG data URL. */
@@ -23,7 +26,6 @@ export interface SceneResult {
 
 declare global {
   interface Window {
-    /** Every scene, with its known pixels. */
     scenes?: SceneInfo[];
     sceneResult?: SceneResult;
     sceneError?: string;
@@ -72,7 +74,7 @@ async function draw(scene: SceneInfo): Promise<SceneResult> {
 
   // Kept, not deleted: deleting it would clear the canvas.
   const viewer = await createViewer('#scene', 'default');
-  viewer.showScene(scene.name);
+  const patches = viewer.showScene(scene.name) as ScenePatch[];
   const engine = new Promise<Uint8Array>((resolve, reject) => {
     viewer.readPixels((pixels: Uint8Array | null, error: string | null) =>
       pixels ? resolve(pixels) : reject(new Error(error ?? 'No pixels')),
@@ -84,8 +86,10 @@ async function draw(scene: SceneInfo): Promise<SceneResult> {
   const info = viewer.info();
   return {
     name: scene.name,
+    description: scene.description,
     widthPx: scene.widthPx,
     heightPx: scene.heightPx,
+    patches,
     gpu: [info.description || info.device, info.backend, info.adapter].filter(Boolean).join(' · '),
     engine: toPng(copied, scene.widthPx, scene.heightPx),
     canvas: toPng(shown, scene.widthPx, scene.heightPx),

@@ -1,0 +1,106 @@
+{
+  "name": "day",
+  "description": "The whole synthetic day as column summaries, the one in the middle highlighted",
+  "widthPx": 960,
+  "heightPx": 540,
+  "patches": [
+    {
+      "what": "right margin",
+      "xPx": 896,
+      "yPx": 0,
+      "widthPx": 64,
+      "heightPx": 540,
+      "rgba": [
+        18,
+        20,
+        26,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "bottom margin",
+      "xPx": 0,
+      "yPx": 518,
+      "widthPx": 896,
+      "heightPx": 22,
+      "rgba": [
+        18,
+        20,
+        26,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "grid line at 2019-12-01",
+      "xPx": 0,
+      "yPx": 0,
+      "widthPx": 1,
+      "heightPx": 6,
+      "rgba": [
+        37,
+        40,
+        43,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "grid line at 06:00",
+      "xPx": 224,
+      "yPx": 0,
+      "widthPx": 1,
+      "heightPx": 6,
+      "rgba": [
+        37,
+        40,
+        43,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "grid line at 12:00",
+      "xPx": 448,
+      "yPx": 0,
+      "widthPx": 1,
+      "heightPx": 6,
+      "rgba": [
+        37,
+        40,
+        43,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "grid line at 18:00",
+      "xPx": 672,
+      "yPx": 0,
+      "widthPx": 1,
+      "heightPx": 6,
+      "rgba": [
+        37,
+        40,
+        43,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "highlighted column",
+      "xPx": 446,
+      "yPx": 201,
+      "widthPx": 1,
+      "heightPx": 1,
+      "rgba": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "tolerance": 0
+    }
+  ]
+}

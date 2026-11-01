@@ -1,6 +1,6 @@
 {
   "platform": "reference",
-  "version": "wgpu-native, Linux x86_64",
+  "version": "wgpu-native v29.0.1.1, Linux x86_64",
   "gpu": "llvmpipe (LLVM 20.1.2, 256 bits) · Vulkan · CPU",
   "scenes": [
     "hour",

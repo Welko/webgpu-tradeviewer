@@ -30,7 +30,7 @@ cpp/
   apps/BenchmarkApp  native command line: frame times at four zoom levels (and the whole day
                      drawing every trade), from the profiler
 tools/check_ranges.py  checks TradeStatsApp against an independent calculation
-tools/render-native.sh, compare-renderings.mjs, reference-renderings/
+tools/render-native.sh, compare-renderings.mjs (with package.json: pngjs), reference-renderings/
                      draw the image tests' scenes natively, and compare every platform's
                      renderings (see Image tests)
 web/                 Vite + React + TypeScript
@@ -95,7 +95,7 @@ cmake --build --preset native
 ./build/native/apps/ViewerApp/ViewerApp                    # or --gpu=low-power / --gpu=high-performance
 ./build/native/apps/ViewerApp/ViewerApp ../data/binance_trades_2019-12-01_BTCUSDT.csv.gz   # a trades file, .csv or .csv.gz
 ./build/native/apps/ViewerApp/ViewerApp --scene=hour       # an image test's scene instead (--list-scenes lists them)
-./build/native/apps/ViewerApp/ViewerApp --snapshot=out.png # saves the first frame as a PNG and exits
+./build/native/apps/ViewerApp/ViewerApp --snapshot=out.png # saves the first frame as a PNG and exits (with a scene, its known pixels as out.json, and the platform as about.json)
 ```
 
 `cmake --preset native-release` builds the binary CI publishes: optimized, with wgpu-native linked in statically. It needs only a Vulkan driver, zlib and Wayland or X11 to run.
@@ -134,7 +134,13 @@ Scenes (`Viewer::Scene`, in `cpp/apps/ViewerApp/src/Scene.cpp`) are fixed pictur
 | `opaque` | a buy and a sell, opaque, in colors chosen for the test, the buy ringed |
 | `blended` | the same at half opacity over the background |
 
-Each scene lists pixels whose color is known in advance: the background, marker centers, the ring. Colors are whole 255ths, so flat ones must come out exact; blended ones may be off by 1, as GPUs round blends differently. Scenes are drawn:
+Each scene knows the color of some pixels in advance, single ones or whole areas:
+
+- **everywhere:** the margins left for axis labels, which nothing is drawn in, all background;
+- **`opaque` and `blended`:** the centers of the trades the scene placed, the ring, the background between them;
+- **`hour` and `day`:** found once the scene is set up, from where the app drew things: the time axis's grid lines in the plot's top rows (which the price axis keeps free of trades), the ring around the picked trade, the middle of the highlighted column.
+
+`Scene::show()` returns them. The test scenes' colors are whole 255ths, so flat ones must come out exact; blended ones, and the default theme's colors that fall halfway between two values, may be off by 1. Scenes are drawn:
 
 | Where | How | Checks there |
 |---|---|---|
@@ -142,14 +148,21 @@ Each scene lists pixels whose color is known in advance: the background, marker 
 | native, through a window | `tools/render-native.sh` runs `ViewerApp --scene=<name> --snapshot=<png>` for each | the frame reads back from the window's surface |
 | Chromium and Firefox | `web/tests/scenes.spec.ts` opens `scene.html?scene=<name>` | the canvas, read back with `drawImage`, is exactly what the engine drew |
 
-Each platform's renderings go to `renderings/<platform>/` (gitignored). `tools/compare-renderings.mjs` then compares every pair, and each platform with `tools/reference-renderings/`, drawn natively on lavapipe. It also checks every rendering's known pixels, from `renderings/scenes.json`: the only check of the window and browser renderings' known pixels. It writes `renderings/report/rendering-comparison.html`: for each scene, the known pixels as each platform drew them, and a grid of every platform's rendering and each pair's difference, scaled so the largest difference is white, with the numbers. A pair fails if more than 0.05% of its pixels differ visibly (by more than 32/255), or more than 2% beyond rounding (by more than 2/255). Edges fall slightly differently on each GPU, so a few pixels always differ; a missing marker fails.
+Each platform's renderings go to `renderings/<platform>/` (gitignored): `<scene>.png`, and its known pixels as `<scene>.json`. `tools/compare-renderings.mjs` then compares every pair, and each platform with `tools/reference-renderings/`, drawn natively on lavapipe. It also checks every rendering's known pixels: the only check of the window and browser renderings' known pixels. It writes `renderings/report/rendering-comparison.html`: for each scene, the known pixels as each platform drew them, and a grid of every platform's rendering and each pair's difference, scaled so the largest difference is white, with the numbers. A pair fails if more than 0.05% of its pixels differ visibly (by more than 32/255), or more than 2% beyond rounding (by more than 2/255). Edges fall slightly differently on each GPU, so a few pixels always differ; a missing marker fails.
 
 ```bash
+(cd tools && npm ci)                            # once: pngjs
 VK_ICD_FILENAMES=$(ls /usr/share/vulkan/icd.d/lvp_icd*.json | head -1) \
   tools/render-native.sh                        # natively, on lavapipe; opens a window per scene
 (cd web && npx playwright test scenes.spec.ts)  # Chromium and Firefox, after npm run build
 node tools/compare-renderings.mjs               # writes renderings/report/
-node tools/compare-renderings.mjs --update-reference   # after an intended change: native renderings become the reference
+```
+
+After a change meant to alter what's drawn, the references need replacing. Take them from CI rather than your machine, so they match CI's lavapipe exactly: download the run's `renderings-native` artifact (from the run's page, or with the GitHub CLI), then make its native renderings the reference:
+
+```bash
+gh run download <run id> --name renderings-native --dir /tmp/ci-renderings
+node tools/compare-renderings.mjs --update-reference /tmp/ci-renderings
 ```
 
 Firefox enables WebGPU (with the `dom.webgpu.enabled` pref) only under Wayland: under X11 or with no display, it reports WebGPU as blocklisted. CI runs it under a headless Weston.

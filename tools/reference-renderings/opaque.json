@@ -1,0 +1,92 @@
+{
+  "name": "opaque",
+  "description": "A buy and a sell in opaque colors chosen for the test, the buy ringed",
+  "widthPx": 400,
+  "heightPx": 200,
+  "patches": [
+    {
+      "what": "buy marker",
+      "xPx": 90,
+      "yPx": 90,
+      "widthPx": 1,
+      "heightPx": 1,
+      "rgba": [
+        40,
+        200,
+        120,
+        255
+      ],
+      "tolerance": 0
+    },
+    {
+      "what": "sell marker",
+      "xPx": 270,
+      "yPx": 90,
+      "widthPx": 1,
+      "heightPx": 1,
+      "rgba": [
+        230,
+        70,
+        60,
+        255
+      ],
+      "tolerance": 0
+    },
+    {
+      "what": "ring",
+      "xPx": 90,
+      "yPx": 71,
+      "widthPx": 1,
+      "heightPx": 1,
+      "rgba": [
+        250,
+        230,
+        20,
+        255
+      ],
+      "tolerance": 0
+    },
+    {
+      "what": "between the markers",
+      "xPx": 180,
+      "yPx": 90,
+      "widthPx": 1,
+      "heightPx": 1,
+      "rgba": [
+        32,
+        36,
+        44,
+        255
+      ],
+      "tolerance": 0
+    },
+    {
+      "what": "right margin",
+      "xPx": 360,
+      "yPx": 0,
+      "widthPx": 40,
+      "heightPx": 200,
+      "rgba": [
+        32,
+        36,
+        44,
+        255
+      ],
+      "tolerance": 0
+    },
+    {
+      "what": "bottom margin",
+      "xPx": 0,
+      "yPx": 180,
+      "widthPx": 360,
+      "heightPx": 20,
+      "rgba": [
+        32,
+        36,
+        44,
+        255
+      ],
+      "tolerance": 0
+    }
+  ]
+}

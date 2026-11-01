@@ -1,0 +1,64 @@
+{
+  "name": "blended",
+  "description": "The same buy and sell at half opacity over the background",
+  "widthPx": 400,
+  "heightPx": 200,
+  "patches": [
+    {
+      "what": "buy marker",
+      "xPx": 90,
+      "yPx": 90,
+      "widthPx": 1,
+      "heightPx": 1,
+      "rgba": [
+        36,
+        118,
+        82,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "sell marker",
+      "xPx": 270,
+      "yPx": 90,
+      "widthPx": 1,
+      "heightPx": 1,
+      "rgba": [
+        131,
+        53,
+        52,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "right margin",
+      "xPx": 360,
+      "yPx": 0,
+      "widthPx": 40,
+      "heightPx": 200,
+      "rgba": [
+        32,
+        36,
+        44,
+        255
+      ],
+      "tolerance": 0
+    },
+    {
+      "what": "bottom margin",
+      "xPx": 0,
+      "yPx": 180,
+      "widthPx": 360,
+      "heightPx": 20,
+      "rgba": [
+        32,
+        36,
+        44,
+        255
+      ],
+      "tolerance": 0
+    }
+  ]
+}

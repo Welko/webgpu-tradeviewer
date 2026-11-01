@@ -94,23 +94,25 @@ export interface Legend {
 /** Same values as WebGPU's GPUPowerPreference, plus 'default' for no hint. */
 export type PowerPreference = 'default' | 'low-power' | 'high-performance';
 
-/** A pixel whose color a scene knows in advance. */
-export interface ScenePatch {
-  what: string;
-  xPx: number;
-  yPx: number;
-  rgba: [number, number, number, number];
-  /** How far each channel may be off. */
-  tolerance: number;
-}
-
 /** What scenes() returns: a picture for image tests (see cpp/apps/ViewerApp/include/Viewer/Scene.hpp). */
 export interface SceneInfo {
   name: string;
   description: string;
   widthPx: number;
   heightPx: number;
-  patches: ScenePatch[];
+}
+
+/** What Viewer.showScene() returns: a pixel, or an area whose every pixel, has a color known in advance. */
+export interface ScenePatch {
+  what: string;
+  /** Its top left corner, from the canvas's top left corner. */
+  xPx: number;
+  yPx: number;
+  widthPx: number;
+  heightPx: number;
+  rgba: [number, number, number, number];
+  /** How far each channel may be off. */
+  tolerance: number;
 }
 
 // One wasm instance for the page; each component creates its own Viewer in it.

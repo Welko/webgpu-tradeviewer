@@ -6,8 +6,9 @@ import type { SceneResult } from '../src/scene';
 
 /**
  * Draws every image-test scene (scene.html) and saves the engine's copy of
- * each as <renderings>/<browser>/<scene>.png, for tools/compare-renderings.mjs
- * to compare with the other platforms'. TRADEVIEWER_RENDERINGS_DIR sets
+ * each as <renderings>/<browser>/<scene>.png, with its known pixels as
+ * <scene>.json, for tools/compare-renderings.mjs to check and compare with
+ * the other platforms'. TRADEVIEWER_RENDERINGS_DIR sets
  * <renderings>; by default it's renderings/ at the repository's root.
  */
 const renderingsDir =
@@ -40,8 +41,6 @@ test('every scene draws, and the canvas shows exactly what the engine drew', asy
 
   const dir = join(renderingsDir, browserName);
   mkdirSync(dir, { recursive: true });
-  // The scenes' known pixels, for the comparison to check every platform's renderings with.
-  writeFileSync(join(renderingsDir, 'scenes.json'), `${JSON.stringify(scenes, null, 2)}\n`);
   let gpu = '';
   for (const name of names) {
     await test.step(name, async () => {
@@ -50,11 +49,15 @@ test('every scene draws, and the canvas shows exactly what the engine drew', asy
       const result = (await page.evaluate(() => window.sceneResult)) as SceneResult;
       gpu = result.gpu;
       writeFileSync(join(dir, `${name}.png`), Buffer.from(result.engine.split(',')[1], 'base64'));
+      // As ViewerApp --snapshot writes it natively.
+      const { description, widthPx, heightPx, patches } = result;
+      const known = { name, description, widthPx, heightPx, patches };
+      writeFileSync(join(dir, `${name}.json`), `${JSON.stringify(known, null, 2)}\n`);
 
       expect.soft(result.canvasDifference, `${name}: canvas vs the engine's copy`).toEqual({ pixels: 0, largest: 0 });
     });
   }
-  // What the report says about this platform, as tools/render-native.sh writes it natively.
+  // What the report says about this platform, as ViewerApp --snapshot writes it natively.
   const about = { platform: browserName, version: `${browserName} ${browser.version()}`, gpu, scenes: names };
-  writeFileSync(join(dir, 'about.json'), JSON.stringify(about, null, 2));
+  writeFileSync(join(dir, 'about.json'), `${JSON.stringify(about, null, 2)}\n`);
 });

@@ -1,0 +1,9 @@
+{
+  "name": "trade-viewer-tools",
+  "private": true,
+  "type": "module",
+  "description": "Scripts for tests and CI (see compare-renderings.mjs)",
+  "devDependencies": {
+    "pngjs": "^7.0.0"
+  }
+}

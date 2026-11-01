@@ -262,6 +262,16 @@ jobs:
           path: renderings
           merge-multiple: true
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+
+      - name: Install the tools' dependencies
+        working-directory: tools
+        run: npm ci
+
       # Fails if a known pixel is off, or two platforms (or a platform and
       # tools/reference-renderings/) differ by more than
       # tools/compare-renderings.mjs allows. The numbers go on the run's page.

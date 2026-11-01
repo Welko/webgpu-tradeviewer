@@ -1,0 +1,134 @@
+{
+  "name": "hour",
+  "description": "Synthetic trades from 12:00 to 13:00 as markers, one in the middle ringed",
+  "widthPx": 960,
+  "heightPx": 540,
+  "patches": [
+    {
+      "what": "right margin",
+      "xPx": 896,
+      "yPx": 0,
+      "widthPx": 64,
+      "heightPx": 540,
+      "rgba": [
+        18,
+        20,
+        26,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "bottom margin",
+      "xPx": 0,
+      "yPx": 518,
+      "widthPx": 896,
+      "heightPx": 22,
+      "rgba": [
+        18,
+        20,
+        26,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "grid line at 12:00",
+      "xPx": 0,
+      "yPx": 0,
+      "widthPx": 1,
+      "heightPx": 6,
+      "rgba": [
+        37,
+        40,
+        43,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "grid line at 12:10",
+      "xPx": 149,
+      "yPx": 0,
+      "widthPx": 1,
+      "heightPx": 6,
+      "rgba": [
+        37,
+        40,
+        43,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "grid line at 12:20",
+      "xPx": 298,
+      "yPx": 0,
+      "widthPx": 1,
+      "heightPx": 6,
+      "rgba": [
+        37,
+        40,
+        43,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "grid line at 12:30",
+      "xPx": 448,
+      "yPx": 0,
+      "widthPx": 1,
+      "heightPx": 6,
+      "rgba": [
+        37,
+        40,
+        43,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "grid line at 12:40",
+      "xPx": 597,
+      "yPx": 0,
+      "widthPx": 1,
+      "heightPx": 6,
+      "rgba": [
+        37,
+        40,
+        43,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "grid line at 12:50",
+      "xPx": 746,
+      "yPx": 0,
+      "widthPx": 1,
+      "heightPx": 6,
+      "rgba": [
+        37,
+        40,
+        43,
+        255
+      ],
+      "tolerance": 1
+    },
+    {
+      "what": "ring",
+      "xPx": 454,
+      "yPx": 385,
+      "widthPx": 1,
+      "heightPx": 1,
+      "rgba": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "tolerance": 0
+    }
+  ]
+}

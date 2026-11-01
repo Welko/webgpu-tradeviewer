@@ -4,9 +4,9 @@
  * reference renderings kept in tools/reference-renderings/, and checks each
  * rendering's known pixels.
  *
- * Reads <renderings>/<platform>/<scene>.png and about.json, and
- * <renderings>/scenes.json (the scenes' known pixels), as
- * tools/render-native.sh and web/tests/scenes.spec.ts write them, and writes
+ * Reads <renderings>/<platform>/about.json, and <scene>.png with its known
+ * pixels in <scene>.json, as tools/render-native.sh and
+ * web/tests/scenes.spec.ts write them, and writes
  * <renderings>/report/:
  *   rendering-comparison.html  each scene's known pixels on every platform, and
  *                              every pair of platforms side by side, with their difference
@@ -22,7 +22,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { deflateSync, inflateSync } from 'node:zlib';
+import { PNG } from 'pngjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const referenceDir = join(root, 'tools', 'reference-renderings');
@@ -47,100 +47,17 @@ const Thresholds = {
 /** The order of the report's rows and columns: the user's, then any others. */
 const PlatformOrder = ['native', 'firefox', 'chromium', 'reference'];
 
-// PNG, 8 bits per channel, RGB or RGBA, without interlacing: what the
-// platforms write. Rows are top first.
+// Images are { width, height, rgba }, rows top first.
 
-const PngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-function paeth(left, up, upLeft) {
-  const estimate = left + up - upLeft;
-  const toLeft = Math.abs(estimate - left);
-  const toUp = Math.abs(estimate - up);
-  const toUpLeft = Math.abs(estimate - upLeft);
-  return toLeft <= toUp && toLeft <= toUpLeft ? left : toUp <= toUpLeft ? up : upLeft;
+/** A PNG file's pixels, as RGBA whatever the file holds. */
+function readPng(path) {
+  const { width, height, data } = PNG.sync.read(readFileSync(path));
+  return { width, height, rgba: data };
 }
 
-/** { width, height, rgba } from a PNG file's bytes. */
-function decodePng(bytes, path) {
-  if (!bytes.subarray(0, 8).equals(PngSignature)) {
-    throw new Error(`${path}: not a PNG`);
-  }
-  let width = 0;
-  let height = 0;
-  let channels = 0;
-  const data = [];
-  for (let offset = 8; offset < bytes.length; ) {
-    const length = bytes.readUInt32BE(offset);
-    const type = bytes.toString('latin1', offset + 4, offset + 8);
-    const chunk = bytes.subarray(offset + 8, offset + 8 + length);
-    if (type === 'IHDR') {
-      width = chunk.readUInt32BE(0);
-      height = chunk.readUInt32BE(4);
-      const [depth, colorType, , , interlace] = chunk.subarray(8, 13);
-      channels = colorType === 6 ? 4 : colorType === 2 ? 3 : 0;
-      if (depth !== 8 || channels === 0 || interlace !== 0) {
-        throw new Error(`${path}: only 8-bit RGB or RGBA without interlacing is supported`);
-      }
-    } else if (type === 'IDAT') {
-      data.push(chunk);
-    }
-    offset += 12 + length;
-  }
-
-  const filtered = inflateSync(Buffer.concat(data));
-  const stride = width * channels;
-  const rows = Buffer.alloc(stride * height);
-  for (let y = 0; y < height; y++) {
-    const filter = filtered[y * (stride + 1)];
-    const line = filtered.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
-    for (let x = 0; x < stride; x++) {
-      const i = y * stride + x;
-      const left = x >= channels ? rows[i - channels] : 0;
-      const up = y > 0 ? rows[i - stride] : 0;
-      const upLeft = x >= channels && y > 0 ? rows[i - stride - channels] : 0;
-      const predictor = [0, left, up, (left + up) >> 1, paeth(left, up, upLeft)][filter];
-      rows[i] = (line[x] + predictor) & 0xff;
-    }
-  }
-
-  const rgba = Buffer.alloc(width * height * 4, 255);
-  for (let pixel = 0; pixel < width * height; pixel++) {
-    rows.copy(rgba, pixel * 4, pixel * channels, pixel * channels + Math.min(channels, 4));
-  }
-  return { width, height, rgba };
-}
-
-function crc32(bytes) {
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc ^= byte;
-    for (let k = 0; k < 8; k++) {
-      crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
-    }
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-function chunk(type, data) {
-  const header = Buffer.alloc(8);
-  header.writeUInt32BE(data.length, 0);
-  header.write(type, 4, 'latin1');
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(Buffer.concat([header.subarray(4), data])));
-  return Buffer.concat([header, data, crc]);
-}
-
-/** A compressed PNG of RGBA rows. */
+/** A PNG of RGBA rows. */
 function encodePng({ width, height, rgba }) {
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(width, 0);
-  header.writeUInt32BE(height, 4);
-  header.set([8, 6, 0, 0, 0], 8);
-  const rows = Buffer.alloc((width * 4 + 1) * height);
-  for (let y = 0; y < height; y++) {
-    rgba.copy(rows, y * (width * 4 + 1) + 1, y * width * 4, (y + 1) * width * 4);
-  }
-  return Buffer.concat([PngSignature, chunk('IHDR', header), chunk('IDAT', deflateSync(rows, { level: 9 })), chunk('IEND', Buffer.alloc(0))]);
+  return PNG.sync.write({ width, height, data: rgba }, { colorType: 6 });
 }
 
 const dataUrl = (png) => `data:image/png;base64,${png.toString('base64')}`;
@@ -211,24 +128,28 @@ function findPlatforms(renderingsDir) {
   return platforms.sort((a, b) => rank(a) - rank(b) || a.platform.localeCompare(b.platform));
 }
 
-/** The scenes and their known pixels: from this run, else as the references were drawn. */
-function readScenes(renderingsDir) {
-  for (const dir of [renderingsDir, referenceDir]) {
-    if (existsSync(join(dir, 'scenes.json'))) {
-      return JSON.parse(readFileSync(join(dir, 'scenes.json'), 'utf8'));
-    }
-  }
-  return [];
-}
-
-/** Each of `patches` as `image` has it: { ...patch, actual, passed }. */
+/**
+ * Each of `patches` as `image` has it: { ...patch, right, total, sample,
+ * passed }, `sample` being the first pixel that's off, else the first one.
+ */
 function checkPatches(patches, image) {
   return patches.map((patch) => {
-    const i = (patch.yPx * image.width + patch.xPx) * 4;
-    const actual = [...image.rgba.subarray(i, i + 4)];
-    const passed = patch.xPx < image.width && patch.yPx < image.height
-      && actual.every((value, channel) => Math.abs(value - patch.rgba[channel]) <= patch.tolerance);
-    return { ...patch, actual, passed };
+    let right = 0;
+    let sample = null;
+    for (let y = patch.yPx; y < patch.yPx + patch.heightPx; y++) {
+      for (let x = patch.xPx; x < patch.xPx + patch.widthPx; x++) {
+        const inside = x < image.width && y < image.height;
+        const i = (y * image.width + x) * 4;
+        const actual = inside ? [...image.rgba.subarray(i, i + 4)] : [0, 0, 0, 0];
+        const close = inside && actual.every((value, channel) => Math.abs(value - patch.rgba[channel]) <= patch.tolerance);
+        right += close ? 1 : 0;
+        if (sample === null || (!close && sample.close)) {
+          sample = { xPx: x, yPx: y, rgba: actual, close };
+        }
+      }
+    }
+    const total = patch.widthPx * patch.heightPx;
+    return { ...patch, right, total, sample, passed: right === total };
   });
 }
 
@@ -254,27 +175,44 @@ function describe(result) {
   ].join('<br>');
 }
 
-/** The scene's known pixels: what each platform drew there. */
-function renderChecks(scene, platforms, checks) {
-  if (!scene.patches?.length) {
+const count = (n) => n.toLocaleString('en-US');
+
+/** The scene's known pixels: what each platform drew there. Rows by what they are, in the first platform's order. */
+function renderChecks(platforms, checks) {
+  const rows = new Map();
+  for (const platform of platforms) {
+    for (const check of checks.get(platform.platform) ?? []) {
+      if (!rows.has(check.what)) {
+        rows.set(check.what, check);
+      }
+    }
+  }
+  if (rows.size === 0) {
     return '';
   }
   const header = platforms.map((platform) => `<th>${escape(platform.platform)}</th>`).join('');
-  const rows = scene.patches.map((patch, index) => {
+  const body = [...rows.values()].map((patch) => {
     const cells = platforms.map((platform) => {
-      const check = checks.get(platform.platform)?.[index];
+      const check = checks.get(platform.platform)?.find((candidate) => candidate.what === patch.what);
       if (!check) {
         return '<td class="failed">missing</td>';
       }
-      return `<td class="${check.passed ? 'passed' : 'failed'}">${swatch(check.actual)}${check.actual.join(', ')}</td>`;
+      const { sample } = check;
+      const value = `${swatch(sample.rgba)}${sample.rgba.join(', ')}`;
+      if (check.total === 1) {
+        return `<td class="${check.passed ? 'passed' : 'failed'}">${value}</td>`;
+      }
+      const where = check.passed ? '' : ` <span class="muted">first off at ${sample.xPx}, ${sample.yPx}:</span> ${value}`;
+      return `<td class="${check.passed ? 'passed' : 'failed'}">${count(check.right)} of ${count(check.total)} right${where}</td>`;
     });
+    const area = patch.widthPx * patch.heightPx > 1 ? ` <span class="muted">(${patch.widthPx} × ${patch.heightPx})</span>` : '';
     const tolerance = patch.tolerance ? ` ±${patch.tolerance}` : ' exactly';
-    return `<tr><td>${escape(patch.what)}</td><td>${patch.xPx}, ${patch.yPx}</td><td>${swatch(patch.rgba)}${patch.rgba.join(', ')}${tolerance}</td>${cells.join('')}</tr>`;
+    return `<tr><td>${escape(patch.what)}</td><td>${patch.xPx}, ${patch.yPx}${area}</td><td>${swatch(patch.rgba)}${patch.rgba.join(', ')}${tolerance}</td>${cells.join('')}</tr>`;
   });
   return `<h3>Known pixels</h3>
 <table class="checks">
-<thead><tr><th>pixel</th><th>at</th><th>expected (RGBA)</th>${header}</tr></thead>
-<tbody>${rows.join('\n')}</tbody>
+<thead><tr><th>pixels</th><th>at</th><th>expected (RGBA)</th>${header}</tr></thead>
+<tbody>${body.join('\n')}</tbody>
 </table>`;
 }
 
@@ -320,7 +258,7 @@ function renderReport(scenes, platforms, results, passed) {
     return `<section>
 <h2>${escape(scene.name)}</h2>
 <p class="muted">${escape(scene.description ?? '')}</p>
-${renderChecks(scene, platforms, result.checks)}
+${renderChecks(platforms, result.checks)}
 ${renderComparison(platforms, result.images, result.pairs)}
 </section>`;
   });
@@ -390,7 +328,7 @@ function renderSummary(scenes, platforms, results, passed) {
       const checks = results.get(scene.name).checks.get(platform.platform);
       if (!checks) return 'missing';
       const off = checks.filter((check) => !check.passed).length;
-      return off ? `❌ ${off} of ${checks.length} off` : `✅ ${checks.length} right`;
+      return off ? `❌ ${off} of ${checks.length} off` : `✅ all ${checks.length} right`;
     });
     lines.push(`| ${scene.name} | ${cells.join(' | ')} |`);
   }
@@ -421,11 +359,11 @@ function updateReference(renderingsDir) {
   const about = JSON.parse(readFileSync(join(native, 'about.json'), 'utf8'));
   mkdirSync(referenceDir, { recursive: true });
   for (const scene of about.scenes) {
-    const image = decodePng(readFileSync(join(native, `${scene}.png`)), scene);
-    writeFileSync(join(referenceDir, `${scene}.png`), encodePng(image));
+    for (const file of [`${scene}.png`, `${scene}.json`]) {
+      writeFileSync(join(referenceDir, file), readFileSync(join(native, file)));
+    }
   }
   writeFileSync(join(referenceDir, 'about.json'), `${JSON.stringify({ ...about, platform: 'reference' }, null, 2)}\n`);
-  writeFileSync(join(referenceDir, 'scenes.json'), readFileSync(join(renderingsDir, 'scenes.json')));
   console.log(`Copied ${about.scenes.length} native renderings to ${referenceDir}`);
 }
 
@@ -443,10 +381,9 @@ function main() {
     console.error(`Fewer than two platforms' renderings in ${renderingsDir}`);
     process.exit(1);
   }
-  // Every scene described, then any other a platform drew.
-  const described = readScenes(renderingsDir);
-  const names = [...new Set([...described.map((scene) => scene.name), ...platforms.flatMap((platform) => platform.scenes ?? [])])];
-  const scenes = names.map((name) => described.find((scene) => scene.name === name) ?? { name, patches: [] });
+  // Every scene any platform drew, in the first platform's order.
+  const names = [...new Set(platforms.flatMap((platform) => platform.scenes ?? []))];
+  const scenes = names.map((name) => ({ name, description: '' }));
 
   let passed = true;
   const results = new Map();
@@ -462,14 +399,18 @@ function main() {
         passed = false;
         continue;
       }
-      const image = decodePng(readFileSync(path), path);
+      const image = readPng(path);
       images.set(platform.platform, { ...image, url: dataUrl(encodePng(image)) });
-      const checked = checkPatches(scene.patches, image);
+      const knownPath = join(platform.dir, `${scene.name}.json`);
+      const known = existsSync(knownPath) ? JSON.parse(readFileSync(knownPath, 'utf8')) : { patches: [] };
+      scene.description ||= known.description ?? '';
+      const checked = checkPatches(known.patches, image);
       checks.set(platform.platform, checked);
       numbers[scene.name].knownPixels[platform.platform] = checked;
       for (const check of checked.filter((check) => !check.passed)) {
         passed = false;
-        console.error(`${scene.name}, ${platform.platform}: ${check.what} at (${check.xPx}, ${check.yPx}) is ${check.actual.join(', ')}, not ${check.rgba.join(', ')} ±${check.tolerance}`);
+        const { sample } = check;
+        console.error(`${scene.name}, ${platform.platform}: ${check.what}: ${check.total - check.right} of ${check.total} pixels off; (${sample.xPx}, ${sample.yPx}) is ${sample.rgba.join(', ')}, not ${check.rgba.join(', ')} ±${check.tolerance}`);
       }
     }
 

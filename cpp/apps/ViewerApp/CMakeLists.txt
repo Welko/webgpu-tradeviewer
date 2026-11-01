@@ -46,8 +46,27 @@ else()
     )
     FetchContent_MakeAvailable(glfw)
 
+    # stb_image_write, for --snapshot's PNGs. Header only.
+    FetchContent_Declare(
+        stb
+        GIT_REPOSITORY https://github.com/nothings/stb.git
+        GIT_TAG 003501f6d7a8668ce8b6d875e34dd97ad0d5d5b5
+    )
+    FetchContent_MakeAvailable(stb)
+
+    # nlohmann/json, for --snapshot's JSON files. Header only.
+    FetchContent_Declare(
+        json
+        URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+        URL_HASH SHA256=42f6e95cad6ec532fd372391373363b62a14af6d771056dbfc86160e6dfff7aa
+    )
+    FetchContent_MakeAvailable(json)
+
     target_sources(ViewerApp PRIVATE src/NativeMain.cpp src/Png.cpp)
-    target_link_libraries(ViewerApp PRIVATE glfw)
+    target_link_libraries(ViewerApp PRIVATE glfw nlohmann_json::nlohmann_json)
+    target_include_directories(ViewerApp SYSTEM PRIVATE "${stb_SOURCE_DIR}")
+    # For about.json, which says which wgpu-native drew the renderings.
+    target_compile_definitions(ViewerApp PRIVATE TRADEVIEWER_WGPU_VERSION="${WGPU_VERSION}")
 
     # Expose the native handles of the platforms GLFW was built with.
     if (GLFW_BUILD_WAYLAND)

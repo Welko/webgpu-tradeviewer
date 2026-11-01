@@ -102,34 +102,38 @@ WebTradeStats toWeb(const Core::Data::TradeStats& stats)
     };
 }
 
-/**
- * The image-test scenes, as an array of { name, description, widthPx,
- * heightPx, patches: [{ what, xPx, yPx, rgba, tolerance }] }.
- */
+/** The image-test scenes, as an array of { name, description, widthPx, heightPx }. */
 val getScenes()
 {
     val array = val::array();
     for (const auto& scene : Viewer::Scene::getScenes()) {
-        val patches = val::array();
-        for (const auto& patch : scene.patches) {
-            val rgba = val::array();
-            for (const std::uint8_t channel : patch.rgba) {
-                rgba.call<void>("push", channel);
-            }
-            val object = val::object();
-            object.set("what", std::string(patch.what));
-            object.set("xPx", patch.xPx);
-            object.set("yPx", patch.yPx);
-            object.set("rgba", rgba);
-            object.set("tolerance", patch.tolerance);
-            patches.call<void>("push", object);
-        }
         val object = val::object();
         object.set("name", std::string(scene.name));
         object.set("description", std::string(scene.description));
         object.set("widthPx", scene.widthPx);
         object.set("heightPx", scene.heightPx);
-        object.set("patches", patches);
+        array.call<void>("push", object);
+    }
+    return array;
+}
+
+/** Known pixels as an array of { what, xPx, yPx, widthPx, heightPx, rgba, tolerance }. */
+val toWeb(const std::vector<Viewer::Scene::Patch>& patches)
+{
+    val array = val::array();
+    for (const auto& patch : patches) {
+        val rgba = val::array();
+        for (const std::uint8_t channel : patch.rgba) {
+            rgba.call<void>("push", channel);
+        }
+        val object = val::object();
+        object.set("what", patch.what);
+        object.set("xPx", patch.xPx);
+        object.set("yPx", patch.yPx);
+        object.set("widthPx", patch.widthPx);
+        object.set("heightPx", patch.heightPx);
+        object.set("rgba", rgba);
+        object.set("tolerance", patch.tolerance);
         array.call<void>("push", object);
     }
     return array;
@@ -443,15 +447,18 @@ public:
         return {};
     }
 
-    /** Shows the image-test scene called `name` (see Viewer::Scene) in place of everything else. False if there's none. */
-    bool showScene(const std::string& name)
+    /**
+     * Shows the image-test scene called `name` (see Viewer::Scene) in place
+     * of everything else. Its known pixels (see toWeb()), or null if there's
+     * no such scene.
+     */
+    val showScene(const std::string& name)
     {
         const auto* scene = Viewer::Scene::find(name);
         if (!*mApp || !scene) {
-            return false;
+            return val::null();
         }
-        Viewer::Scene::show(*scene, **mApp);
-        return true;
+        return toWeb(Viewer::Scene::show(*scene, **mApp));
     }
 
     /**
