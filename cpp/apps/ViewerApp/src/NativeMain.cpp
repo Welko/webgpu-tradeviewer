@@ -12,7 +12,9 @@
 
 #include <nlohmann/json.hpp>
 
+#ifdef __linux__
 #include <sys/utsname.h>
+#endif
 
 #include <chrono>
 #include <cmath>
@@ -164,6 +166,8 @@ void connectInput(GLFWwindow* window)
 std::optional<Gpu::Type::Target::Any> getSurfaceTarget(GLFWwindow* window)
 {
     switch (glfwGetPlatform()) {
+    // Linux's window systems, as GLFW was built with them.
+#ifdef __linux__
 #ifdef GLFW_EXPOSE_NATIVE_WAYLAND
     case GLFW_PLATFORM_WAYLAND:
         return Gpu::Type::Target::Wayland{ .display = glfwGetWaylandDisplay(), .surface = glfwGetWaylandWindow(window) };
@@ -171,6 +175,9 @@ std::optional<Gpu::Type::Target::Any> getSurfaceTarget(GLFWwindow* window)
 #ifdef GLFW_EXPOSE_NATIVE_X11
     case GLFW_PLATFORM_X11:
         return Gpu::Type::Target::Xlib{ .display = glfwGetX11Display(), .window = glfwGetX11Window(window) };
+#endif
+#else
+#error "getSurfaceTarget() knows Linux's window systems only"
 #endif
     default:
         return std::nullopt;
@@ -272,14 +279,19 @@ nlohmann::ordered_json getSceneJson(const Viewer::Scene& scene, const std::vecto
 /** What the comparison report says about this platform, as web/tests/scenes.spec.ts writes it for the browsers. */
 nlohmann::ordered_json getAboutJson(const Gpu::Type::Info& info)
 {
+#ifdef __linux__
     utsname system{};
     uname(&system);
+    const std::string os = std::format("{} {}", system.sysname, system.machine);
+#else
+#error "getAboutJson() names the system on Linux only"
+#endif
     auto scenes = nlohmann::ordered_json::array();
     for (const auto& scene : Viewer::Scene::getScenes()) {
         scenes.push_back(scene.name);
     }
     return { { "platform", "native" },
-             { "version", std::format("wgpu-native {}, {} {}", TRADEVIEWER_WGPU_VERSION, system.sysname, system.machine) },
+             { "version", std::format("wgpu-native {}, {}", TRADEVIEWER_WGPU_VERSION, os) },
              { "gpu", std::format("{} · {} · {}", info.device, info.backend, info.adapter) },
              { "scenes", std::move(scenes) } };
 }

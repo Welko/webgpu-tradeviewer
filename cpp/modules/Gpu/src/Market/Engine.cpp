@@ -55,16 +55,16 @@ WGPUTextureFormat pickSurfaceFormat(std::span<const WGPUTextureFormat> formats)
 /** The WebGPU surface for a window or canvas; null if it can't be created. */
 WGPUSurface createSurface(WGPUInstance instance, const Gpu::Type::Target::Any& target)
 {
-    WGPUSurfaceDescriptor descriptor{};
-
 #ifdef __EMSCRIPTEN__
+    WGPUSurfaceDescriptor descriptor{};
     const auto& canvas = std::get<Gpu::Type::Target::Canvas>(target);
     WGPUEmscriptenSurfaceSourceCanvasHTMLSelector source{};
     source.chain.sType = WGPUSType_EmscriptenSurfaceSourceCanvasHTMLSelector;
     source.selector = Convert::ToWgpu::stringView(canvas.selector);
     descriptor.nextInChain = &source.chain;
     return wgpuInstanceCreateSurface(instance, &descriptor);
-#else
+#elif defined(__linux__)
+    WGPUSurfaceDescriptor descriptor{};
     if (const auto* wayland = std::get_if<Gpu::Type::Target::Wayland>(&target)) {
         WGPUSurfaceSourceWaylandSurface source{};
         source.chain.sType = WGPUSType_SurfaceSourceWaylandSurface;
@@ -82,6 +82,8 @@ WGPUSurface createSurface(WGPUInstance instance, const Gpu::Type::Target::Any& t
         return wgpuInstanceCreateSurface(instance, &descriptor);
     }
     return nullptr;
+#else
+#error "createSurface() knows Linux's window systems and Web only"
 #endif
 }
 

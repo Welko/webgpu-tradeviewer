@@ -2,10 +2,10 @@
 // writes a Markdown table: the CPU time to update the view, the CPU phases of
 // a frame and the GPU time of each pass. CI publishes it on each run's page.
 //
-// Beside the table, <table>.json holds the numbers tools/check-benchmark.mjs
-// compares with the baseline in tools/benchmark-baseline.csv: times to load
-// and show the trades, each view's medians, and the memory the synthetic day
-// takes, which is the same on every machine.
+// Beside the table, <table>.json holds the numbers tools/check-regressions.mjs
+// checks: times to load and show the trades and each view's medians, compared
+// with another commit's on the same machine, and the memory the synthetic day
+// takes, the same on every machine, compared with tools/regression-baseline.csv.
 //
 // Usage: BenchmarkApp <table.md> [trades.csv[.gz]] [--commit <sha>]
 //   the synthetic day without a file; --commit names the commit measured in
@@ -86,7 +86,7 @@ std::string describe(const std::vector<double>& values)
     return std::format("{:.3f} ({:.3f})", getPercentile(values, 0.5), getPercentile(values, 0.95));
 }
 
-/** A number compared between runs (see tools/check-benchmark.mjs). */
+/** A number compared between commits (see tools/check-regressions.mjs). */
 struct Metric
 {
     std::string key;  // a CSV column: letters, digits and underscores
@@ -129,6 +129,31 @@ std::optional<std::vector<Metric>> measureMemory()
         { "memory_summaries_bytes", "Memory: column summaries (whole day)", "bytes", bytes(memory.summariesBytes) },
         { "memory_gpu_bytes", "Memory: GPU buffers and textures", "bytes", bytes(static_cast<std::size_t>(memory.gpuBytes)) },
     };
+}
+
+/**
+ * The CPU's model and how many threads it runs: times depend on both,
+ * lavapipe's GPU times too.
+ */
+std::string describeCpu()
+{
+    std::string model = "an unknown CPU";
+#ifdef __linux__
+    // Named in /proc/cpuinfo.
+    std::ifstream cpuinfo("/proc/cpuinfo");
+    for (std::string line; std::getline(cpuinfo, line);) {
+        if (line.starts_with("model name")) {
+            const auto start = line.find_first_not_of(" \t:", line.find(':'));
+            if (start != std::string::npos) {
+                model = line.substr(start);
+            }
+            break;
+        }
+    }
+#else
+#error "describeCpu() reads the CPU's model on Linux only"
+#endif
+    return std::format("{} · {} threads", model, std::thread::hardware_concurrency());
 }
 
 /** Waits until `count` frames have been reported; false if that takes 10 s. */
@@ -320,6 +345,7 @@ int main(int argc, char** argv)
         // Its own baseline: the web's memory differs (32-bit), and so do its times.
         { "platform", "native" },
         { "gpu", std::format("{} · {} · {}", info.device, info.backend, info.adapter) },
+        { "cpu", describeCpu() },
         { "trades", app->getTrades().size() },
         { "metrics", std::move(list) },
     };

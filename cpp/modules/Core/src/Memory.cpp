@@ -32,7 +32,7 @@ std::optional<std::uint64_t> getProcessBytes()
     const std::uint64_t residentPages = std::strtoull(end, nullptr, 10);
     return residentPages * static_cast<std::uint64_t>(sysconf(_SC_PAGESIZE));
 #else
-    return std::nullopt;
+#error "getProcessBytes() knows Linux and Web only"
 #endif
 }
 

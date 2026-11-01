@@ -31,7 +31,7 @@ cpp/
                      drawing every trade), from the profiler
 tools/check_ranges.py  checks TradeStatsApp against an independent calculation
 tools/render-native.sh, compare-renderings.mjs (with package.json: pngjs), reference-renderings/,
-                     check-benchmark.mjs and benchmark-baseline.csv (see Memory and speed between commits)
+                     check-regressions.mjs and regression-baseline.csv (see Memory and speed between commits)
                      draw the image tests' scenes natively, and compare every platform's
                      renderings (see Image tests)
 web/                 Vite + React + TypeScript
@@ -303,32 +303,34 @@ GPU times are in nanoseconds on every platform. wgpu-native counts timestamps in
 
 ### Memory and speed between commits
 
-CI catches changes in what the viewer costs (`tools/check-benchmark.mjs`). `BenchmarkApp` writes its numbers beside its table, as `benchmark.json`, and CI compares them with the baseline in [`tools/benchmark-baseline.csv`](tools/benchmark-baseline.csv):
+CI catches regressions in what the viewer costs (`tools/check-regressions.mjs`). `BenchmarkApp` writes its numbers beside its table, as `benchmark.json`:
 
 | Numbers | Compared with | Fails when |
 |---|---|---|
-| Memory the synthetic day takes, with the whole day in view: trades, running totals, price tree, column summaries, GPU buffers and textures | The platform's last row, exactly. Memory is the same on every machine (lavapipe and an Intel GPU agree to the byte). | Any change, less too. |
-| Times: reading the trades, showing them (derived data and upload), and each view's update, CPU frame and GPU frame (medians of 60 frames) | The platform's last row on the same GPU. | More than 1.5 times slower or faster, and by more than 1 ms. |
+| Memory the synthetic day takes, with the whole day in view: trades, running totals, price tree, column summaries, GPU buffers and textures | The platform's last row in [`tools/regression-baseline.csv`](tools/regression-baseline.csv), exactly. Memory is the same on every machine (lavapipe and an Intel GPU agree to the byte). | Any change, less too. |
+| Times: reading the trades, showing them (derived data and upload), and each view's update, CPU frame and GPU frame (medians of 60 frames) | The baseline's commit, the platform's last row's, built and run on the same machine in the same CI run. | More than 1.5 times slower or faster, and by more than 1 ms. |
 
-Failing when things get faster too makes a gain part of the baseline, so losing it later fails. A fixed baseline also catches slow creep, which comparing with recent runs would follow along. A platform or GPU with no row yet fails, so a check never quietly stops checking.
+Failing when things get faster too makes a gain part of the baseline, so losing it later fails. Comparing with the baseline's commit, rather than the previous one, also catches slow creep. A platform with no row yet fails, so a check never quietly stops checking.
+
+**Times are compared on the same machine.** CI's runners differ: one run got a machine about twice as fast as the run before, and every time dropped by 30–60%, those of code that hadn't changed included. So the baseline keeps no times. CI builds `BenchmarkApp` at the baseline's commit too (`check-regressions.mjs baseline-commit native` names it; about 1.5 minutes, in a `git worktree`) and runs both commits three times, taking turns to go first, so neither gains from going first (a warm cache) or loses alone to a busy moment. Each number's median is compared. The trade file is read once before, so no run reads it cold. The `benchmark` artifact keeps every run of both commits, and their medians. `benchmark.json` names the GPU and CPU, which the run's page shows. A row accepted from a local run with uncommitted changes (`-dirty`) can't be built, so times are compared with the last row before it that can.
 
 The 1 ms floor is 6% of a 60 Hz frame. Below it, CI's shared runners can't tell a change from noise: between two runs of the same code, sub-millisecond CPU times jumped by up to half a millisecond, doubling some, while the long ones moved by 1%. Such changes still show in the table; they just don't fail.
 
-Some numbers are too unsteady to fail a build on, such as a browser's GPU times; the benchmark marks them `flaky`. They're shown on the run's page and kept in the baseline like the rest, marked "recorded only", and never checked.
+Some numbers are too unsteady to fail a build on, such as a browser's GPU times; the benchmark marks them `flaky`. They're shown on the run's page, marked "recorded only", and never checked.
 
-**The baseline only changes by hand,** so it's also the log of every change in cost: each row has the date, the commit measured, the platform and GPU, a description of what changed and why, and every number. When a change is meant, the failing run's page links its `benchmark` artifact and gives the commands that make its numbers the baseline; add the description and commit the CSV:
+**The baseline only changes by hand,** so it's also the log of every accepted change in cost: each row has the date, the commit, the platform, a description of what changed and why, and the memory. Its commit is also the one new commits' times are compared with. When a change is meant, the failing run's page links its `benchmark` artifact and gives the commands that make its numbers the baseline; add the description and commit the CSV:
 
 ```bash
 unzip -o ~/Downloads/benchmark.zip -d ~/Downloads/benchmark
-node tools/check-benchmark.mjs accept ~/Downloads/benchmark/benchmark.json "Shrink the price tree to n entries"
+node tools/check-regressions.mjs accept ~/Downloads/benchmark/benchmark.json "Shrink the price tree to n entries"
 ```
 
-The numbers come from CI's run, so the times are CI's own: times measured on another machine mean nothing to CI's runner. The page also gives the same command with the run id instead, for those signed in to the [GitHub CLI](https://cli.github.com/) (`gh`), which downloads the artifact itself. CI's `benchmark.json` names the commit it measured (`BenchmarkApp --commit`). A local run's doesn't, so it counts as the commit checked out, marked `-dirty` with changes on top. A local run is enough for a memory change, which is the same everywhere:
+The page also gives the same command with the run id instead, for those signed in to the [GitHub CLI](https://cli.github.com/) (`gh`), which downloads the artifact itself. CI's `benchmark.json` names the commit it measured (`BenchmarkApp --commit`). A local run's doesn't, so it counts as the commit checked out, marked `-dirty` with changes on top. A local run works for a memory change, which is the same everywhere; without `--baseline`, its times aren't compared:
 
 ```bash
 cpp/build/native-release/apps/BenchmarkApp/BenchmarkApp /tmp/benchmark.md data/binance_trades_2019-12-01_BTCUSDT.csv.gz
-node tools/check-benchmark.mjs check /tmp/benchmark.json
-node tools/check-benchmark.mjs accept /tmp/benchmark.json "Shrink the price tree to n entries"
+node tools/check-regressions.mjs check /tmp/benchmark.json
+node tools/check-regressions.mjs accept /tmp/benchmark.json "Shrink the price tree to n entries"
 ```
 
 ### GPU buffer layout

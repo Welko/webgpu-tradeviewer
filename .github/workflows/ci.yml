@@ -2,7 +2,7 @@ name: CI
 
 # On every push to dev or main: build and test natively and for the web,
 # compare the image-test scenes as each platform draws them, and check memory
-# and times against tools/benchmark-baseline.csv. On main, if everything
+# and times against tools/regression-baseline.csv. On main, if everything
 # passed, also publish the site
 # (docs/, with the comparison under ci/renderings/) to GitHub Pages and the
 # native binary to the "latest" release.
@@ -33,7 +33,10 @@ jobs:
     name: Native build and tests
     runs-on: ubuntu-24.04
     steps:
+      # All of history: the benchmark builds the baseline's commit too.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       # GLFW's build dependencies, zlib, and the Vulkan loader with Mesa's
       # software Vulkan driver (lavapipe): the runner has no GPU, and the GPU
@@ -117,17 +120,47 @@ jobs:
           cmake --build --preset native-release -j "$(nproc)"
           ctest --test-dir build/native-release --output-on-failure --no-tests=error
 
-      # Frame times at four zoom levels, and the whole day without summaries, from the profiler: the CPU phases and
-      # each GPU pass. lavapipe runs on the CPU, so compare runs with each
-      # other, not with real GPUs. Shown on the run's page and kept as a file.
-      - name: Benchmark
+      # CI's machines differ by up to twice in speed, so times are compared
+      # with the baseline's commit measured on this one: BenchmarkApp, built
+      # at the commit of the last accepted row (see tools/check-regressions.mjs).
+      - name: Build the baseline's commit
         run: |
-          mkdir -p benchmark
-          cpp/build/native-release/apps/BenchmarkApp/BenchmarkApp benchmark/benchmark.md "$RUNNER_TEMP/BTCUSDT-trades-2019-12-01.csv" --commit "$GITHUB_SHA"
-          { echo "### Frame times on lavapipe (a CPU Vulkan driver)"; cat benchmark/benchmark.md; } >> "$GITHUB_STEP_SUMMARY"
+          commit=$(node tools/check-regressions.mjs baseline-commit native)
+          git worktree add --detach "$RUNNER_TEMP/baseline" "$commit"
+          cd "$RUNNER_TEMP/baseline/cpp"
+          cmake --preset native-release
+          cmake --build --preset native-release --target BenchmarkApp -j "$(nproc)"
 
-      # The table, and the numbers in benchmark.json, which tools/check-benchmark.mjs
-      # accept downloads to make them the baseline.
+      # Frame times at four zoom levels, and the whole day without summaries,
+      # from the profiler: the CPU phases and each GPU pass. Three runs of
+      # this commit and three of the baseline's, taking turns to go first, so
+      # neither gains from going first or loses to a busy moment; each
+      # number's median goes in benchmark.json. The file is read once first,
+      # so no run reads it cold. The first run's table goes on the run's page.
+      - name: Benchmark this commit and the baseline's
+        env:
+          TRADES: ${{ runner.temp }}/BTCUSDT-trades-2019-12-01.csv
+        run: |
+          mkdir -p benchmark/runs benchmark/baseline/runs
+          cat "$TRADES" > /dev/null
+          baseline_commit=$(git -C "$RUNNER_TEMP/baseline" rev-parse HEAD)
+          this=0
+          other=0
+          for side in baseline this this baseline baseline this; do
+            if [ "$side" = this ]; then
+              this=$((this + 1))
+              cpp/build/native-release/apps/BenchmarkApp/BenchmarkApp "benchmark/runs/$this.md" "$TRADES" --commit "$GITHUB_SHA"
+            else
+              other=$((other + 1))
+              "$RUNNER_TEMP/baseline/cpp/build/native-release/apps/BenchmarkApp/BenchmarkApp" "benchmark/baseline/runs/$other.md" \
+                "$TRADES" --commit "$baseline_commit"
+            fi
+          done
+          node tools/check-regressions.mjs median benchmark/benchmark.json benchmark/runs/*.json
+          node tools/check-regressions.mjs median benchmark/baseline/benchmark.json benchmark/baseline/runs/*.json
+          { echo "### Frame times on lavapipe (a CPU Vulkan driver), this commit's first run"; cat benchmark/runs/1.md; } >> "$GITHUB_STEP_SUMMARY"
+
+      # Both commits' runs and medians: benchmark.json is what accept takes.
       - uses: actions/upload-artifact@v7
         id: benchmark-artifact
         with:
@@ -135,22 +168,23 @@ jobs:
           path: benchmark/
           if-no-files-found: error
 
-      # Memory exactly, times within a margin, against the last accepted
-      # numbers in tools/benchmark-baseline.csv. Any change past them fails,
-      # faster or smaller too, and the summary gives the commands that accept
-      # this run's numbers, with and without the GitHub CLI.
+      # Memory exactly against the last accepted numbers in
+      # tools/regression-baseline.csv, times within a margin against the
+      # baseline's commit on this machine. Any change past them fails, faster
+      # or smaller too, and the summary gives the commands that accept this
+      # run's numbers, with and without the GitHub CLI.
       - name: Check memory and times against the baseline
         env:
           ARTIFACT_URL: ${{ steps.benchmark-artifact.outputs.artifact-url }}
         run: |
-          if node tools/check-benchmark.mjs check benchmark/benchmark.json --summary "$RUNNER_TEMP/check.md" \
-            --run-id "$GITHUB_RUN_ID" --artifact-url "$ARTIFACT_URL"; then
+          if node tools/check-regressions.mjs check benchmark/benchmark.json --baseline benchmark/baseline/benchmark.json \
+            --summary "$RUNNER_TEMP/check.md" --run-id "$GITHUB_RUN_ID" --artifact-url "$ARTIFACT_URL"; then
             status=0
           else
             status=$?
           fi
           { cat "$RUNNER_TEMP/check.md"
-            echo "Every accepted change: [benchmark-baseline.csv](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/tools/benchmark-baseline.csv)"
+            echo "Every accepted change: [regression-baseline.csv](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/tools/regression-baseline.csv)"
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
 

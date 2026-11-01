@@ -110,7 +110,7 @@ struct Canvas
 /** Where the Engine draws. */
 using Any = std::variant<Canvas>;
 
-#else
+#elif defined(__linux__)
 
 /** A Wayland `wl_display*` and `wl_surface*`. */
 struct Wayland
@@ -136,6 +136,8 @@ struct Offscreen
 /** Where the Engine draws. */
 using Any = std::variant<Wayland, Xlib, Offscreen>;
 
+#else
+#error "Gpu::Type::Target has Linux's and Web's targets only"
 #endif
 
 } // namespace Target
