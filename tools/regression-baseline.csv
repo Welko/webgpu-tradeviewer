@@ -1,3 +1,4 @@
 date,commit,platform,description,memory_trades_bytes,memory_totals_bytes,memory_price_tree_bytes,memory_summaries_bytes,memory_gpu_bytes
 2026-11-01T19:35:27Z,abe69c5-dirty,native,"First baseline: memory of the synthetic day; times on an Intel HD 520, locally",10813600,8650900,13841408,131072,14444144
 2026-11-01T20:16:58Z,bd65b31,native,CI's first baseline on lavapipe,10813600,8650900,13841408,131072,14444144
+2026-11-01T22:42:27Z,10f5798,native,Reduced PriceTree memory consuption,10813600,8650900,865088,131072,14444144
