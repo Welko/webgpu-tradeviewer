@@ -115,13 +115,62 @@ export interface ScenePatch {
   tolerance: number;
 }
 
+/** What Viewer.gpuHealth() returns: how the GPU is doing (see Viewer::App::GpuHealth). */
+export interface GpuHealth {
+  /** Lost, and a new device is on its way. */
+  restarting: boolean;
+  /** How many times it was lost and came back. */
+  restarts: number;
+  /** Why it couldn't come back; nothing draws. */
+  failure: string | null;
+  /** The first WebGPU errors nothing caught, such as validation errors, which mean a bug. */
+  errors: string[];
+  errorCount: number;
+}
+
+/** What Viewer.memoryStats() returns: what the viewer's large parts hold, room to grow included. */
+export interface MemoryStats {
+  /** The trades themselves: 25 bytes each. */
+  tradesBytes: number;
+  /** Derived: amounts and buy counts summed up to each trade, 20 bytes per trade. */
+  totalsBytes: number;
+  /** Derived: lowest and highest prices of spans of trades, 32 bytes per trade. */
+  priceTreeBytes: number;
+  /** Derived: the column summaries on show, while zoomed out. */
+  summariesBytes: number;
+  /** A file being read, until it's done. */
+  loadingBytes: number;
+  /** Its GPU buffers and textures, the canvas's own excepted. */
+  gpuBytes: number;
+  /** The whole wasm heap, which never shrinks; at most 4 GiB. */
+  heapBytes: number;
+}
+
 // One wasm instance for the page; each component creates its own Viewer in it.
 let modulePromise: Promise<MainModule> | null = null;
+const abortListeners = new Set<(reason: string) => void>();
 
-/** The wasm module, loaded on first use. */
+/**
+ * The wasm module, loaded on first use. After it aborts (out of memory, or a
+ * bug), every Viewer in it is dead, and the next call loads a new one.
+ */
 export function loadModule(): Promise<MainModule> {
-  modulePromise ??= createViewerModule();
+  modulePromise ??= createViewerModule({
+    onAbort: (what: unknown) => {
+      modulePromise = null;
+      const reason = String(what ?? 'unknown reason').replace(/^Aborted\((.*)\)$/s, '$1') || 'unknown reason';
+      for (const listener of abortListeners) {
+        listener(reason);
+      }
+    },
+  });
   return modulePromise;
+}
+
+/** Calls `listener` with why, whenever the wasm module aborts. Returns a function that stops it. */
+export function onModuleAbort(listener: (reason: string) => void): () => void {
+  abortListeners.add(listener);
+  return () => abortListeners.delete(listener);
 }
 
 /**

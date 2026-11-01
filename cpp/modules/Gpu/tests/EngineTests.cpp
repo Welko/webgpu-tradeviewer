@@ -33,7 +33,7 @@ std::unique_ptr<Engine> createOffscreen(std::uint32_t widthPx, std::uint32_t hei
 {
     std::unique_ptr<Engine> engine;
     bool done = false;
-    Engine::create(Gpu::Type::Target::Offscreen{ .width = widthPx, .height = heightPx }, Gpu::Type::PowerPreference::Default,
+    Engine::create({ .target = Gpu::Type::Target::Offscreen{ .width = widthPx, .height = heightPx } },
         [&](Engine::CreatedResult result) {
             done = true;
             CHECK_MESSAGE(result, (result ? "" : result.error()));
@@ -165,7 +165,7 @@ TEST_CASE("Trades are drawn where their time and price fall, colored by side")
     if (!engine) {
         return;
     }
-    engine->setTrades(buyThenSell());
+    CHECK(engine->setTrades(buyThenSell()));
     engine->setView(viewOf({ 0, 2 }));
     engine->render();
 
@@ -187,7 +187,7 @@ TEST_CASE("Insets keep trades and grid lines inside the plot")
     }
     // The plot is the top left 80 × 40 pixels.
     engine->setPlotInsets({ .left = 0, .top = 0, .right = 20, .bottom = 10 });
-    engine->setTrades(buyThenSell());
+    CHECK(engine->setTrades(buyThenSell()));
     engine->setView(viewOf({ 0, 2 }));
     engine->setGrid({ .verticalLines = { 0.5f }, .horizontalLines = { 0.25f } });
     engine->render();
@@ -216,7 +216,7 @@ TEST_CASE("Only the view's trades are drawn")
     if (!engine) {
         return;
     }
-    engine->setTrades(buyThenSell());
+    CHECK(engine->setTrades(buyThenSell()));
     engine->setView(viewOf({ 1, 2 }));
     engine->render();
 
@@ -242,7 +242,7 @@ std::optional<Pixels> drawOne(Engine& engine, double amount, Side side, MarkerSc
 {
     Trades trades;
     add(trades, NoonUs + 50, 100.0, amount, side);
-    engine.setTrades(trades);
+    CHECK(engine.setTrades(trades));
     engine.setView(viewOf({ 0, 1 }));
     engine.setMarkerScale(scale);
     engine.setPixelRatio(pixelRatio);
@@ -355,7 +355,7 @@ TEST_CASE("Columns are drawn instead of trades, as bars over their price range, 
     }
     Trades trades;
     add(trades, NoonUs + 50, 100.0, 1.0, Side::Buy);  // drawn at (50, 50) when trades show
-    engine->setTrades(trades);
+    CHECK(engine->setTrades(trades));
     engine->setView(viewOf({ 0, 1 }));
     // 10 columns of 10 pixels. Prices 99 to 101 fill the height, top down.
     engine->setColumns(Gpu::Market::Type::Columns{
@@ -446,7 +446,7 @@ TEST_CASE("Times are exact to the microsecond, decades after 1970")
     Trades trades;
     add(trades, StartUs + 2, 100.0, 1e-6, Side::Buy);
     add(trades, StartUs + 3, 100.0, 1e-6, Side::Sell);
-    engine->setTrades(trades);
+    CHECK(engine->setTrades(trades));
     engine->setView({ .time = { StartUs, StartUs + 10 }, .price = { .low = 99.0, .high = 101.0 }, .trades = { 0, 2 } });
     engine->render();
 
@@ -475,9 +475,9 @@ TEST_CASE("Appending past the reserved room keeps the earlier trades")
     add(second, both.timeUs[1], both.price[1], both.amount[1], both.side[1]);
 
     engine->reserveTrades(1);
-    engine->appendTrades(first);
+    CHECK(engine->appendTrades(first));
     engine->render();
-    engine->appendTrades(second);
+    CHECK(engine->appendTrades(second));
     engine->setView(viewOf({ 0, 2 }));
     engine->render();
 
@@ -501,7 +501,7 @@ TEST_CASE("Zooming and panning allocate nothing")
     }
     std::vector<FrameStats> reported;
     recordStats(*engine, reported);
-    engine->setTrades(buyThenSell());
+    CHECK(engine->setTrades(buyThenSell()));
     for (std::int64_t step = 0; step < 50; ++step) {
         engine->setView({ .time = { NoonUs + step, NoonUs + 100 + step * 3 }, .price = { .low = 99.0, .high = 101.0 },
                           .trades = { 0, 2 } });
@@ -621,7 +621,7 @@ TEST_CASE("Each frame is reported once, in order, with times only if it was prof
 TEST_CASE("An offscreen target needs a size")
 {
     std::optional<Engine::CreatedResult> result;
-    Engine::create(Gpu::Type::Target::Offscreen{ .width = 0, .height = 16 }, Gpu::Type::PowerPreference::Default,
+    Engine::create({ .target = Gpu::Type::Target::Offscreen{ .width = 0, .height = 16 } },
         [&](Engine::CreatedResult created) { result = std::move(created); });
     CHECK(result);
     if (result) {

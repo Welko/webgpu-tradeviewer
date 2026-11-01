@@ -16,6 +16,7 @@ target_copy_webgpu_binaries(GpuTests)
 if(NOT EMSCRIPTEN)
     viewer_add_test(GpuDeviceTests
         EngineTests.cpp
+        GrowableBufferTests.cpp
         ProfilerTests.cpp
     )
     target_include_directories(GpuDeviceTests PRIVATE ../src/include)

@@ -23,6 +23,9 @@ if (EMSCRIPTEN)
         -sEXPORT_NAME=createViewerModule
         -sENVIRONMENT=web
         -sALLOW_MEMORY_GROWTH=1
+        # The most wasm32 addresses, rather than the default 2 GB: a trade
+        # takes about 80 bytes.
+        -sMAXIMUM_MEMORY=4GB
         --emit-tsd ViewerApp.d.ts
     )
     if (TRADEVIEWER_WASM_NAMES)

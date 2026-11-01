@@ -1,6 +1,7 @@
 import { useEffect, useState, type DragEvent } from 'react';
-import type { TradeStats, Viewer } from '../viewer/viewerModule';
+import type { MemoryStats, TradeStats, Viewer } from '../viewer/viewerModule';
 import { utc } from '../utc';
+import { MemoryBreakdown } from './MemoryBreakdown';
 import { BinanceSampleUrl, loadBinanceSample, loadFile, type OnProgress } from './loadTrades';
 
 const TardisUrl = 'https://datasets.tardis.dev/v1/binance/trades/2019/12/01/BTCUSDT.csv.gz';
@@ -19,12 +20,14 @@ function megabytes(bytes: number): string {
 export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTradesChanged: () => void }) {
   const [source, setSource] = useState(Synthetic);
   const [stats, setStats] = useState<TradeStats>(() => viewer.tradeStats());
+  const [memory, setMemory] = useState(() => viewer.memoryStats() as MemoryStats | null);
   const [load, setLoad] = useState<LoadState>({ kind: 'idle' });
 
   // A new viewer, for another GPU, starts again from synthetic data.
   useEffect(() => {
     setSource(Synthetic);
     setStats(viewer.tradeStats());
+    setMemory(viewer.memoryStats() as MemoryStats | null);
     setLoad({ kind: 'idle' });
   }, [viewer]);
 
@@ -34,6 +37,7 @@ export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTrade
       await loading((loaded, total) => setLoad({ kind: 'loading', what, loaded, total }));
       setSource(what);
       setStats(viewer.tradeStats());
+      setMemory(viewer.memoryStats() as MemoryStats | null);
       onTradesChanged();
       setLoad({ kind: 'idle' });
     } catch (error) {
@@ -67,6 +71,9 @@ export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTrade
         <dt>Traded</dt>
         <dd>{stats.totalAmount.toLocaleString('en-US', { maximumFractionDigits: 6 })} BTC</dd>
       </dl>
+      {memory && (
+        <MemoryBreakdown memory={memory} count={stats.count} onOpen={() => setMemory(viewer.memoryStats() as MemoryStats | null)} />
+      )}
 
       {load.kind === 'loading' && (
         <div className="progress">

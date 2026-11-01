@@ -14,7 +14,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <optional>
+#include <string>
 
 namespace Gpu::Market {
 
@@ -34,14 +36,20 @@ public:
     /** The Context and Stats must outlive the pass. */
     TradesPass(const Context& context, Resource::Stats& stats, WGPUTextureFormat format);
 
-    /** Makes room for `count` trades in total, so appending up to there doesn't grow the buffer. */
-    void reserve(std::size_t count);
+    /** Makes room for `count` trades in total, so appending up to there doesn't grow the buffer. Fails past getMaxCount(). */
+    [[nodiscard]] std::expected<void, std::string> reserve(std::size_t count);
+
+    /** The most trades the GPU's largest buffer holds. */
+    [[nodiscard]] std::size_t getMaxCount() const;
+
+    /** How many trades were appended since the last clear(). */
+    [[nodiscard]] std::size_t getCount() const;
 
     /** Removes every trade, keeping the room. */
     void clear();
 
-    /** Adds trades after the current ones; they must not be earlier. */
-    void append(const Core::Data::Trades& trades);
+    /** Adds trades after the current ones; they must not be earlier. Fails, adding none, past getMaxCount(). */
+    [[nodiscard]] std::expected<void, std::string> append(const Core::Data::Trades& trades);
 
     void setView(const Type::View& view) { mView = view; }
     void setMarkerScale(Type::MarkerScale scale) { mMarkerScale = scale; }

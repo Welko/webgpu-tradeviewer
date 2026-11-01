@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <format>
 
 namespace Gpu {
 
@@ -11,27 +12,46 @@ GrowableBuffer::GrowableBuffer(const Context& context, Resource::Stats& stats, W
       mUsage(usage | WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc)
 {}
 
-void GrowableBuffer::reserve(std::uint64_t bytes)
+namespace {
+
+std::unexpected<std::string> tooLarge(std::uint64_t bytes, std::uint64_t maxBytes)
 {
-    if (bytes > mCapacity) {
-        // Copies need sizes in multiples of 4.
-        grow((bytes + 3) / 4 * 4);
-    }
+    return std::unexpected(std::format("{} bytes are more than the largest buffer this GPU takes, {} bytes", bytes, maxBytes));
 }
 
-void GrowableBuffer::append(std::span<const std::byte> data)
+} // namespace
+
+std::expected<void, std::string> GrowableBuffer::reserve(std::uint64_t bytes)
+{
+    // Copies need sizes in multiples of 4.
+    const std::uint64_t rounded = (bytes + 3) / 4 * 4;
+    if (rounded > mContext->maxBufferBytes) {
+        return tooLarge(rounded, mContext->maxBufferBytes);
+    }
+    if (rounded > mCapacity) {
+        grow(rounded);
+    }
+    return {};
+}
+
+std::expected<void, std::string> GrowableBuffer::append(std::span<const std::byte> data)
 {
     assert(data.size() % 4 == 0);
     if (data.empty()) {
-        return;
+        return {};
     }
     const std::uint64_t needed = mSize + data.size();
+    if (needed > mContext->maxBufferBytes) {
+        return tooLarge(needed, mContext->maxBufferBytes);
+    }
     if (needed > mCapacity) {
-        // Half again as much, so appending many times copies little overall.
-        grow(std::max(needed, mCapacity + mCapacity / 2 / 4 * 4));
+        // Half again as much, so appending many times copies little overall,
+        // short of the largest buffer the device takes.
+        grow(std::max(needed, std::min(mCapacity + mCapacity / 2 / 4 * 4, mContext->maxBufferBytes / 4 * 4)));
     }
     wgpuQueueWriteBuffer(mContext->queue.get(), mBuffer.get(), mSize, data.data(), data.size());
     mSize = needed;
+    return {};
 }
 
 void GrowableBuffer::grow(std::uint64_t capacity)
@@ -46,8 +66,7 @@ void GrowableBuffer::grow(std::uint64_t capacity)
         const Handle encoder(wgpuDeviceCreateCommandEncoder(mContext->device.get(), nullptr));
         wgpuCommandEncoderCopyBufferToBuffer(encoder.get(), mBuffer.get(), 0, buffer.get(), 0, mSize);
         const Handle commands(wgpuCommandEncoderFinish(encoder.get(), nullptr));
-        const WGPUCommandBuffer submitted = commands.get();
-        wgpuQueueSubmit(mContext->queue.get(), 1, &submitted);
+        mContext->submit(commands.get());
     }
     // The GPU keeps the old buffer alive until the copy is done.
     mBuffer = std::move(buffer);

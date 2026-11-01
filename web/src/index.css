@@ -229,6 +229,67 @@ body,
   font-variant-numeric: tabular-nums;
 }
 
+.data-panel .memory {
+  margin: 0 0 1rem;
+}
+
+.data-panel .memory summary {
+  cursor: pointer;
+  color: #9aa1ad;
+}
+
+.data-panel .memory table {
+  width: 100%;
+  margin: 0.4rem 0;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-panel .memory th,
+.data-panel .memory td {
+  padding: 0.15rem 0;
+  vertical-align: top;
+  text-align: right;
+}
+
+.data-panel .memory thead th {
+  white-space: nowrap;
+}
+
+.data-panel .memory tbody th {
+  font-weight: normal;
+  text-align: left;
+}
+
+.data-panel .memory td {
+  padding-left: 0.6rem;
+  white-space: nowrap;
+}
+
+.data-panel .memory small {
+  display: block;
+  color: #9aa1ad;
+  font-size: 0.75rem;
+}
+
+.data-panel .memory .derived th {
+  padding-left: 0.75rem;
+}
+
+.data-panel .memory .total {
+  border-top: 1px solid #2a2e37;
+  font-weight: 600;
+}
+
+.data-panel .memory .total th {
+  font-weight: 600;
+}
+
+.data-panel .memory p {
+  margin: 0;
+  color: #9aa1ad;
+}
+
 .data-panel .progress {
   display: flex;
   flex-direction: column;

@@ -24,6 +24,9 @@ public:
     /** Nothing if `indices` is empty. */
     [[nodiscard]] std::optional<ValueRange> getRange(IndexRange indices) const;
 
+    /** The memory held: 32 bytes per trade. */
+    [[nodiscard]] std::size_t getBytes() const { return mNodes.capacity() * sizeof(ValueRange); }
+
 private:
     std::size_t mSize = 0;
     // mNodes[mSize + i] is trade i's price; mNodes[k], for 0 < k < mSize,

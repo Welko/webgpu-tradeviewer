@@ -110,6 +110,50 @@ void fail(std::unique_ptr<Pending> pending, std::string_view what, WGPUStringVie
 
 void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message, void* userdata1, void*);
 
+std::string_view describe(WGPUErrorType type)
+{
+    switch (type) {
+    case WGPUErrorType_Validation:
+        return "validation";
+    case WGPUErrorType_OutOfMemory:
+        return "out of memory";
+    case WGPUErrorType_Internal:
+        return "internal";
+    default:
+        return "unknown";
+    }
+}
+
+void onUncapturedError(WGPUDevice const*, WGPUErrorType type, WGPUStringView message, void* userdata1, void*)
+{
+    auto& health = *static_cast<Context::Health*>(userdata1);
+    if (health.lost) {
+        // wgpu-native reports every call on a lost device; the loss says it all.
+        return;
+    }
+    auto error = std::format("WebGPU {} error: {}", describe(type), Convert::FromWgpu::stringView(message));
+    Core::Log::error("{}", error);
+    if (health.errors.size() < Context::Health::KeptErrors) {
+        health.errors.push_back(std::move(error));
+    }
+    ++health.errorCount;
+}
+
+void onDeviceLost(WGPUDevice const*, WGPUDeviceLostReason reason, WGPUStringView message, void* userdata1, void*)
+{
+    const std::unique_ptr<std::shared_ptr<Context::Health>> owned(static_cast<std::shared_ptr<Context::Health>*>(userdata1));
+    auto& health = **owned;
+    const auto detail = Convert::FromWgpu::stringView(message);
+    health.lost = detail.empty() ? std::format("reason {}", static_cast<int>(reason)) : std::string(detail);
+    if (health.released || reason == WGPUDeviceLostReason_FailedCreation || reason == WGPUDeviceLostReason_CallbackCancelled) {
+        return;
+    }
+    Core::Log::warn("The GPU device was lost: {}", *health.lost);
+    if (health.onLost) {
+        health.onLost();
+    }
+}
+
 void onAdapter(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message, void* userdata1, void*)
 {
     std::unique_ptr<Pending> pending(static_cast<Pending*>(userdata1));
@@ -126,13 +170,29 @@ void onAdapter(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringV
         features.push_back(WGPUFeatureName_TimestampQuery);
     }
 
+    // The largest buffers the adapter allows, rather than the default 256 MiB:
+    // the trades take 20 bytes each, all in one buffer. Other limits keep
+    // their defaults.
+    WGPULimits supported = WGPU_LIMITS_INIT;
+    WGPULimits required = WGPU_LIMITS_INIT;
+    if (wgpuAdapterGetLimits(adapter, &supported) == WGPUStatus_Success) {
+        required.maxBufferSize = supported.maxBufferSize;
+    }
+
+    // Owned by the lost callback, which the device calls exactly once, even
+    // when it fails to be created or is released: errors can't come later.
+    auto& health = pending->context.health;
+    health = std::make_shared<Context::Health>();
+
     WGPUDeviceDescriptor descriptor{};
     descriptor.requiredFeatureCount = features.size();
     descriptor.requiredFeatures = features.data();
-    descriptor.uncapturedErrorCallbackInfo.callback =
-        [](WGPUDevice const*, WGPUErrorType type, WGPUStringView message, void*, void*) {
-            Core::Log::error("WebGPU error ({}): {}", static_cast<int>(type), Convert::FromWgpu::stringView(message));
-        };
+    descriptor.requiredLimits = &required;
+    descriptor.uncapturedErrorCallbackInfo.callback = onUncapturedError;
+    descriptor.uncapturedErrorCallbackInfo.userdata1 = health.get();
+    descriptor.deviceLostCallbackInfo.mode = WGPUCallbackMode_AllowSpontaneous;
+    descriptor.deviceLostCallbackInfo.callback = onDeviceLost;
+    descriptor.deviceLostCallbackInfo.userdata1 = new std::shared_ptr<Context::Health>(health);
 
     wgpuAdapterRequestDevice(adapter, &descriptor, WGPURequestDeviceCallbackInfo {
         .nextInChain = nullptr,
@@ -159,6 +219,10 @@ void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView 
     context.nanosecondsPerTick = wgpuQueueGetTimestampPeriod(context.queue.get());
 #endif
     context.info = readInfo(context.adapter.get());
+    WGPULimits limits = WGPU_LIMITS_INIT;
+    if (wgpuDeviceGetLimits(device, &limits) == WGPUStatus_Success) {
+        context.maxBufferBytes = limits.maxBufferSize;
+    }
     Core::Log::info("GPU timestamps: {}", context.features.timestampQuery
                                               ? std::format("available, {:.4g} ns per tick", context.nanosecondsPerTick)
                                               : "not available");
@@ -170,6 +234,17 @@ void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView 
 }
 
 } // namespace
+
+void Context::submit(WGPUCommandBuffer commands) const
+{
+    if (health && health->lost) {
+        return;
+    }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    wgpuQueueSubmit(queue.get(), 1, &commands);
+#pragma GCC diagnostic pop
+}
 
 void Context::create(Handle<WGPUInstance> instance, WGPUSurface compatible, Type::PowerPreference powerPreference,
                      Callback onDone)

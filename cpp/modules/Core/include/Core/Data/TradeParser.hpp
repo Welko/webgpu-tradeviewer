@@ -30,6 +30,9 @@ public:
     /** Parses the last line, if it had no newline, and hands over the trades in time order. */
     std::expected<Trades, std::string> finish();
 
+    /** The memory held so far: the trades read, with room to grow, and the line waiting for its end. */
+    [[nodiscard]] std::size_t getBytes() const { return mTrades.getBytes() + mPartialLine.capacity(); }
+
 private:
     enum class Format : std::uint8_t
     {

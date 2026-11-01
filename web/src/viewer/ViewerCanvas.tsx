@@ -6,7 +6,11 @@ import { ColumnTooltip, TradeTooltip } from './Tooltip';
 import { ViewControls } from './ViewControls';
 import {
   createViewer,
+  loadModule,
+  onModuleAbort,
+  type MainModule,
   type Axes,
+  type GpuHealth,
   type Legend,
   type PickedColumn,
   type PickedTrade,
@@ -15,9 +19,49 @@ import {
 
 export type ViewerStatus =
   | { kind: 'loading' }
-  /** `refresh()` draws again; call it after changing the viewer, such as loading trades. */
-  | { kind: 'ready'; gpu: GpuInfo; viewer: Viewer; refresh: () => void }
+  /**
+   * `refresh()` draws again; call it after changing the viewer, such as
+   * loading trades. `problem` says what went wrong, if anything: the GPU
+   * restarting or failing, WebGPU errors, or the viewer having had to start
+   * over.
+   */
+  | { kind: 'ready'; gpu: GpuInfo; viewer: Viewer; refresh: () => void; problem: string | null }
   | { kind: 'error'; message: string };
+
+declare global {
+  interface Window {
+    /** The viewer on the page, for tests and the console. */
+    viewer?: Viewer;
+    /** Faults to inject into it, for the browser tests (see Testing in WebMain.cpp). */
+    viewerTesting?: MainModule['Testing'];
+  }
+}
+
+/** What the page should say after the wasm module stopped for `reason`, and started over. */
+function describeAbort(reason: string): string {
+  if (reason.startsWith('Out of memory')) {
+    return `This data is too large for the page. ${reason}. The viewer started over with the demo data.`;
+  }
+  // A bug: the details are for developers.
+  return 'Something went wrong, and the viewer started over with the demo data. The details are in the browser’s console.';
+}
+
+/** What the page should say about `health`, if anything. */
+function describeHealth(health: GpuHealth | null): string | null {
+  if (!health) {
+    return null;
+  }
+  if (health.failure) {
+    return `The GPU stopped working: ${health.failure}`;
+  }
+  if (health.restarting) {
+    return 'The GPU was lost; restarting it…';
+  }
+  if (health.errorCount > 0) {
+    return `WebGPU reported ${health.errorCount} error${health.errorCount === 1 ? '' : 's'}: ${health.errors[0]}`;
+  }
+  return null;
+}
 
 // Zooming per CSS pixel of wheel scrolling: a usual 100-pixel step zooms by about 1.22.
 const ZoomPerWheelCssPx = 0.002;
@@ -52,6 +96,9 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
   const canvasId = `viewer-${useId().replace(/:/g, '')}`;
   const onStatusRef = useRef(onStatus);
   onStatusRef.current = onStatus;
+  // Bumped when the wasm module aborts, to start over with a new one.
+  const [generation, setGeneration] = useState(0);
+  const abortedRef = useRef<string | null>(null);
   const [shown, setShown] = useState<{
     viewer: Viewer;
     view: TimeRange;
@@ -75,6 +122,16 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
     let scheduled = false;
     let observer: ResizeObserver | null = null;
     const removeInput = new AbortController();
+    let dead = false;
+    const stopListening = onModuleAbort((reason) => {
+      // Every call into the module would throw from now on.
+      dead = true;
+      cancelAnimationFrame(frame);
+      removeInput.abort();
+      console.error(`The viewer stopped: ${reason}`);
+      abortedRef.current = describeAbort(reason);
+      setGeneration((current) => current + 1);
+    });
 
     onStatusRef.current?.({ kind: 'loading' });
 
@@ -85,10 +142,18 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
           return;
         }
         viewer = created;
+        window.viewer = created;
+        // The module the viewer is in, already loaded.
+        void loadModule().then((module) => {
+          window.viewerTesting = module.Testing;
+        });
         created.setTheme(readTheme(canvas.parentElement!));
 
         const tick = (now: number) => {
           scheduled = false;
+          if (dead) {
+            return;
+          }
           created.update(now);
           if (created.needsRender()) {
             created.render();
@@ -106,8 +171,17 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
           }
         };
         let sizeCssPx = { width: canvas.clientWidth, height: canvas.clientHeight };
+        let problem: string | null = null;
         const refresh = () => {
+          if (dead) {
+            return;
+          }
           requestFrame();
+          const now = describeHealth(created.gpuHealth() as GpuHealth | null) ?? abortedRef.current;
+          if (now !== problem) {
+            problem = now;
+            onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created, refresh, problem });
+          }
           setShown({
             viewer: created,
             view: created.view(),
@@ -195,9 +269,11 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
           refresh();
         });
         observer.observe(canvas);
+        // When the GPU is lost, and once it's back.
+        created.setWakeCallback(refresh);
         refresh();
 
-        onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created, refresh });
+        onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created, refresh, problem });
       })
       .catch((error: unknown) => {
         if (!disposed) {
@@ -207,13 +283,19 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
 
     return () => {
       disposed = true;
+      stopListening();
       cancelAnimationFrame(frame);
       observer?.disconnect();
       removeInput.abort();
       setShown(null);
-      viewer?.delete();
+      if (window.viewer === viewer) {
+        delete window.viewer;
+      }
+      if (!dead) {
+        viewer?.delete();
+      }
     };
-  }, [canvasId, powerPreference]);
+  }, [canvasId, powerPreference, generation]);
 
   return (
     <div className="viewer">

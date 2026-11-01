@@ -1,6 +1,7 @@
 #include "Viewer/Scene.hpp"
 
 #include "Core/Data/Trades.hpp"
+#include "Core/Log.hpp"
 #include "Gpu/Market/Style.hpp"
 #include "Gpu/Market/Type.hpp"
 
@@ -145,15 +146,23 @@ void pointAtMiddle(App& app)
     }
 }
 
+/** Shows `trades`, which are few enough for any GPU. */
+void showTrades(App& app, Core::Data::Trades trades)
+{
+    if (auto set = app.setTrades(std::move(trades)); !set) {
+        Core::Log::error("{}", set.error());
+    }
+}
+
 void setUpHour(App& app)
 {
-    app.setTrades(generateSyntheticDay());
+    showTrades(app, generateSyntheticDay());
     pointAtMiddle(app);
 }
 
 void setUpDay(App& app)
 {
-    app.setTrades(generateSyntheticDay());
+    showTrades(app, generateSyntheticDay());
     app.showDay();
     pointAtMiddle(app);
 }
@@ -199,7 +208,7 @@ void setUpColors(App& app, float opacity)
     };
     add(DayStartUs + 12 * 60 * MinuteUs + 15 * MinuteUs, Core::Data::Side::Buy);
     add(DayStartUs + 12 * 60 * MinuteUs + 45 * MinuteUs, Core::Data::Side::Sell);
-    app.setTrades(std::move(trades));
+    showTrades(app, std::move(trades));
     app.setTheme({
         .plot = { .background = toColor(Background), .grid = toColor(Background) },
         .buy = toColor(Buy),

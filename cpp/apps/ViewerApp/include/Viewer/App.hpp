@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace Viewer {
@@ -36,15 +37,19 @@ public:
     using Callback = std::function<void(Result)>;
 
     /** Calls `onDone` exactly once, possibly before returning. */
-    static void create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone);
+    static void create(const Gpu::Market::Engine::Params& params, Callback onDone);
 
-    explicit App(std::unique_ptr<Gpu::Market::Engine> engine) noexcept;
+    /** `engine` was created with `params`, which make a new one if the GPU is lost. */
+    App(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market::Engine::Params params) noexcept;
 
     /** The trades on show: none until setTrades(). */
     [[nodiscard]] const Core::Data::Trades& getTrades() const;
 
-    /** Replaces the trades, which must be in time order, and resets the view. */
-    void setTrades(Core::Data::Trades trades);
+    /**
+     * Replaces the trades, which must be in time order, and resets the view.
+     * Fails, keeping the old ones, if the GPU can't hold them all.
+     */
+    [[nodiscard]] std::expected<void, std::string> setTrades(Core::Data::Trades trades);
 
     /** The trades in the time range on screen, start inclusive and end exclusive. */
     [[nodiscard]] Core::Data::TradeStats getViewStats() const;
@@ -177,8 +182,48 @@ public:
     /** Calls `onStats` once per drawn frame, in order, once its GPU times are in. */
     void setStatsCallback(Gpu::Market::Engine::StatsCallback onStats);
 
-    /** Copies the next frame drawn back as RGBA rows, top row first (see Gpu::Market::Engine::readPixels). */
+    /**
+     * Copies the next frame drawn back as RGBA rows, top row first (see
+     * Gpu::Market::Engine::readPixels). Fails at once while the GPU restarts.
+     */
     void readPixels(Gpu::Market::Engine::PixelsCallback onDone);
+
+    /**
+     * How the GPU is doing. When it's lost (a driver reset, the browser's GPU
+     * process crashing...), the next update() creates a new engine on a new
+     * device, and sets it up as the old one was: trades, view, size, colors.
+     */
+    struct GpuHealth
+    {
+        bool restarting = false;  // lost, and a new device is on its way
+        std::size_t restarts = 0;  // how many times it was lost and came back
+        std::optional<std::string> failure;  // why it couldn't come back; nothing draws
+        std::vector<std::string> errors;  // the first WebGPU errors nothing caught (see Engine::getErrors)
+        std::size_t errorCount = 0;
+    };
+
+    [[nodiscard]] GpuHealth getGpuHealth() const;
+
+    /**
+     * Called when the app needs update() and render() without any input:
+     * when the GPU is lost, and once it's back. Possibly from processEvents()
+     * natively, or the browser's event loop.
+     */
+    void setWakeCallback(std::function<void()> onWake);
+
+    /** The memory the app's large parts hold, room to grow included. */
+    struct MemoryStats
+    {
+        std::size_t tradesBytes = 0;  // 25 per trade
+        std::size_t totalsBytes = 0;  // running totals, 20 per trade
+        std::size_t priceTreeBytes = 0;  // 32 per trade
+        std::size_t summariesBytes = 0;  // the column summaries on show
+        std::uint64_t gpuBytes = 0;  // buffers and textures: 20 per trade, and the columns'
+
+        [[nodiscard]] std::size_t getCpuBytes() const { return tradesBytes + totalsBytes + priceTreeBytes + summariesBytes; }
+    };
+
+    [[nodiscard]] MemoryStats getMemoryStats() const;
 
 #ifndef __EMSCRIPTEN__
     /** Delivers finished asynchronous GPU work. Call every loop iteration. */
@@ -197,6 +242,15 @@ private:
 
     /** Picks the trade or column at the cursor again, after it or the view moved, and highlights it. */
     void updatePick();
+
+    /** Draws the columns in mSummaries, or the trades when there are none. */
+    void showColumns();
+
+    /** Creates a new engine after the GPU was lost. */
+    void restartGpu();
+
+    /** Gives a new engine everything the old one had. */
+    void setUpEngine();
 
     /** Where the view's trades are drawn, in physical pixels within the plot. */
     [[nodiscard]] Core::Plot::Mapping getPlotMapping() const;
@@ -251,7 +305,37 @@ private:
         std::vector<Core::Data::ColumnSummary> columns;  // those with trades, so up to `across`
     };
 
+    /** The GPU works. */
+    struct GpuWorking
+    {};
+
+    /** The GPU was lost, and a new engine is on its way. */
+    struct GpuRestarting
+    {};
+
+    /** The GPU was lost and couldn't come back: nothing draws. */
+    struct GpuFailed
+    {
+        std::string reason;
+    };
+
+    /** How the engine is made, how the GPU is doing, and what each new engine is given besides the app's state. */
+    struct EngineSetup
+    {
+        Gpu::Market::Engine::Params params;
+        Gpu::Type::Info info;  // of the engine in use, or the last one
+        std::variant<GpuWorking, GpuRestarting, GpuFailed> gpu = GpuWorking{};
+        std::size_t restarts = 0;  // times the GPU was lost and came back
+        bool profiling = false;
+        Gpu::Market::Engine::StatsCallback onStats{};
+        std::function<void()> onWake{};
+        // Expires with the app, for a new engine that arrives later.
+        std::shared_ptr<int> alive = std::make_shared<int>();
+    };
+
+    // Null only while a new one is being created, after the GPU was lost.
     std::unique_ptr<Gpu::Market::Engine> mEngine;
+    EngineSetup mSetup;
     TradeData mData;
     View mView;
     Layout mLayout;

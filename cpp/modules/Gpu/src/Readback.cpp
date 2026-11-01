@@ -102,8 +102,7 @@ void texture(const Context& context, WGPUTexture texture, WGPUTextureFormat form
     const WGPUExtent3D extent{ width, height, 1 };
     wgpuCommandEncoderCopyTextureToBuffer(encoder.get(), &source, &destination, &extent);
     const Handle commands(wgpuCommandEncoderFinish(encoder.get(), nullptr));
-    const WGPUCommandBuffer submitted = commands.get();
-    wgpuQueueSubmit(context.queue.get(), 1, &submitted);
+    context.submit(commands.get());
 
     // The copy's rows are padded; strip the padding once the bytes arrive, and put red first.
     map(staging->get(), size, [staging, rowBytes, bytesPerRow, height, bgra, onDone = std::move(onDone)](std::expected<Bytes, std::string> padded) {

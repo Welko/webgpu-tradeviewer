@@ -8,7 +8,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <span>
+#include <string>
 
 namespace Gpu {
 
@@ -23,11 +25,19 @@ public:
     /** `usage` is what the data is for; copying in and out is added. Holds nothing until data arrives. */
     GrowableBuffer(const Context& context, Resource::Stats& stats, WGPUBufferUsage usage);
 
-    /** Makes room for at least `bytes` in total, without growing again. */
-    void reserve(std::uint64_t bytes);
+    /**
+     * Makes room for at least `bytes` in total, without growing again. Fails,
+     * changing nothing, past the largest buffer the device takes
+     * (Context::maxBufferBytes), saying so.
+     */
+    [[nodiscard]] std::expected<void, std::string> reserve(std::uint64_t bytes);
 
-    /** Adds `data` after what's there. Its size must be a multiple of 4. */
-    void append(std::span<const std::byte> data);
+    /**
+     * Adds `data` after what's there. Its size must be a multiple of 4.
+     * Fails, adding nothing, if the whole would be past the largest buffer
+     * the device takes, saying so.
+     */
+    [[nodiscard]] std::expected<void, std::string> append(std::span<const std::byte> data);
 
     /** Forgets the data, keeping the room. */
     void clear() { mSize = 0; }

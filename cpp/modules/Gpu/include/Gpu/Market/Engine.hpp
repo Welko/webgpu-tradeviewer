@@ -31,11 +31,20 @@ public:
 
     using StatsCallback = std::function<void(const Gpu::Type::FrameStats&)>;
 
+    /** What an engine draws to, on which GPU, and how much it may hold. */
+    struct Params
+    {
+        Gpu::Type::Target::Any target;
+        Gpu::Type::PowerPreference powerPreference = Gpu::Type::PowerPreference::Default;
+        /** At most this many trades, short of what the GPU holds; none for as many as it holds. */
+        std::optional<std::size_t> maxTrades = std::nullopt;
+    };
+
     /**
      * Calls `onCreated` exactly once: natively before returning, on the web
      * later from the browser's event loop.
      */
-    static void create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, CreatedCallback onDone);
+    static void create(const Params& params, CreatedCallback onDone);
 
     ~Engine();
     Engine(const Engine&) = delete;
@@ -55,17 +64,20 @@ public:
     /** Where to draw grid lines, usually at the axis ticks. */
     void setGrid(const Plot::Type::Grid& grid);
 
-    /** Replaces the trades, which must be in time order. */
-    void setTrades(const Core::Data::Trades& trades);
+    /** The most trades the engine holds: as many as fit in the GPU's largest buffer, or Params::maxTrades. */
+    [[nodiscard]] std::size_t getMaxTrades() const;
+
+    /** Replaces the trades, which must be in time order. Fails, keeping the old ones, past getMaxTrades(). */
+    [[nodiscard]] std::expected<void, std::string> setTrades(const Core::Data::Trades& trades);
 
     /**
      * Adds trades after the current ones; they must not be earlier. If they
      * don't fit in the room reserved, the GPU copies everything to a bigger
-     * buffer, which is slow.
+     * buffer, which is slow. Fails, adding none, past getMaxTrades().
      */
-    void appendTrades(const Core::Data::Trades& trades);
+    [[nodiscard]] std::expected<void, std::string> appendTrades(const Core::Data::Trades& trades);
 
-    /** Makes room for `count` trades in total, for appending without copies. */
+    /** Makes room for `count` trades in total, up to getMaxTrades(), for appending without copies. */
     void reserveTrades(std::size_t count);
 
     /** What part of the trades to show. */
@@ -122,6 +134,35 @@ public:
      * event loop.
      */
     void readPixels(PixelsCallback onDone);
+
+    /**
+     * Whether the GPU device is gone, after a driver reset or a crash of the
+     * browser's GPU process, for example. Nothing draws any more, and every
+     * call does nothing: the app must create a new engine and set it up
+     * again.
+     */
+    [[nodiscard]] bool isLost() const;
+
+    /**
+     * Called once when the device is lost: natively from processEvents(), on
+     * the web from the browser's event loop. It mustn't destroy the engine.
+     */
+    void setLostCallback(std::function<void()> onLost);
+
+    /** Loses the device, as a GPU reset would: WebGPU's destroy(). For tests of what follows. */
+    void loseDevice();
+
+    /**
+     * The first WebGPU errors nothing caught (up to 16), such as validation
+     * errors, which mean a bug, or running out of GPU memory.
+     */
+    [[nodiscard]] const std::vector<std::string>& getErrors() const;
+
+    /** How many such errors there were, including those not kept. */
+    [[nodiscard]] std::size_t getErrorCount() const;
+
+    /** The GPU memory the engine's buffers and textures take, a window's or canvas's own excepted. */
+    [[nodiscard]] std::uint64_t getGpuBytes() const;
 
 private:
     struct Impl;

@@ -4,6 +4,7 @@ add_library(Core STATIC
     src/Data/PriceTree.cpp
     src/Data/Synthetic.cpp
     src/Data/TradeParser.cpp
+    src/Memory.cpp
     src/Plot/Axis.cpp
 )
 viewer_setup_target(Core)

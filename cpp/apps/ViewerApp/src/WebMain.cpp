@@ -1,23 +1,46 @@
 #include "Viewer/App.hpp"
 #include "Viewer/Scene.hpp"
 
+#include "Core/Memory.hpp"
 #include "Core/Plot/Axis.hpp"
 #include "Core/Data/TradeParser.hpp"
 
 #include <emscripten/bind.h>
+#include <emscripten/em_js.h>
+#include <emscripten/heap.h>
 #include <emscripten/val.h>
 
 #include <cstdint>
+#include <cstdlib>
 #include <expected>
 #include <memory>
+#include <new>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+/*
+ * Stops the module with a message saying why, which Module.onAbort receives.
+ * A request fails when it would take the heap past its most, which it may
+ * be well short of.
+ */
+EM_JS(void, viewerAbortOutOfMemory, (double heapBytes, double maxBytes), {
+    abort("Out of memory: the viewer had " + Math.round(heapBytes / 1048576) + " MiB, and needed more than the " +
+          Math.round(maxBytes / 1048576) + " MiB a page can have");
+});
+
 namespace {
 
 using emscripten::val;
+
+/** Lets JavaScript tell running out of memory from other aborts. Exceptions are off, so new can only abort. */
+const bool OutOfMemoryHandled = [] {
+    std::set_new_handler([] {
+        viewerAbortOutOfMemory(static_cast<double>(emscripten_get_heap_size()), static_cast<double>(emscripten_get_heap_max()));
+    });
+    return true;
+}();
 
 /** Accepts the WebGPU spelling: "low-power", "high-performance", anything else is the default. */
 Gpu::Type::PowerPreference parsePowerPreference(const std::string& value)
@@ -157,21 +180,30 @@ public:
     void init(std::string selector, std::string powerPreference, val onDone)
     {
         std::weak_ptr<std::unique_ptr<Viewer::App>> slot = mApp;
-        Viewer::App::create(Gpu::Type::Target::Canvas{ .selector = std::move(selector) }, parsePowerPreference(powerPreference),
-            [slot, onDone](Viewer::App::Result result) {
-                auto app = slot.lock();
-                if (!app) {
-                    // delete() was called before initialization finished.
-                    return;
-                }
-                if (!result) {
-                    onDone(result.error());
-                    return;
-                }
-                *app = std::move(*result);
-                (*app)->setTrades(Viewer::generateSyntheticDay());
-                onDone(val::null());
-            });
+        const Gpu::Market::Engine::Params params{
+            .target = Gpu::Type::Target::Canvas{ .selector = std::move(selector) },
+            .powerPreference = parsePowerPreference(powerPreference),
+        };
+        // The engine first, rather than App::create(), so Testing can reach it.
+        Gpu::Market::Engine::create(params, [this, slot, params, onDone](Gpu::Market::Engine::CreatedResult result) {
+            auto app = slot.lock();
+            if (!app) {
+                // delete() was called before initialization finished.
+                return;
+            }
+            if (!result) {
+                onDone(result.error());
+                return;
+            }
+            // The slot lives as long as this viewer.
+            mFirstEngine = result->get();
+            *app = std::make_unique<Viewer::App>(std::move(*result), params);
+            if (auto set = (*app)->setTrades(Viewer::generateSyntheticDay()); !set) {
+                onDone(set.error());
+                return;
+            }
+            onDone(val::null());
+        });
     }
 
     /** The GPU in use, as a plain JavaScript object. Empty until init() succeeds. */
@@ -410,6 +442,56 @@ public:
         return *mApp ? toWeb(Core::Data::getStats((*mApp)->getTrades())) : WebTradeStats{};
     }
 
+    /** How the GPU is doing, as { restarting, restarts, failure, errors, errorCount } (see Viewer::App::GpuHealth). Null until init() succeeds. */
+    val getGpuHealth() const
+    {
+        if (!*mApp) {
+            return val::null();
+        }
+        const auto health = (*mApp)->getGpuHealth();
+        val errors = val::array();
+        for (const auto& error : health.errors) {
+            errors.call<void>("push", error);
+        }
+        val object = val::object();
+        object.set("restarting", health.restarting);
+        object.set("restarts", static_cast<double>(health.restarts));
+        object.set("failure", health.failure ? val(*health.failure) : val::null());
+        object.set("errors", errors);
+        object.set("errorCount", static_cast<double>(health.errorCount));
+        return object;
+    }
+
+    /**
+     * What the app's large parts hold, as { tradesBytes, totalsBytes,
+     * priceTreeBytes, summariesBytes, loadingBytes, gpuBytes, heapBytes } (see
+     * Viewer::App::MemoryStats). Null until init() succeeds.
+     */
+    val getMemoryStats() const
+    {
+        if (!*mApp) {
+            return val::null();
+        }
+        const auto memory = (*mApp)->getMemoryStats();
+        val object = val::object();
+        object.set("tradesBytes", static_cast<double>(memory.tradesBytes));
+        object.set("totalsBytes", static_cast<double>(memory.totalsBytes));
+        object.set("priceTreeBytes", static_cast<double>(memory.priceTreeBytes));
+        object.set("summariesBytes", static_cast<double>(memory.summariesBytes));
+        object.set("loadingBytes", static_cast<double>(mParser ? mParser->getBytes() : 0));
+        object.set("gpuBytes", static_cast<double>(memory.gpuBytes));
+        object.set("heapBytes", static_cast<double>(Core::Memory::getProcessBytes().value_or(0)));
+        return object;
+    }
+
+    /** Calls `onWake()` when the viewer needs a frame without any input: when the GPU is lost, and once it's back. */
+    void setWakeCallback(val onWake)
+    {
+        if (*mApp) {
+            (*mApp)->setWakeCallback([onWake] { onWake(); });
+        }
+    }
+
     /** Starts reading a trades file, which appendChunk() then receives piece by piece. */
     void beginLoad()
     {
@@ -443,7 +525,9 @@ public:
         if (!trades) {
             return trades.error();
         }
-        (*mApp)->setTrades(std::move(*trades));
+        if (auto set = (*mApp)->setTrades(std::move(*trades)); !set) {
+            return set.error();
+        }
         return {};
     }
 
@@ -482,12 +566,56 @@ public:
     }
 
 private:
+    friend struct Testing;
+
     std::shared_ptr<std::unique_ptr<Viewer::App>> mApp = std::make_shared<std::unique_ptr<Viewer::App>>();
+    // The app's first engine, for Testing; gone once the app replaces it.
+    Gpu::Market::Engine* mFirstEngine = nullptr;
     std::optional<Core::Data::TradeParser> mParser;  // while a file loads
     std::vector<char> mChunk;  // the last chunk, copied out of JavaScript
 };
 
+/**
+ * Faults to inject, for the browser tests: not part of the viewer. They
+ * ship in the published build, so the tests run what's published; each
+ * harms only the page that calls it.
+ */
+struct Testing
+{
+    /** Loses `viewer`'s GPU device, as a driver reset would. False once its first engine is gone. */
+    static bool loseGpu(WebViewer& viewer)
+    {
+        if (!*viewer.mApp || (*viewer.mApp)->getGpuHealth().restarts > 0) {
+            return false;
+        }
+        viewer.mFirstEngine->loseDevice();
+        return true;
+    }
+
+    /** Stops the module, as a bug would. */
+    static void crash()
+    {
+        std::abort();
+    }
+
+    /** Asks for as much memory as the heap can ever have, which fails at once without using any. */
+    static void exhaustMemory()
+    {
+        // Volatile, so the compiler can't leave out the request.
+        char* volatile taken = new char[emscripten_get_heap_max()];
+        delete[] taken;
+    }
+};
+
 } // namespace
+
+EMSCRIPTEN_BINDINGS(Testing)
+{
+    emscripten::class_<Testing>("Testing")
+        .class_function("loseGpu", &Testing::loseGpu)
+        .class_function("crash", &Testing::crash)
+        .class_function("exhaustMemory", &Testing::exhaustMemory);
+}
 
 EMSCRIPTEN_BINDINGS(Viewer)
 {
@@ -542,7 +670,10 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("appendChunk", &WebViewer::appendChunk)
         .function("finishLoad", &WebViewer::finishLoad)
         .function("showScene", &WebViewer::showScene)
-        .function("readPixels", &WebViewer::readPixels);
+        .function("readPixels", &WebViewer::readPixels)
+        .function("gpuHealth", &WebViewer::getGpuHealth)
+        .function("memoryStats", &WebViewer::getMemoryStats)
+        .function("setWakeCallback", &WebViewer::setWakeCallback);
 
     emscripten::function("scenes", &getScenes);
 }

@@ -18,7 +18,6 @@ struct GpuLine
     float position;
     std::uint32_t vertical;  // 1 or 0
 };
-static_assert(sizeof(GpuLine) == 8);
 
 /** The shader's Plot uniform (GridPass.wgsl). */
 struct Uniforms
@@ -29,6 +28,7 @@ struct Uniforms
     std::array<float, 3> lineColor;
     float padding2;  // uniform structs are sized in 16-byte steps
 };
+// The size WGSL's layout rules give Plot in GridPass.wgsl, which this must match field for field.
 static_assert(sizeof(Uniforms) == 32);
 
 Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat format)

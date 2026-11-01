@@ -9,7 +9,7 @@ function describe(status: ViewerStatus): string {
     case 'loading':
       return 'Starting WebGPU…';
     case 'ready':
-      return describeGpu(status.gpu);
+      return status.problem ?? describeGpu(status.gpu);
     case 'error':
       return status.message;
   }
@@ -23,7 +23,10 @@ export function App() {
     <div className="app">
       <header className="app-header">
         <h1>BTC/USDT trades</h1>
-        <span className={status.kind === 'error' ? 'status error' : 'status'} data-status={status.kind}>
+        <span
+          className={status.kind === 'error' || (status.kind === 'ready' && status.problem) ? 'status error' : 'status'}
+          data-status={status.kind}
+        >
           {describe(status)}
           {status.kind === 'ready' && powerPreference !== 'default' && ` · ${powerPreference} requested`}
         </span>

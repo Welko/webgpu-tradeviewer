@@ -17,6 +17,8 @@
 #include <webgpu/webgpu.h>
 
 #include <algorithm>
+#include <format>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -81,6 +83,12 @@ WGPUSurface createSurface(WGPUInstance instance, const Gpu::Type::Target::Any& t
     }
     return nullptr;
 #endif
+}
+
+/** Why setTrades() or appendTrades() refuses `count` trades. */
+std::unexpected<std::string> tooManyTrades(std::size_t count, std::size_t max)
+{
+    return std::unexpected(std::format("{} trades are too many: at most {} fit on the GPU", count, max));
 }
 
 } // namespace
@@ -164,6 +172,7 @@ struct Engine::Impl
     std::vector<PixelsCallback> pendingReads;  // waiting for the next frame on a surface
 
     Plot::Type::Insets insets{};
+    std::optional<std::size_t> maxTrades;  // Params::maxTrades
     bool showColumns = false;  // summaries instead of trades
     double nowMs = 0.0;  // the time frames show, for time-based effects
     bool dirty = true;
@@ -171,15 +180,16 @@ struct Engine::Impl
 
 // Creation
 
-void Engine::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, CreatedCallback onDone)
+void Engine::create(const Params& params, CreatedCallback onDone)
 {
     auto impl = std::make_unique<Impl>();
+    impl->maxTrades = params.maxTrades;
     Handle instance(wgpuCreateInstance(nullptr));
     if (!instance) {
         onDone(std::unexpected("Failed to create a WebGPU instance"));
         return;
     }
-    if (auto prepared = impl->prepare(instance.get(), target); !prepared) {
+    if (auto prepared = impl->prepare(instance.get(), params.target); !prepared) {
         onDone(std::unexpected(std::move(prepared.error())));
         return;
     }
@@ -193,7 +203,7 @@ void Engine::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPrefer
     const WGPUSurface compatible = impl->output.surface.get();  // null offscreen: any adapter
     auto pending = std::make_shared<Pending>(std::move(impl), std::move(onDone));
 
-    Context::create(std::move(instance), compatible, powerPreference, [pending](Context::Result context) {
+    Context::create(std::move(instance), compatible, params.powerPreference, [pending](Context::Result context) {
         auto impl = std::move(pending->impl);
         auto onDone = std::move(pending->onDone);
         if (!context) {
@@ -267,6 +277,11 @@ std::expected<void, std::string> Engine::Impl::finishOutput()
 
 Engine::Impl::~Impl()
 {
+    // Releasing the device loses it too, which isn't news.
+    if (context.health) {
+        context.health->released = true;
+        context.health->onLost = nullptr;
+    }
     // The handles release themselves afterwards; only the surface
     // configuration needs undoing first.
     if (output.surface && output.width > 0) {
@@ -389,8 +404,7 @@ void Engine::Impl::render()
     {
         const Core::Profiling::Scope scope(submitMs, timed);
         const Handle commands(wgpuCommandEncoderFinish(encoder.get(), nullptr));
-        const WGPUCommandBuffer submitted = commands.get();
-        wgpuQueueSubmit(context.queue.get(), 1, &submitted);
+        context.submit(commands.get());
         readBack(*image);
         present();
     }
@@ -453,23 +467,44 @@ void Engine::setGrid(const Plot::Type::Grid& grid)
     mImpl->dirty = true;
 }
 
-void Engine::setTrades(const Core::Data::Trades& trades)
+std::size_t Engine::getMaxTrades() const
 {
-    mImpl->passes->trades.clear();
-    mImpl->passes->trades.reserve(trades.size());
-    mImpl->passes->trades.append(trades);
-    mImpl->dirty = true;
+    return std::min(mImpl->passes->trades.getMaxCount(), mImpl->maxTrades.value_or(std::numeric_limits<std::size_t>::max()));
 }
 
-void Engine::appendTrades(const Core::Data::Trades& trades)
+std::expected<void, std::string> Engine::setTrades(const Core::Data::Trades& trades)
 {
-    mImpl->passes->trades.append(trades);
+    if (trades.size() > getMaxTrades()) {
+        return tooManyTrades(trades.size(), getMaxTrades());
+    }
+    auto& pass = mImpl->passes->trades;
+    pass.clear();
     mImpl->dirty = true;
+    // Can't fail below getMaxTrades(), but the buffer has the last word.
+    if (auto stored = pass.reserve(trades.size()).and_then([&] { return pass.append(trades); }); !stored) {
+        pass.clear();
+        return std::unexpected(std::format("Failed to upload {} trades: {}", trades.size(), stored.error()));
+    }
+    return {};
+}
+
+std::expected<void, std::string> Engine::appendTrades(const Core::Data::Trades& trades)
+{
+    const std::size_t total = mImpl->passes->trades.getCount() + trades.size();
+    if (total > getMaxTrades()) {
+        return tooManyTrades(total, getMaxTrades());
+    }
+    if (auto appended = mImpl->passes->trades.append(trades); !appended) {
+        return std::unexpected(std::format("Failed to upload {} trades: {}", trades.size(), appended.error()));
+    }
+    mImpl->dirty = true;
+    return {};
 }
 
 void Engine::reserveTrades(std::size_t count)
 {
-    mImpl->passes->trades.reserve(count);
+    // Can't fail: no more than the buffer takes.
+    [[maybe_unused]] const auto reserved = mImpl->passes->trades.reserve(std::min(count, getMaxTrades()));
 }
 
 void Engine::setView(const Type::View& view)
@@ -567,6 +602,40 @@ void Engine::readPixels(PixelsCallback onDone)
     }
     mImpl->pendingReads.push_back(std::move(onDone));
     mImpl->dirty = true;
+}
+
+// Health
+
+bool Engine::isLost() const
+{
+    const auto& health = *mImpl->context.health;
+    return health.lost.has_value() && !health.released;
+}
+
+void Engine::setLostCallback(std::function<void()> onLost)
+{
+    mImpl->context.health->onLost = std::move(onLost);
+}
+
+void Engine::loseDevice()
+{
+    wgpuDeviceDestroy(mImpl->context.device.get());
+}
+
+
+const std::vector<std::string>& Engine::getErrors() const
+{
+    return mImpl->context.health->errors;
+}
+
+std::size_t Engine::getErrorCount() const
+{
+    return mImpl->context.health->errorCount;
+}
+
+std::uint64_t Engine::getGpuBytes() const
+{
+    return mImpl->resources.getTotalBytes();
 }
 
 } // namespace Gpu::Market

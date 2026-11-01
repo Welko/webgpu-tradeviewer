@@ -8,6 +8,7 @@
 #include "Viewer/App.hpp"
 
 #include "Core/Data/TradeFile.hpp"
+#include "Core/Log.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -90,7 +91,7 @@ int main(int argc, char** argv)
     }
 
     std::unique_ptr<Viewer::App> app;
-    Viewer::App::create(Gpu::Type::Target::Offscreen{ .width = WidthPx, .height = HeightPx }, Gpu::Type::PowerPreference::Default,
+    Viewer::App::create({ .target = Gpu::Type::Target::Offscreen{ .width = WidthPx, .height = HeightPx } },
         [&](Viewer::App::Result result) {
             if (!result) {
                 std::fputs(std::format("{}\n", result.error()).c_str(), stderr);
@@ -103,7 +104,10 @@ int main(int argc, char** argv)
     }
     app->resize(WidthPx, HeightPx);
     app->setPixelRatio(1.0f);
-    app->setTrades(std::move(*trades));
+    if (auto set = app->setTrades(std::move(*trades)); !set) {
+        Core::Log::error("{}", set.error());
+        return 1;
+    }
 
     std::vector<Gpu::Type::FrameStats> reported;
     app->setStatsCallback([&reported](const Gpu::Type::FrameStats& stats) { reported.push_back(stats); });

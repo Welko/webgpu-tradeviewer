@@ -23,7 +23,6 @@ struct GpuTrade
     float amount;
     std::uint32_t side;  // 0 buy, 1 sell
 };
-static_assert(sizeof(GpuTrade) == 20);
 
 /** The shader's Markers uniform (TradesPass.wgsl). */
 struct GpuMarkers
@@ -41,6 +40,7 @@ struct GpuMarkers
     std::array<float, 3> cursorColor;
     float padding2;  // uniform structs are sized in 16-byte steps
 };
+// The size WGSL's layout rules give Markers in TradesPass.wgsl, which this must match field for field.
 static_assert(sizeof(GpuMarkers) == 80);
 
 /** The shader's View uniform (TradesPass.wgsl). */
@@ -56,6 +56,7 @@ struct Uniforms
     float pixelRatio;
     GpuMarkers markers;
 };
+// The size WGSL's layout rules give View in TradesPass.wgsl, which this must match field for field.
 static_assert(sizeof(Uniforms) == 112);
 
 std::array<float, 3> toGpu(Gpu::Type::Color color)
@@ -175,9 +176,19 @@ TradesPass::TradesPass(const Context& context, Resource::Stats& stats, WGPUTextu
     mBindGroup = Handle(wgpuDeviceCreateBindGroup(context.device.get(), &bindGroupDescriptor));
 }
 
-void TradesPass::reserve(std::size_t count)
+std::size_t TradesPass::getMaxCount() const
 {
-    mTrades.reserve(count * sizeof(GpuTrade));
+    return mContext->maxBufferBytes / sizeof(GpuTrade);
+}
+
+std::size_t TradesPass::getCount() const
+{
+    return mTrades.size() / sizeof(GpuTrade);
+}
+
+std::expected<void, std::string> TradesPass::reserve(std::size_t count)
+{
+    return mTrades.reserve(count * sizeof(GpuTrade));
 }
 
 void TradesPass::clear()
@@ -185,7 +196,7 @@ void TradesPass::clear()
     mTrades.clear();
 }
 
-void TradesPass::append(const Core::Data::Trades& trades)
+std::expected<void, std::string> TradesPass::append(const Core::Data::Trades& trades)
 {
     std::vector<GpuTrade> packed(trades.size());
     for (std::size_t i = 0; i < trades.size(); ++i) {
@@ -198,7 +209,7 @@ void TradesPass::append(const Core::Data::Trades& trades)
             .side = trades.side[i] == Core::Data::Side::Buy ? 0u : 1u,
         };
     }
-    mTrades.append(std::as_bytes(std::span(packed)));
+    return mTrades.append(std::as_bytes(std::span(packed)));
 }
 
 void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot::Area plot, Profiler& profiler)

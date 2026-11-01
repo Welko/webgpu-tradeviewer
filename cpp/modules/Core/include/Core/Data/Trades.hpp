@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 #include <vector>
 
 namespace Core::Data {
@@ -27,6 +28,31 @@ struct Trades
 
     [[nodiscard]] std::size_t size() const { return timeUs.size(); }
     [[nodiscard]] bool empty() const { return timeUs.empty(); }
+
+    /** The memory held, room to grow included: 25 bytes per trade, once shrunk. */
+    [[nodiscard]] std::size_t getBytes() const
+    {
+        return timeUs.capacity() * sizeof(std::int64_t) + price.capacity() * sizeof(double) + amount.capacity() * sizeof(double)
+               + side.capacity() * sizeof(Side);
+    }
+
+    /**
+     * Gives back the room to grow that reading left, up to half of it.
+     * Copies rather than calling shrink_to_fit(), which libstdc++ skips
+     * without exceptions.
+     */
+    void shrinkToFit()
+    {
+        const auto shrink = [](auto& column) {
+            if (column.capacity() > column.size()) {
+                column = std::remove_reference_t<decltype(column)>(column.begin(), column.end());
+            }
+        };
+        shrink(timeUs);
+        shrink(price);
+        shrink(amount);
+        shrink(side);
+    }
 };
 
 /**
@@ -114,6 +140,13 @@ public:
     }
 
     [[nodiscard]] std::size_t getBuyCount(IndexRange indices) const { return mBuyCounts[indices.last] - mBuyCounts[indices.first]; }
+
+    /** The memory held: 20 bytes per trade. */
+    [[nodiscard]] std::size_t getBytes() const
+    {
+        return mRunning.capacity() * sizeof(std::int64_t) + mRunningBuys.capacity() * sizeof(std::int64_t)
+               + mBuyCounts.capacity() * sizeof(std::uint32_t);
+    }
 
 private:
     // Element i covers the first i trades.

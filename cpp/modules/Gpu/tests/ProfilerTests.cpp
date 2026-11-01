@@ -297,8 +297,7 @@ TEST_CASE("Each pass is timed with timestamps of its own, up to a limit")
     profiler->endPasses(encoder.get());
 
     const Gpu::Handle commands(wgpuCommandEncoderFinish(encoder.get(), nullptr));
-    const WGPUCommandBuffer submitted = commands.get();
-    wgpuQueueSubmit(context->queue.get(), 1, &submitted);
+    context->submit(commands.get());
     profiler->endFrame(1);
 
     if (!waitFor(*context, reported, 1)) {

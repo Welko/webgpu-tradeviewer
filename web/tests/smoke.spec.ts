@@ -341,6 +341,12 @@ test('shows synthetic trades until a file is opened', async ({ page }) => {
   await waitUntilReady(page);
   await expect(page.getByTestId('source')).toContainText('Synthetic');
   await expect(page.getByTestId('trade-count')).not.toHaveText('0');
+  // 432,544 trades: 25 bytes each, and 52 derived.
+  const memory = page.getByTestId('memory');
+  await expect(memory.locator('summary')).toHaveText('Memory: 31.8 MiB, and 8.3 MiB on the GPU');
+  await memory.locator('summary').click();
+  await expect(memory.locator('tr', { hasText: 'Price tree' })).toContainText('32 B');
+  await expect(page.getByTestId('memory-derived')).toContainText('The derived data adds 208% to the trades.');
 
   const fileInput = page.locator('input[type=file]');
   await fileInput.setInputFiles({ name: 'trades.csv.gz', mimeType: 'application/gzip', buffer: TwoTrades });
@@ -373,4 +379,62 @@ test('opens Binance\'s zipped files too, with times in milliseconds', async ({ p
   await expect(page.getByTestId('trade-tooltip').getByTestId('trade-time')).toHaveText('2019-12-01 00:00:03.579000 UTC');
 
   expect(errors).toEqual([]);
+});
+
+test('after losing the GPU, the viewer restarts it and draws the same picture', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/');
+  await waitUntilReady(page);
+  const canvas = page.locator('canvas');
+  const before = await canvas.screenshot();
+
+  expect(await page.evaluate(() => window.viewerTesting!.loseGpu(window.viewer!))).toBe(true);
+  await expect
+    .poll(() => page.evaluate(() => window.viewer!.gpuHealth()), { timeout: 15_000 })
+    .toMatchObject({ restarting: false, restarts: 1, failure: null, errorCount: 0 });
+  await expect(page.locator('[data-status]')).not.toHaveClass(/error/);
+  expect(await canvas.screenshot()).toEqual(before);
+  // Warnings, ours and the browser's, say it was lost; errors would be news.
+  expect(errors.filter((error) => !/^WARNING|lost|destroyed/i.test(error))).toEqual([]);
+});
+
+test('after the wasm module stops, the viewer starts over and says why', async ({ page }) => {
+  await page.goto('/');
+  await waitUntilReady(page);
+  const first = await page.evaluate(() => window.viewer!.tradeStats().count);
+
+  await page.evaluate(() => {
+    try {
+      window.viewerTesting!.crash();
+    } catch {
+      // The abort, thrown into the caller.
+    }
+  });
+  const status = page.locator('[data-status]');
+  // A bug's details are for the console, not the page.
+  await expect(status).toHaveText(/^Something went wrong, and the viewer started over with the demo data/, { timeout: 30_000 });
+  await expect(status).toHaveAttribute('data-status', 'ready');
+  // A new module, with the synthetic day again.
+  await expect.poll(() => page.evaluate(() => window.viewer?.tradeStats().count)).toBe(first);
+});
+
+test('running out of memory says so, with sizes, and the viewer starts over', async ({ page }) => {
+  await page.goto('/');
+  await waitUntilReady(page);
+  const first = await page.evaluate(() => window.viewer!.tradeStats().count);
+
+  await page.evaluate(() => {
+    try {
+      window.viewerTesting!.exhaustMemory();
+    } catch {
+      // The abort, thrown into the caller.
+    }
+  });
+  const status = page.locator('[data-status]');
+  await expect(status).toHaveText(
+    /^This data is too large for the page\. Out of memory: the viewer had \d+ MiB, and needed more than the 40\d\d MiB a page can have\. The viewer started over/,
+    { timeout: 30_000 },
+  );
+  await expect(status).toHaveAttribute('data-status', 'ready');
+  await expect.poll(() => page.evaluate(() => window.viewer?.tradeStats().count)).toBe(first);
 });

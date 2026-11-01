@@ -4,6 +4,7 @@
 
 #include "Core/Data/TradeFile.hpp"
 #include "Core/Log.hpp"
+#include "Core/Memory.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -17,11 +18,13 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <expected>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <memory>
+#include <new>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -59,6 +62,25 @@ void logLegend(const Viewer::App& app, Gpu::Market::Type::MarkerScale scale)
         sizes += std::format("{}{}{:.4g} BTC {:.3g} px", sizes.empty() ? "" : ", ", prefix, size.amount, size.radiusCssPx);
     }
     Core::Log::info("Buys green, sells red; marker radius by {}: {}", scale == Gpu::Market::Type::MarkerScale::Area ? "area" : "log", sizes);
+}
+
+/** Logs what the trades and what's derived from them hold, the GPU's share, and the whole process, to compare. */
+void logMemory(const Viewer::App& app)
+{
+    const auto memory = app.getMemoryStats();
+    const auto count = static_cast<double>(std::max<std::size_t>(1, app.getTrades().size()));
+    const auto line = [count](std::string_view what, std::uint64_t bytes) {
+        return std::format("\n  {:<16} {:>8.1f} MiB  {:>5.1f} B per trade", what, static_cast<double>(bytes) / 1048576.0,
+                           static_cast<double>(bytes) / count);
+    };
+    const std::size_t derived = memory.totalsBytes + memory.priceTreeBytes + memory.summariesBytes;
+    const auto process = Core::Memory::getProcessBytes();
+    Core::Log::info("Memory:{}{}{}{}{}{}\n  The derived data adds {:.0f}% to the trades.{}", line("trades", memory.tradesBytes),
+                    line("running totals", memory.totalsBytes), line("price tree", memory.priceTreeBytes),
+                    line("column summaries", memory.summariesBytes), line("total", memory.getCpuBytes()),
+                    line("on the GPU", memory.gpuBytes),
+                    memory.tradesBytes > 0 ? 100.0 * static_cast<double>(derived) / static_cast<double>(memory.tradesBytes) : 0.0,
+                    process ? std::format(" The process uses {:.1f} MiB in all.", static_cast<double>(*process) / 1048576.0) : "");
 }
 
 /** Window coordinates in physical pixels, which differ on scaled screens. */
@@ -302,6 +324,17 @@ void writeSnapshot(Snapshot& snapshot, std::uint32_t widthPx, std::uint32_t heig
 
 int main(int argc, char** argv)
 {
+    // Exceptions are off, so running out of memory can only abort: say why
+    // first, and how much was in use, without allocating.
+    std::set_new_handler([] {
+        char message[128];
+        const auto process = Core::Memory::getProcessBytes();
+        std::snprintf(message, sizeof(message), "ERROR  : Out of memory, with %.1f MiB in use\n",
+                      process ? static_cast<double>(*process) / 1048576.0 : 0.0);
+        std::fputs(message, stderr);
+        std::abort();
+    });
+
     // The image tests' scenes, one name per line, for tools/render-native.sh.
     if (getOption(argc, argv, "--list-scenes")) {
         for (const auto& known : Viewer::Scene::getScenes()) {
@@ -368,7 +401,7 @@ int main(int argc, char** argv)
 
     // Natively, creation finishes before create() returns.
     std::unique_ptr<Viewer::App> app;
-    Viewer::App::create(*target, parsePowerPreference(argc, argv), [&](Viewer::App::Result result) {
+    Viewer::App::create({ .target = *target, .powerPreference = parsePowerPreference(argc, argv) }, [&](Viewer::App::Result result) {
         if (!result) {
             Core::Log::error("{}", result.error());
             return;
@@ -382,6 +415,9 @@ int main(int argc, char** argv)
         glfwTerminate();
         return 1;
     }
+
+    // Wakes the loop when the GPU is lost and again once it's back.
+    app->setWakeCallback([] { glfwPostEmptyEvent(); });
 
     WindowState state{ .app = app.get() };
     if (scene) {
@@ -402,10 +438,17 @@ int main(int argc, char** argv)
             writeJson(path.parent_path() / "about.json", getAboutJson(app->getInfo()));
         }
     } else {
-        app->setTrades(loaded ? std::move(*loaded) : Viewer::generateSyntheticDay());
+        if (auto set = app->setTrades(loaded ? std::move(*loaded) : Viewer::generateSyntheticDay()); !set) {
+            Core::Log::error("{}", set.error());
+            app.reset();
+            glfwDestroyWindow(window);
+            glfwTerminate();
+            return 1;
+        }
         const auto stats = Core::Data::getStats(app->getTrades());
         Core::Log::info("{} {} trades from {} to {} UTC, {:.6f} in total", stats.count, loaded ? "loaded" : "synthetic",
                         formatUtc(stats.firstUs), formatUtc(stats.lastUs), stats.totalAmount);
+        logMemory(*app);
 
         glfwSetWindowUserPointer(window, &state);
         connectInput(window);

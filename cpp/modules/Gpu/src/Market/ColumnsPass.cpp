@@ -4,6 +4,8 @@
 #include "Gpu/Market/Style.hpp"
 #include "Gpu/Shaders/ColumnsPass.hpp"
 
+#include "Core/Log.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -25,7 +27,6 @@ struct GpuColumn
     float buyShare;  // of the column's amount
     float weight;  // the column's amount relative to the largest's, square-rooted so small ones still show
 };
-static_assert(sizeof(GpuColumn) == 20);
 
 /** The shader's View uniform (ColumnsPass.wgsl). */
 struct Uniforms
@@ -47,6 +48,7 @@ struct Uniforms
     std::array<float, 3> cursorColor;
     float padding3;
 };
+// The size WGSL's layout rules give View in ColumnsPass.wgsl, which this must match field for field.
 static_assert(sizeof(Uniforms) == 96);
 
 std::array<float, 3> toGpu(Gpu::Type::Color color)
@@ -154,8 +156,9 @@ void ColumnsPass::setColumns(const Type::Columns& columns)
         });
     }
     mColumns.clear();
-    if (!packed.empty()) {
-        mColumns.append(std::as_bytes(std::span(packed)));
+    if (auto appended = mColumns.append(std::as_bytes(std::span(packed))); !appended) {
+        Core::Log::error("Failed to upload {} column summaries: {}", packed.size(), appended.error());
+        mAcross = 0;
     }
 }
 

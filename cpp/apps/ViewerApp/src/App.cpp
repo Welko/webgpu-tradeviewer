@@ -4,6 +4,8 @@
 #include "Core/Data/Synthetic.hpp"
 #include "Gpu/Market/Style.hpp"
 
+#include "Core/Log.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -39,37 +41,46 @@ Core::Data::Trades generateSyntheticDay()
     return Core::Data::generateSyntheticTrades(DayStartUs, DayStartUs + DayUs, SyntheticSeed);
 }
 
-void App::create(const Gpu::Type::Target::Any& target, Gpu::Type::PowerPreference powerPreference, Callback onDone)
+void App::create(const Gpu::Market::Engine::Params& params, Callback onDone)
 {
-    Gpu::Market::Engine::create(target, powerPreference, [onDone = std::move(onDone)](Gpu::Market::Engine::CreatedResult result) {
+    Gpu::Market::Engine::create(params, [params, onDone = std::move(onDone)](Gpu::Market::Engine::CreatedResult result) {
         if (!result) {
             onDone(std::unexpected(std::move(result.error())));
             return;
         }
-        onDone(std::make_unique<App>(std::move(*result)));
+        onDone(std::make_unique<App>(std::move(*result), params));
     });
 }
 
-App::App(std::unique_ptr<Gpu::Market::Engine> engine) noexcept
-    : mEngine(std::move(engine))
-{}
+App::App(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market::Engine::Params params) noexcept
+    : mEngine(std::move(engine)),
+      mSetup{ .params = std::move(params), .info = mEngine->getInfo() }
+{
+    setUpEngine();
+}
 
 const Core::Data::Trades& App::getTrades() const
 {
     return mData.trades;
 }
 
-void App::setTrades(Core::Data::Trades trades)
+std::expected<void, std::string> App::setTrades(Core::Data::Trades trades)
 {
+    if (mEngine) {
+        if (auto set = mEngine->setTrades(trades); !set) {
+            return set;
+        }
+    }
     mData.trades = std::move(trades);
+    mData.trades.shrinkToFit();
     mData.totals = Core::Data::RunningTotals(mData.trades);
     mData.prices = Core::Data::PriceTree(mData.trades);
-    mEngine->setTrades(mData.trades);
     const std::int64_t firstUs = mData.trades.empty() ? 0 : mData.trades.timeUs.front();
     // Rounded down, also before 1970.
     mData.dayStartUs = (firstUs >= 0 ? firstUs : firstUs - DayUs + 1) / DayUs * DayUs;
     mView.price = {};
     resetView();
+    return {};
 }
 
 Core::Data::TradeStats App::getViewStats() const
@@ -118,14 +129,18 @@ void App::panBy(double dxPx)
 void App::setMarkerScale(Gpu::Market::Type::MarkerScale scale)
 {
     mMarkerScale = scale;
-    mEngine->setMarkerScale(scale);
+    if (mEngine) {
+        mEngine->setMarkerScale(scale);
+    }
     updatePick();
 }
 
 void App::setTheme(const Gpu::Market::Type::Theme& theme)
 {
     mTheme = theme;
-    mEngine->setTheme(theme);
+    if (mEngine) {
+        mEngine->setTheme(theme);
+    }
 }
 
 Gpu::Market::Type::Legend App::getLegend() const
@@ -136,7 +151,9 @@ Gpu::Market::Type::Legend App::getLegend() const
 void App::setPixelRatio(float ratio)
 {
     mLayout.pixelRatio = ratio;
-    mEngine->setPixelRatio(ratio);
+    if (mEngine) {
+        mEngine->setPixelRatio(ratio);
+    }
     updateAxes();
     updateSummaries();
     updatePick();
@@ -145,7 +162,9 @@ void App::setPixelRatio(float ratio)
 void App::setPlotInsets(Gpu::Plot::Type::Insets insets)
 {
     mLayout.insets = insets;
-    mEngine->setPlotInsets(insets);
+    if (mEngine) {
+        mEngine->setPlotInsets(insets);
+    }
     updateAxes();
     updateSummaries();
     updatePick();
@@ -179,7 +198,9 @@ void App::updateAxes()
     for (const auto& tick : mView.axes.prices) {
         grid.horizontalLines.push_back(static_cast<float>(tick.fraction));
     }
-    mEngine->setGrid(grid);
+    if (mEngine) {
+        mEngine->setGrid(grid);
+    }
 }
 
 void App::applyView()
@@ -190,7 +211,9 @@ void App::applyView()
         const double padding = std::max((price->high - price->low) * PricePadding, price->high * 1e-5);
         mView.price = { .low = price->low - padding, .high = price->high + padding };
     }
-    mEngine->setView({ .time = mView.time, .price = mView.price, .trades = mView.trades });
+    if (mEngine) {
+        mEngine->setView({ .time = mView.time, .price = mView.price, .trades = mView.trades });
+    }
     updateAxes();
     updateSummaries();
     updatePick();
@@ -220,13 +243,24 @@ void App::updateSummaries()
         if (mSummaries.across > 0) {
             mSummaries.across = 0;
             mSummaries.columns.clear();
-            mEngine->setColumns(std::nullopt);
+            showColumns();
         }
         return;
     }
     mSummaries.across = static_cast<std::uint32_t>(across);
     mSummaries.columns = Core::Data::summarizeColumns(mData.trades, mData.totals, mData.prices, mView.time, mSummaries.across);
+    showColumns();
+}
 
+void App::showColumns()
+{
+    if (!mEngine) {
+        return;
+    }
+    if (mSummaries.across == 0) {
+        mEngine->setColumns(std::nullopt);
+        return;
+    }
     Gpu::Market::Type::Columns columns{ .across = mSummaries.across, .columns = {} };
     columns.columns.reserve(mSummaries.columns.size());
     for (const auto& column : mSummaries.columns) {
@@ -317,18 +351,22 @@ void App::updatePick()
     }
     if (trade != mCursor.trade) {
         mCursor.trade = trade;
-        mEngine->setHighlightedTrade(trade);
+        if (mEngine) {
+            mEngine->setHighlightedTrade(trade);
+        }
     }
     // A position stays right when the columns are replaced: it's into the new ones.
     if (column != mCursor.column) {
         mCursor.column = column;
-        mEngine->setHighlightedColumn(column);
+        if (mEngine) {
+            mEngine->setHighlightedColumn(column);
+        }
     }
 }
 
 const Gpu::Type::Info& App::getInfo() const
 {
-    return mEngine->getInfo();
+    return mSetup.info;
 }
 
 void App::resize(std::uint32_t widthPx, std::uint32_t heightPx)
@@ -339,7 +377,9 @@ void App::resize(std::uint32_t widthPx, std::uint32_t heightPx)
     }
     mLayout.surfaceWidthPx = widthPx;
     mLayout.surfaceHeightPx = heightPx;
-    mEngine->resize(widthPx, heightPx);
+    if (mEngine) {
+        mEngine->resize(widthPx, heightPx);
+    }
     updateAxes();
     updateSummaries();
     updatePick();
@@ -347,39 +387,151 @@ void App::resize(std::uint32_t widthPx, std::uint32_t heightPx)
 
 void App::update(double nowMs)
 {
-    mEngine->update(nowMs);
+    if (mEngine && mEngine->isLost()) {
+        restartGpu();
+    }
+    if (mEngine) {
+        mEngine->update(nowMs);
+    }
 }
 
 bool App::needsRender() const
 {
-    return mEngine->needsRender();
+    return mEngine && mEngine->needsRender();
 }
 
 void App::render()
 {
-    mEngine->render();
+    if (mEngine) {
+        mEngine->render();
+    }
 }
 
 void App::setProfiling(bool enabled)
 {
-    mEngine->setProfiling(enabled);
+    mSetup.profiling = enabled;
+    if (mEngine) {
+        mEngine->setProfiling(enabled);
+    }
 }
 
 void App::setStatsCallback(Gpu::Market::Engine::StatsCallback onStats)
 {
-    mEngine->setStatsCallback(std::move(onStats));
+    mSetup.onStats = std::move(onStats);
+    if (mEngine) {
+        mEngine->setStatsCallback(mSetup.onStats);
+    }
 }
 
 void App::readPixels(Gpu::Market::Engine::PixelsCallback onDone)
 {
+    if (!mEngine) {
+        onDone(std::unexpected("The GPU is restarting"));
+        return;
+    }
     mEngine->readPixels(std::move(onDone));
 }
 
 #ifndef __EMSCRIPTEN__
 void App::processEvents()
 {
-    mEngine->processEvents();
+    if (mEngine) {
+        mEngine->processEvents();
+    }
 }
 #endif
+
+App::GpuHealth App::getGpuHealth() const
+{
+    const auto* failed = std::get_if<GpuFailed>(&mSetup.gpu);
+    GpuHealth health{
+        .restarting = std::holds_alternative<GpuRestarting>(mSetup.gpu),
+        .restarts = mSetup.restarts,
+        .failure = failed ? std::optional(failed->reason) : std::nullopt,
+        .errors = {},
+        .errorCount = 0,
+    };
+    if (mEngine) {
+        health.errors = mEngine->getErrors();
+        health.errorCount = mEngine->getErrorCount();
+    }
+    return health;
+}
+
+App::MemoryStats App::getMemoryStats() const
+{
+    return {
+        .tradesBytes = mData.trades.getBytes(),
+        .totalsBytes = mData.totals.getBytes(),
+        .priceTreeBytes = mData.prices.getBytes(),
+        .summariesBytes = mSummaries.columns.capacity() * sizeof(Core::Data::ColumnSummary),
+        .gpuBytes = mEngine ? mEngine->getGpuBytes() : 0,
+    };
+}
+
+void App::setWakeCallback(std::function<void()> onWake)
+{
+    mSetup.onWake = std::move(onWake);
+}
+
+void App::restartGpu()
+{
+    Core::Log::warn("Restarting the GPU");
+    // The old engine goes first: a window or canvas takes one surface at a time.
+    mEngine.reset();
+    mSetup.gpu = GpuRestarting{};
+    // Natively, this calls back before returning; on the web, later.
+    Gpu::Market::Engine::create(mSetup.params,
+        [this, alive = std::weak_ptr(mSetup.alive)](Gpu::Market::Engine::CreatedResult result) {
+            if (alive.expired()) {
+                return;  // the app is gone
+            }
+            if (!result) {
+                Core::Log::error("The GPU couldn't restart: {}", result.error());
+                mSetup.gpu = GpuFailed{ .reason = std::move(result.error()) };
+            } else {
+                mEngine = std::move(*result);
+                mSetup.gpu = GpuWorking{};
+                mSetup.info = mEngine->getInfo();
+                ++mSetup.restarts;
+                setUpEngine();
+                Core::Log::info("The GPU is back: {} · {} · {}", mSetup.info.device, mSetup.info.backend, mSetup.info.adapter);
+            }
+            if (mSetup.onWake) {
+                mSetup.onWake();
+            }
+        });
+}
+
+void App::setUpEngine()
+{
+    // The engine doesn't outlive the app, so neither does its callback.
+    mEngine->setLostCallback([this] {
+        // update() restarts it, outside the engine's own calls.
+        if (mSetup.onWake) {
+            mSetup.onWake();
+        }
+    });
+    mEngine->setProfiling(mSetup.profiling);
+    if (mSetup.onStats) {
+        mEngine->setStatsCallback(mSetup.onStats);
+    }
+    mEngine->resize(mLayout.surfaceWidthPx, mLayout.surfaceHeightPx);
+    mEngine->setPixelRatio(mLayout.pixelRatio);
+    mEngine->setPlotInsets(mLayout.insets);
+    mEngine->setTheme(mTheme);
+    mEngine->setMarkerScale(mMarkerScale);
+    if (auto set = mEngine->setTrades(mData.trades); !set) {
+        // Only if the new GPU holds fewer than the old one did.
+        Core::Log::error("{}", set.error());
+        mSetup.gpu = GpuFailed{ .reason = std::move(set.error()) };
+        return;
+    }
+    mEngine->setView({ .time = mView.time, .price = mView.price, .trades = mView.trades });
+    updateAxes();
+    showColumns();
+    mEngine->setHighlightedTrade(mCursor.trade);
+    mEngine->setHighlightedColumn(mCursor.column);
+}
 
 } // namespace Viewer
