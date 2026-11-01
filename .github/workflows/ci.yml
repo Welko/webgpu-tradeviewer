@@ -1,9 +1,11 @@
 name: CI
 
-# On every push to dev or main: build and test natively and for the web, and
-# compare the image-test scenes as each platform draws them. On main, if
-# everything passed, also publish the site (docs/, with the comparison under
-# ci/renderings/) to GitHub Pages and the native binary to the "latest" release.
+# On every push to dev or main: build and test natively and for the web,
+# compare the image-test scenes as each platform draws them, and check memory
+# and times against tools/benchmark-baseline.csv. On main, if everything
+# passed, also publish the site
+# (docs/, with the comparison under ci/renderings/) to GitHub Pages and the
+# native binary to the "latest" release.
 on:
   push:
     branches: [main, dev]
@@ -121,14 +123,32 @@ jobs:
       - name: Benchmark
         run: |
           mkdir -p benchmark
-          cpp/build/native-release/apps/BenchmarkApp/BenchmarkApp benchmark/benchmark.md "$RUNNER_TEMP/BTCUSDT-trades-2019-12-01.csv"
+          cpp/build/native-release/apps/BenchmarkApp/BenchmarkApp benchmark/benchmark.md "$RUNNER_TEMP/BTCUSDT-trades-2019-12-01.csv" --commit "$GITHUB_SHA"
           { echo "### Frame times on lavapipe (a CPU Vulkan driver)"; cat benchmark/benchmark.md; } >> "$GITHUB_STEP_SUMMARY"
 
+      # The table, and the numbers in benchmark.json, which tools/check-benchmark.mjs
+      # accept downloads to make them the baseline.
       - uses: actions/upload-artifact@v7
         with:
           name: benchmark
-          path: benchmark/benchmark.md
+          path: benchmark/
           if-no-files-found: error
+
+      # Memory exactly, times within a margin, against the last accepted
+      # numbers in tools/benchmark-baseline.csv. Any change past them fails,
+      # faster or smaller too, and the summary gives the command that accepts
+      # this run's numbers.
+      - name: Check memory and times against the baseline
+        run: |
+          if node tools/check-benchmark.mjs check benchmark/benchmark.json --summary "$RUNNER_TEMP/check.md" --run-id "$GITHUB_RUN_ID"; then
+            status=0
+          else
+            status=$?
+          fi
+          { cat "$RUNNER_TEMP/check.md"
+            echo "Every accepted change: [benchmark-baseline.csv](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/tools/benchmark-baseline.csv)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
 
       # The stripped binary, with the licenses of what's linked into it.
       - name: Package the release binary

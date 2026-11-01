@@ -30,7 +30,8 @@ cpp/
   apps/BenchmarkApp  native command line: frame times at four zoom levels (and the whole day
                      drawing every trade), from the profiler
 tools/check_ranges.py  checks TradeStatsApp against an independent calculation
-tools/render-native.sh, compare-renderings.mjs (with package.json: pngjs), reference-renderings/
+tools/render-native.sh, compare-renderings.mjs (with package.json: pngjs), reference-renderings/,
+                     check-benchmark.mjs and benchmark-baseline.csv (see Memory and speed between commits)
                      draw the image tests' scenes natively, and compare every platform's
                      renderings (see Image tests)
 web/                 Vite + React + TypeScript
@@ -79,7 +80,7 @@ npm run dev        # builds the wasm, then starts Vite on http://localhost:5173
 
 Work happens on `dev`; `main` gets what's ready to publish. `.github/workflows/ci.yml` runs on every push to either (and manually from the Actions tab):
 
-1. **Native:** builds with the `native` preset and runs the tests with `ctest`, then again with profiling compiled out. It draws the image tests' scenes through a window (on Xvfb) and opens a real day's file. It then builds and tests the `native-release` preset, a single binary with wgpu-native linked in statically, and packages it with the licenses of what's linked in. Along the way it checks the visible counts (see [Viewing trades](#viewing-trades)) and runs `BenchmarkApp` on Mesa's lavapipe; both tables appear on the run's page, signed in to GitHub, and the benchmark is also kept as the `benchmark` artifact.
+1. **Native:** builds with the `native` preset and runs the tests with `ctest`, then again with profiling compiled out. It draws the image tests' scenes through a window (on Xvfb) and opens a real day's file. It then builds and tests the `native-release` preset, a single binary with wgpu-native linked in statically, and packages it with the licenses of what's linked in. Along the way it checks the visible counts (see [Viewing trades](#viewing-trades)) and runs `BenchmarkApp` on Mesa's lavapipe; both tables appear on the run's page, signed in to GitHub, and the benchmark is also kept as the `benchmark` artifact. The benchmark's memory and times are checked against the baseline (see [Memory and speed between commits](#memory-and-speed-between-commits)): a change in memory, or a big change in speed either way, fails the job.
 2. **Web:** installs Emscripten, runs `npm ci` and `npm run build`, which builds the wasm module, type-checks and writes `docs/`. It then runs the same tests compiled to wasm in Node, the site's smoke tests in Chromium, and the image tests' scenes in Chromium and Firefox.
 3. **Compare renderings:** compares the scenes as native, Chromium and Firefox drew them, with each other and with the reference renderings (see [Image tests](#image-tests)). The numbers appear on the run's page, with a link to the report with the pictures (the `rendering-comparison.html` artifact, which opens in the browser).
 4. **On `main` only, if everything passes:** publishes `docs/` to GitHub Pages, with the rendering comparison at `ci/renderings/`, and replaces the [`latest` release](../../releases/latest) with the new Linux binary. If anything fails, both keep their previous version.
@@ -299,6 +300,33 @@ Each marker is one equilateral triangle around its disc, the smallest triangle a
 Fewer vertices alone didn't help (the strip); halving the triangles did. Most markers are a few pixels across, and GPUs pay a fixed cost per triangle. The triangle covers 30% more pixels than the square, which costs nothing measurable at the other zoom levels (hundredths of a millisecond, within noise).
 
 GPU times are in nanoseconds on every platform. wgpu-native counts timestamps in device ticks (83.3 ns each on Intel's Skylake GPUs, for example), so the profiler multiplies by the tick length it reports (`wgpuQueueGetTimestampPeriod`). Browsers report nanoseconds already.
+
+### Memory and speed between commits
+
+CI catches changes in what the viewer costs (`tools/check-benchmark.mjs`). `BenchmarkApp` writes its numbers beside its table, as `benchmark.json`, and CI compares them with the baseline in [`tools/benchmark-baseline.csv`](tools/benchmark-baseline.csv):
+
+| Numbers | Compared with | Fails when |
+|---|---|---|
+| Memory the synthetic day takes, with the whole day in view: trades, running totals, price tree, column summaries, GPU buffers and textures | The platform's last row, exactly. Memory is the same on every machine (lavapipe and an Intel GPU agree to the byte). | Any change, less too. |
+| Times: reading the trades, showing them (derived data and upload), and each view's update, CPU frame and GPU frame (medians of 60 frames) | The platform's last row on the same GPU. | More than 1.5 times slower or faster, and by more than 0.05 ms. |
+
+Failing when things get faster too makes a gain part of the baseline, so losing it later fails. A fixed baseline also catches slow creep, which comparing with recent runs would follow along. A platform or GPU with no row yet fails, so a check never quietly stops checking.
+
+Some numbers are too unsteady to fail a build on, such as a browser's GPU times; the benchmark marks them `flaky`. They're shown on the run's page and kept in the baseline like the rest, marked "recorded only", and never checked.
+
+**The baseline only changes by hand,** so it's also the log of every change in cost: each row has the date, the commit measured, the platform and GPU, a description of what changed and why, and every number. When a change is meant, the failing run's page gives the command that makes its numbers the baseline; add the description and commit the CSV:
+
+```bash
+node tools/check-benchmark.mjs accept <run-id> "Shrink the price tree to n entries"
+```
+
+It downloads the run's `benchmark` artifact with the [GitHub CLI](https://cli.github.com/) (`gh`), so the times are CI's own: times measured on another machine mean nothing to CI's runner. Without `gh`, download and unzip the artifact from the run's page, and pass its `benchmark.json` instead of the run id. CI's `benchmark.json` names the commit it measured (`BenchmarkApp --commit`). A local run's doesn't, so it counts as the commit checked out, marked `-dirty` with changes on top. A local run is enough for a memory change, which is the same everywhere:
+
+```bash
+cpp/build/native-release/apps/BenchmarkApp/BenchmarkApp /tmp/benchmark.md data/binance_trades_2019-12-01_BTCUSDT.csv.gz
+node tools/check-benchmark.mjs check /tmp/benchmark.json
+node tools/check-benchmark.mjs accept /tmp/benchmark.json "Shrink the price tree to n entries"
+```
 
 ### GPU buffer layout
 
