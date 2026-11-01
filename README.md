@@ -308,9 +308,11 @@ CI catches changes in what the viewer costs (`tools/check-benchmark.mjs`). `Benc
 | Numbers | Compared with | Fails when |
 |---|---|---|
 | Memory the synthetic day takes, with the whole day in view: trades, running totals, price tree, column summaries, GPU buffers and textures | The platform's last row, exactly. Memory is the same on every machine (lavapipe and an Intel GPU agree to the byte). | Any change, less too. |
-| Times: reading the trades, showing them (derived data and upload), and each view's update, CPU frame and GPU frame (medians of 60 frames) | The platform's last row on the same GPU. | More than 1.5 times slower or faster, and by more than 0.05 ms. |
+| Times: reading the trades, showing them (derived data and upload), and each view's update, CPU frame and GPU frame (medians of 60 frames) | The platform's last row on the same GPU. | More than 1.5 times slower or faster, and by more than 1 ms. |
 
 Failing when things get faster too makes a gain part of the baseline, so losing it later fails. A fixed baseline also catches slow creep, which comparing with recent runs would follow along. A platform or GPU with no row yet fails, so a check never quietly stops checking.
+
+The 1 ms floor is 6% of a 60 Hz frame. Below it, CI's shared runners can't tell a change from noise: between two runs of the same code, sub-millisecond CPU times jumped by up to half a millisecond, doubling some, while the long ones moved by 1%. Such changes still show in the table; they just don't fail.
 
 Some numbers are too unsteady to fail a build on, such as a browser's GPU times; the benchmark marks them `flaky`. They're shown on the run's page and kept in the baseline like the rest, marked "recorded only", and never checked.
 

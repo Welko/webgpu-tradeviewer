@@ -37,8 +37,13 @@ const baselinePath = join(root, 'tools', 'benchmark-baseline.csv');
 const Thresholds = {
   /** Slower than this many times the baseline fails, and so does faster than its inverse. */
   ratio: 1.5,
-  /** Differences smaller than this are noise, whatever the ratio: some times are a few microseconds. */
-  floorMs: 0.05,
+  /**
+   * Differences smaller than this fail nothing, whatever the ratio: 6% of a
+   * 60 Hz frame. CI's shared runners make sub-millisecond times jump by half
+   * a millisecond between runs, doubling some; less wouldn't show in the
+   * frame rate anyway.
+   */
+  floorMs: 1,
 };
 
 /** The columns before the numbers in the baseline. */
