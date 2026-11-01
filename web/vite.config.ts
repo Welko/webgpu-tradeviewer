@@ -9,5 +9,9 @@ export default defineConfig({
     // Published to GitHub Pages by .github/workflows/ci.yml.
     outDir: '../docs',
     emptyOutDir: true,
+    rollupOptions: {
+      // The viewer, and the image-test scenes (see src/scene.ts).
+      input: { main: 'index.html', scene: 'scene.html' },
+    },
   },
 });

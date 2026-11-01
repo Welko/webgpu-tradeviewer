@@ -1,4 +1,5 @@
 #include "Viewer/App.hpp"
+#include "Viewer/Scene.hpp"
 
 #include "Core/Plot/Axis.hpp"
 #include "Core/Data/TradeParser.hpp"
@@ -7,6 +8,7 @@
 #include <emscripten/val.h>
 
 #include <cstdint>
+#include <expected>
 #include <memory>
 #include <optional>
 #include <string>
@@ -98,6 +100,39 @@ WebTradeStats toWeb(const Core::Data::TradeStats& stats)
         .lastMs = static_cast<double>(stats.lastUs) / 1000.0,
         .totalAmount = stats.totalAmount,
     };
+}
+
+/**
+ * The image-test scenes, as an array of { name, description, widthPx,
+ * heightPx, patches: [{ what, xPx, yPx, rgba, tolerance }] }.
+ */
+val getScenes()
+{
+    val array = val::array();
+    for (const auto& scene : Viewer::Scene::getScenes()) {
+        val patches = val::array();
+        for (const auto& patch : scene.patches) {
+            val rgba = val::array();
+            for (const std::uint8_t channel : patch.rgba) {
+                rgba.call<void>("push", channel);
+            }
+            val object = val::object();
+            object.set("what", std::string(patch.what));
+            object.set("xPx", patch.xPx);
+            object.set("yPx", patch.yPx);
+            object.set("rgba", rgba);
+            object.set("tolerance", patch.tolerance);
+            patches.call<void>("push", object);
+        }
+        val object = val::object();
+        object.set("name", std::string(scene.name));
+        object.set("description", std::string(scene.description));
+        object.set("widthPx", scene.widthPx);
+        object.set("heightPx", scene.heightPx);
+        object.set("patches", patches);
+        array.call<void>("push", object);
+    }
+    return array;
 }
 
 /** A time range in milliseconds since the epoch, for Date. */
@@ -408,6 +443,37 @@ public:
         return {};
     }
 
+    /** Shows the image-test scene called `name` (see Viewer::Scene) in place of everything else. False if there's none. */
+    bool showScene(const std::string& name)
+    {
+        const auto* scene = Viewer::Scene::find(name);
+        if (!*mApp || !scene) {
+            return false;
+        }
+        Viewer::Scene::show(*scene, **mApp);
+        return true;
+    }
+
+    /**
+     * Copies the next frame drawn back, then calls `onDone(pixels, error)`:
+     * a Uint8Array of RGBA rows, top row first, and null; or null and a message.
+     */
+    void readPixels(val onDone)
+    {
+        if (!*mApp) {
+            onDone(val::null(), std::string("The viewer isn't ready"));
+            return;
+        }
+        (*mApp)->readPixels([onDone](const std::expected<std::vector<std::uint8_t>, std::string>& pixels) {
+            if (!pixels) {
+                onDone(val::null(), pixels.error());
+                return;
+            }
+            // A copy that outlives the vector.
+            onDone(val(emscripten::typed_memory_view(pixels->size(), pixels->data())).call<val>("slice"), val::null());
+        });
+    }
+
 private:
     std::shared_ptr<std::unique_ptr<Viewer::App>> mApp = std::make_shared<std::unique_ptr<Viewer::App>>();
     std::optional<Core::Data::TradeParser> mParser;  // while a file loads
@@ -467,5 +533,9 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("tradeStats", &WebViewer::getTradeStats)
         .function("beginLoad", &WebViewer::beginLoad)
         .function("appendChunk", &WebViewer::appendChunk)
-        .function("finishLoad", &WebViewer::finishLoad);
+        .function("finishLoad", &WebViewer::finishLoad)
+        .function("showScene", &WebViewer::showScene)
+        .function("readPixels", &WebViewer::readPixels);
+
+    emscripten::function("scenes", &getScenes);
 }

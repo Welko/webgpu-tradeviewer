@@ -1,6 +1,6 @@
 # The viewer without its platform (view state, input, engine), so BenchmarkApp
 # can drive the same code.
-add_library(ViewerAppLib STATIC src/App.cpp)
+add_library(ViewerAppLib STATIC src/App.cpp src/Scene.cpp)
 viewer_setup_target(ViewerAppLib)
 target_include_directories(ViewerAppLib PUBLIC include)
 target_link_libraries(ViewerAppLib PUBLIC Core Gpu)
@@ -46,7 +46,7 @@ else()
     )
     FetchContent_MakeAvailable(glfw)
 
-    target_sources(ViewerApp PRIVATE src/NativeMain.cpp)
+    target_sources(ViewerApp PRIVATE src/NativeMain.cpp src/Png.cpp)
     target_link_libraries(ViewerApp PRIVATE glfw)
 
     # Expose the native handles of the platforms GLFW was built with.

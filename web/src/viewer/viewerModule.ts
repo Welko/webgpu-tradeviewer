@@ -1,6 +1,6 @@
 import createViewerModule, { type MainModule, type TimeRange, type TradeStats, type Viewer } from '../wasm/ViewerApp.js';
 
-export type { TimeRange, TradeStats, Viewer };
+export type { MainModule, TimeRange, TradeStats, Viewer };
 
 /** A tick on an axis: where along it (0 at the left or bottom, 1 at the other end), and its label. */
 export interface AxisTick {
@@ -94,10 +94,30 @@ export interface Legend {
 /** Same values as WebGPU's GPUPowerPreference, plus 'default' for no hint. */
 export type PowerPreference = 'default' | 'low-power' | 'high-performance';
 
+/** A pixel whose color a scene knows in advance. */
+export interface ScenePatch {
+  what: string;
+  xPx: number;
+  yPx: number;
+  rgba: [number, number, number, number];
+  /** How far each channel may be off. */
+  tolerance: number;
+}
+
+/** What scenes() returns: a picture for image tests (see cpp/apps/ViewerApp/include/Viewer/Scene.hpp). */
+export interface SceneInfo {
+  name: string;
+  description: string;
+  widthPx: number;
+  heightPx: number;
+  patches: ScenePatch[];
+}
+
 // One wasm instance for the page; each component creates its own Viewer in it.
 let modulePromise: Promise<MainModule> | null = null;
 
-function loadModule(): Promise<MainModule> {
+/** The wasm module, loaded on first use. */
+export function loadModule(): Promise<MainModule> {
   modulePromise ??= createViewerModule();
   return modulePromise;
 }

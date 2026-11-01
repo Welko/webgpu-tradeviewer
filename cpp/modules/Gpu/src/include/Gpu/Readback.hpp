@@ -25,9 +25,10 @@ using Callback = std::function<void(std::expected<Bytes, std::string>)>;
 void map(WGPUBuffer buffer, std::uint64_t size, Callback onDone);
 
 /**
- * Copies a CopySrc RGBA8 texture back as tightly packed rows, top row first.
- * Calls `onDone` exactly once. Its staging buffer isn't tracked.
+ * Copies a CopySrc RGBA8 or BGRA8 texture back as tightly packed RGBA rows,
+ * top row first. Calls `onDone` exactly once. Its staging buffer isn't tracked.
  */
-void texture(const Context& context, WGPUTexture texture, std::uint32_t width, std::uint32_t height, Callback onDone);
+void texture(const Context& context, WGPUTexture texture, WGPUTextureFormat format, std::uint32_t width, std::uint32_t height,
+             Callback onDone);
 
 } // namespace Gpu::Readback

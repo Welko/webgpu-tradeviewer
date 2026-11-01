@@ -1,8 +1,9 @@
 name: CI
 
-# On every push to dev or main: build and test natively and for the web.
-# On main, if everything passed, also publish the site (docs/) to GitHub
-# Pages and the native binary to the "latest" release.
+# On every push to dev or main: build and test natively and for the web, and
+# compare the image-test scenes as each platform draws them. On main, if
+# everything passed, also publish the site (docs/, with the comparison under
+# ci/renderings/) to GitHub Pages and the native binary to the "latest" release.
 on:
   push:
     branches: [main, dev]
@@ -34,14 +35,14 @@ jobs:
 
       # GLFW's build dependencies, zlib, and the Vulkan loader with Mesa's
       # software Vulkan driver (lavapipe): the runner has no GPU, and the GPU
-      # tests need one.
+      # tests need one. Xvfb for a window to draw the scenes through.
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libwayland-dev libxkbcommon-dev \
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
-            zlib1g-dev libvulkan1 mesa-vulkan-drivers
+            zlib1g-dev libvulkan1 mesa-vulkan-drivers xvfb xauth
 
       # Cargo comes with the runner; the cache skips building naga again.
       - name: Cache naga
@@ -79,6 +80,24 @@ jobs:
           echo "### Visible count and amount, against an independent calculation" >> "$GITHUB_STEP_SUMMARY"
           python3 tools/check_ranges.py cpp/build/native/apps/TradeStatsApp/TradeStatsApp \
             "$RUNNER_TEMP/BTCUSDT-trades-2019-12-01.csv" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The image-test scenes through a real window and surface, which the
+      # offscreen tests don't use, checked against their known pixels and
+      # saved for the compare job. Then the viewer opens a real day's file and
+      # draws it once.
+      - name: Draw the scenes and a file through a window
+        run: |
+          xvfb-run -a tools/render-native.sh cpp/build/native/apps/ViewerApp/ViewerApp renderings/native
+          xvfb-run -a cpp/build/native/apps/ViewerApp/ViewerApp "$RUNNER_TEMP/BTCUSDT-trades-2019-12-01.csv" \
+            --snapshot="$RUNNER_TEMP/file.png"
+
+      - name: Upload the renderings
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: renderings-native
+          path: renderings
+          if-no-files-found: ignore
 
       # Keeps the compiled-out stubs building and passing.
       - name: Build and test with profiling compiled out
@@ -183,15 +202,33 @@ jobs:
           source ~/emsdk/emsdk_env.sh
           ctest --test-dir build/web --output-on-failure --no-tests=error
 
-      # Smoke-tests the built site in Chromium, with WebGPU on SwiftShader
-      # (bundled with Chromium), since the runner has no GPU.
-      - name: Install Playwright's Chromium
+      # The runner has no GPU. Chromium brings its own WebGPU driver
+      # (SwiftShader); Firefox uses the system's Vulkan driver, lavapipe, and
+      # only enables WebGPU under Wayland, so a headless Weston provides one.
+      - name: Install Playwright's browsers, lavapipe and Weston
         working-directory: web
-        run: npx playwright install --with-deps chromium
+        run: |
+          npx playwright install --with-deps chromium firefox
+          sudo apt-get install -y --no-install-recommends libvulkan1 mesa-vulkan-drivers weston
 
-      - name: Test (site in Chromium)
+      # Smoke tests in Chromium, and the image-test scenes in both browsers,
+      # saved for the compare job.
+      - name: Test (site in Chromium and Firefox)
         working-directory: web
-        run: npm run test:e2e
+        run: |
+          export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-$RUNNER_TEMP/xdg}
+          mkdir -p -m 700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless --socket=wayland-ci --idle-time=0 &
+          for _ in $(seq 100); do [ -S "$XDG_RUNTIME_DIR/wayland-ci" ] && break; sleep 0.1; done
+          WAYLAND_DISPLAY=wayland-ci npm run test:e2e
+
+      - name: Upload the renderings
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: renderings-web
+          path: renderings
+          if-no-files-found: ignore
 
       - name: Upload test results
         if: always()
@@ -200,6 +237,77 @@ jobs:
           name: test-results-web
           path: test-results
           if-no-files-found: ignore
+
+      - name: Upload the site
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: site
+          path: docs
+          if-no-files-found: error
+
+  compare:
+    name: Compare renderings
+    needs: [native, web]
+    # Also when a platform failed, to show what the others drew.
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: renderings-*
+          path: renderings
+          merge-multiple: true
+
+      # Fails if a known pixel is off, or two platforms (or a platform and
+      # tools/reference-renderings/) differ by more than
+      # tools/compare-renderings.mjs allows. The numbers go on the run's page.
+      - name: Compare
+        run: |
+          status=0
+          node tools/compare-renderings.mjs renderings || status=$?
+          cat renderings/report/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+          exit $status
+
+      # The report with the pictures, unzipped so it opens in the browser. A
+      # job summary can't show the pictures themselves: it only shows images
+      # from public URLs, and artifacts need a sign-in.
+      - id: report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          path: renderings/report/rendering-comparison.html
+          archive: false
+          if-no-files-found: ignore
+
+      - name: Link the report
+        if: always() && steps.report.outputs.artifact-url
+        env:
+          REPORT_URL: ${{ steps.report.outputs.artifact-url }}
+          PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/ci/renderings/
+        run: |
+          {
+            echo ""
+            echo "**[Open the report with the pictures]($REPORT_URL)**"
+            if [ "$GITHUB_REF" = refs/heads/main ]; then
+              echo "(also on [GitHub Pages]($PAGES_URL) once this run publishes it)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/download-artifact@v8
+        if: github.ref == 'refs/heads/main'
+        with:
+          name: site
+          path: docs
+
+      - name: Add the comparison to the site
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p docs/ci/renderings
+          cp renderings/report/rendering-comparison.html docs/ci/renderings/index.html
 
       - uses: actions/upload-pages-artifact@v5
         if: github.ref == 'refs/heads/main'
@@ -227,7 +335,7 @@ jobs:
 
   deploy:
     name: Publish to GitHub Pages
-    needs: [native, web]
+    needs: [native, web, compare]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:

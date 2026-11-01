@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trade Viewer scenes</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='5' cy='10' r='3' fill='%23e64d4d'/%3E%3Ccircle cx='11' cy='6' r='4' fill='%2333cc73'/%3E%3C/svg%3E" />
+    <style>
+      body { margin: 16px; font: 14px system-ui, sans-serif; background: #12141a; color: #d8dbe2; }
+      a { color: #8ab4ff; }
+      canvas { display: block; margin-top: 12px; }
+      pre { white-space: pre-wrap; }
+    </style>
+  </head>
+  <body data-status="loading">
+    <h1>Image-test scenes</h1>
+    <p id="about">Fixed pictures that tests draw on every platform and compare.</p>
+    <ul id="scenes"></ul>
+    <canvas id="scene"></canvas>
+    <pre id="result"></pre>
+    <script type="module" src="/src/scene.ts"></script>
+  </body>
+</html>

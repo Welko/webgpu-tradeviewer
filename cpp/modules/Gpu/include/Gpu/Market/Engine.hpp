@@ -112,13 +112,16 @@ public:
 #ifndef __EMSCRIPTEN__
     /** Delivers finished asynchronous work, such as readPixels() results and GPU times. */
     void processEvents();
+#endif
 
     /**
-     * Copies the last frame of an offscreen target back to the CPU. Calls
-     * `onDone` exactly once, usually from processEvents().
+     * Copies a frame back to the CPU as RGBA rows, top row first: offscreen,
+     * the last one drawn; on a window or canvas, the next one, since a shown
+     * frame is gone. Calls `onDone` once, unless the engine is destroyed
+     * first: natively from processEvents(), on the web from the browser's
+     * event loop.
      */
     void readPixels(PixelsCallback onDone);
-#endif
 
 private:
     struct Impl;

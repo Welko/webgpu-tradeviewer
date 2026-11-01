@@ -177,6 +177,9 @@ public:
     /** Calls `onStats` once per drawn frame, in order, once its GPU times are in. */
     void setStatsCallback(Gpu::Market::Engine::StatsCallback onStats);
 
+    /** Copies the next frame drawn back as RGBA rows, top row first (see Gpu::Market::Engine::readPixels). */
+    void readPixels(Gpu::Market::Engine::PixelsCallback onDone);
+
 #ifndef __EMSCRIPTEN__
     /** Delivers finished asynchronous GPU work. Call every loop iteration. */
     void processEvents();

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { gzipSync } from 'node:zlib';
+import { deflateRawSync, gzipSync } from 'node:zlib';
 
 /** Collects console errors and uncaught exceptions from the page. */
 function collectErrors(page: Page): string[] {
@@ -26,6 +26,53 @@ const TwoTrades = gzipSync(
     'binance,BTCUSDT,1575158403572000,1575158403820370,1,sell,7540.78,0.039741\n' +
     'binance,BTCUSDT,1575158403579000,1575158403820405,2,buy,7540.79,1.5\n',
 );
+
+/** The same two trades in Binance's format: no header, times in milliseconds. */
+const TwoBinanceTrades =
+  '211646077,7540.78000000,0.03974100,299.67,1575158403572,True,True\n' +
+  '211646078,7540.79000000,1.50000000,11311.18,1575158403579,False,True\n';
+
+function crc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let k = 0; k < 8; k++) {
+      crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+/** A zip archive holding one deflated file, as Binance serves its trades. */
+function zip(name: string, text: string): Buffer {
+  const data = Buffer.from(text);
+  const compressed = deflateRawSync(data);
+  const fileName = Buffer.from(name);
+  const common = (header: Buffer, offset: number) => {
+    header.writeUInt16LE(20, offset); // version needed
+    header.writeUInt16LE(0, offset + 2); // flags
+    header.writeUInt16LE(8, offset + 4); // deflate
+    header.writeUInt32LE(0, offset + 6); // time and date
+    header.writeUInt32LE(crc32(data), offset + 10);
+    header.writeUInt32LE(compressed.length, offset + 14);
+    header.writeUInt32LE(data.length, offset + 18);
+    header.writeUInt16LE(fileName.length, offset + 22);
+  };
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04034b50, 0);
+  common(local, 4);
+  const central = Buffer.alloc(46);
+  central.writeUInt32LE(0x02014b50, 0);
+  central.writeUInt16LE(20, 4); // version made by
+  common(central, 6);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(1, 8);
+  end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(central.length + fileName.length, 12);
+  end.writeUInt32LE(local.length + fileName.length + compressed.length, 16);
+  return Buffer.concat([local, fileName, compressed, central, fileName, end]);
+}
 
 /** What the last drawn frame showed. */
 interface Frame {
@@ -304,6 +351,26 @@ test('shows synthetic trades until a file is opened', async ({ page }) => {
   await fileInput.setInputFiles({ name: 'page.csv', mimeType: 'text/csv', buffer: Buffer.from('<html>\n') });
   await expect(page.getByRole('alert')).toHaveText('page.csv: Line 1: no "timestamp" column');
   await expect(page.getByTestId('trade-count')).toHaveText('2');
+
+  expect(errors).toEqual([]);
+});
+
+test('opens Binance\'s zipped files too, with times in milliseconds', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/');
+  await waitUntilReady(page);
+  const name = 'BTCUSDT-trades-2019-12-01.zip';
+  await page.locator('input[type=file]').setInputFiles({ name, mimeType: 'application/zip', buffer: zip('BTCUSDT-trades-2019-12-01.csv', TwoBinanceTrades) });
+  await expect(page.getByTestId('source')).toHaveText(name);
+  await expect(page.getByTestId('trade-count')).toHaveText('2');
+  await page.getByRole('button', { name: 'Whole day' }).click();
+  await expect(page.getByTestId('view-count')).toHaveText('2');
+  await expect(page.getByTestId('view-amount')).toHaveText('1.539741');
+
+  // Exact to the millisecond: the buy, 3.579 s into the day.
+  const box = (await page.locator('canvas').boundingBox())!;
+  await page.mouse.move(box.x + 2, box.y + (box.height - 22) * (1 - 0.53));
+  await expect(page.getByTestId('trade-tooltip').getByTestId('trade-time')).toHaveText('2019-12-01 00:00:03.579000 UTC');
 
   expect(errors).toEqual([]);
 });

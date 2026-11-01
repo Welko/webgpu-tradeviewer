@@ -1,0 +1,154 @@
+[
+  {
+    "name": "hour",
+    "description": "Synthetic trades from 12:00 to 13:00 as markers, one in the middle ringed",
+    "widthPx": 960,
+    "heightPx": 540,
+    "patches": [
+      {
+        "what": "background, under the axis labels",
+        "xPx": 956,
+        "yPx": 536,
+        "rgba": [
+          18,
+          20,
+          26,
+          255
+        ],
+        "tolerance": 1
+      }
+    ]
+  },
+  {
+    "name": "day",
+    "description": "The whole synthetic day as column summaries, the one in the middle highlighted",
+    "widthPx": 960,
+    "heightPx": 540,
+    "patches": [
+      {
+        "what": "background, under the axis labels",
+        "xPx": 956,
+        "yPx": 536,
+        "rgba": [
+          18,
+          20,
+          26,
+          255
+        ],
+        "tolerance": 1
+      }
+    ]
+  },
+  {
+    "name": "opaque",
+    "description": "A buy and a sell in opaque colors chosen for the test, the buy ringed",
+    "widthPx": 400,
+    "heightPx": 200,
+    "patches": [
+      {
+        "what": "background",
+        "xPx": 396,
+        "yPx": 196,
+        "rgba": [
+          32,
+          36,
+          44,
+          255
+        ],
+        "tolerance": 0
+      },
+      {
+        "what": "buy marker",
+        "xPx": 90,
+        "yPx": 90,
+        "rgba": [
+          40,
+          200,
+          120,
+          255
+        ],
+        "tolerance": 0
+      },
+      {
+        "what": "sell marker",
+        "xPx": 270,
+        "yPx": 90,
+        "rgba": [
+          230,
+          70,
+          60,
+          255
+        ],
+        "tolerance": 0
+      },
+      {
+        "what": "ring",
+        "xPx": 90,
+        "yPx": 71,
+        "rgba": [
+          250,
+          230,
+          20,
+          255
+        ],
+        "tolerance": 0
+      },
+      {
+        "what": "between the markers",
+        "xPx": 180,
+        "yPx": 90,
+        "rgba": [
+          32,
+          36,
+          44,
+          255
+        ],
+        "tolerance": 0
+      }
+    ]
+  },
+  {
+    "name": "blended",
+    "description": "The same buy and sell at half opacity over the background",
+    "widthPx": 400,
+    "heightPx": 200,
+    "patches": [
+      {
+        "what": "background",
+        "xPx": 396,
+        "yPx": 196,
+        "rgba": [
+          32,
+          36,
+          44,
+          255
+        ],
+        "tolerance": 0
+      },
+      {
+        "what": "buy marker",
+        "xPx": 90,
+        "yPx": 90,
+        "rgba": [
+          36,
+          118,
+          82,
+          255
+        ],
+        "tolerance": 1
+      },
+      {
+        "what": "sell marker",
+        "xPx": 270,
+        "yPx": 90,
+        "rgba": [
+          131,
+          53,
+          52,
+          255
+        ],
+        "tolerance": 1
+      }
+    ]
+  }
+]

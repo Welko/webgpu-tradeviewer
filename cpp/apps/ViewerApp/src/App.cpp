@@ -370,6 +370,11 @@ void App::setStatsCallback(Gpu::Market::Engine::StatsCallback onStats)
     mEngine->setStatsCallback(std::move(onStats));
 }
 
+void App::readPixels(Gpu::Market::Engine::PixelsCallback onDone)
+{
+    mEngine->readPixels(std::move(onDone));
+}
+
 #ifndef __EMSCRIPTEN__
 void App::processEvents()
 {

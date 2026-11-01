@@ -1,4 +1,6 @@
+#include "Png.hpp"
 #include "Viewer/App.hpp"
+#include "Viewer/Scene.hpp"
 
 #include "Core/Data/TradeFile.hpp"
 #include "Core/Log.hpp"
@@ -10,11 +12,15 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <expected>
 #include <format>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -158,6 +164,18 @@ Gpu::Type::PowerPreference parsePowerPreference(int argc, char** argv)
     return Gpu::Type::PowerPreference::Default;
 }
 
+/** The value of the option starting with `prefix`, such as "--scene=". */
+std::optional<std::string> getOption(int argc, char** argv, std::string_view prefix)
+{
+    for (int i = 1; i < argc; ++i) {
+        const std::string_view arg = argv[i];
+        if (arg.starts_with(prefix)) {
+            return std::string(arg.substr(prefix.size()));
+        }
+    }
+    return std::nullopt;
+}
+
 /** The first argument that isn't an option: a trades file to show. */
 const char* getTradesPath(int argc, char** argv)
 {
@@ -199,10 +217,89 @@ std::string getWindowTitle(const Viewer::App& app)
                        app.getColumnsAcross() > 0 ? " · summarized: one bar per pixel column" : "");
 }
 
+/**
+ * Every scene and its known pixels as JSON, for tools/compare-renderings.mjs
+ * to check renderings with. Their names and descriptions need no escaping.
+ */
+std::string getScenesJson()
+{
+    std::string scenes;
+    for (const auto& scene : Viewer::Scene::getScenes()) {
+        std::string patches;
+        for (const auto& patch : scene.patches) {
+            patches += std::format("{}\n      {{ \"what\": \"{}\", \"xPx\": {}, \"yPx\": {}, \"rgba\": [{}, {}, {}, {}], \"tolerance\": {} }}",
+                                   patches.empty() ? "" : ",", patch.what, patch.xPx, patch.yPx, patch.rgba[0], patch.rgba[1],
+                                   patch.rgba[2], patch.rgba[3], patch.tolerance);
+        }
+        scenes += std::format("{}\n  {{\n    \"name\": \"{}\",\n    \"description\": \"{}\",\n    \"widthPx\": {},\n    \"heightPx\": {},\n    \"patches\": [{}\n    ]\n  }}",
+                              scenes.empty() ? "" : ",", scene.name, scene.description, scene.widthPx, scene.heightPx, patches);
+    }
+    return std::format("[{}\n]\n", scenes);
+}
+
+/** Where a snapshot goes, and whether it was written. */
+struct Snapshot
+{
+    std::string path;
+    bool done = false;
+    bool written = false;
+};
+
+/**
+ * Writes `pixels` to the snapshot's file. Doesn't check a scene's known
+ * pixels: tools/compare-renderings.mjs checks them on every platform.
+ */
+void writeSnapshot(Snapshot& snapshot, std::uint32_t widthPx, std::uint32_t heightPx,
+                   const std::expected<std::vector<std::uint8_t>, std::string>& pixels)
+{
+    snapshot.done = true;
+    if (!pixels) {
+        Core::Log::error("{}", pixels.error());
+        return;
+    }
+    if (auto written = Viewer::Png::write(snapshot.path, widthPx, heightPx, *pixels); !written) {
+        Core::Log::error("{}", written.error());
+        return;
+    }
+    snapshot.written = true;
+    Core::Log::info("Wrote {}", snapshot.path);
+}
+
 } // namespace
 
 int main(int argc, char** argv)
 {
+    // The image tests' scenes, one name per line, or as JSON with their known pixels, for tools/render-native.sh.
+    if (getOption(argc, argv, "--list-scenes")) {
+        for (const auto& known : Viewer::Scene::getScenes()) {
+            std::fputs(std::format("{}\n", known.name).c_str(), stdout);
+        }
+        return 0;
+    }
+    if (getOption(argc, argv, "--describe-scenes")) {
+        std::fputs(getScenesJson().c_str(), stdout);
+        return 0;
+    }
+
+    // A scene for image tests instead of the trades, drawn once at its own size.
+    const Viewer::Scene* scene = nullptr;
+    if (const auto name = getOption(argc, argv, "--scene=")) {
+        scene = Viewer::Scene::find(*name);
+        if (!scene) {
+            std::string names;
+            for (const auto& known : Viewer::Scene::getScenes()) {
+                names += std::format("{}{}", names.empty() ? "" : ", ", known.name);
+            }
+            Core::Log::error("No scene called \"{}\"; there are {}", *name, names);
+            return 1;
+        }
+    }
+    // Saves the first frame as a PNG, then exits: 1 if it couldn't.
+    std::optional<Snapshot> snapshot;
+    if (auto path = getOption(argc, argv, "--snapshot=")) {
+        snapshot = Snapshot{ .path = std::move(*path) };
+    }
+
     std::optional<Core::Data::Trades> loaded;
     if (const char* path = getTradesPath(argc, argv)) {
         auto trades = Core::Data::readTradeFile(path);
@@ -219,7 +316,13 @@ int main(int argc, char** argv)
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "Trade Viewer", nullptr, nullptr);
+    if (scene) {
+        // Exactly the scene's size in physical pixels, even on a scaled screen.
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_SCALE_FRAMEBUFFER, GLFW_FALSE);
+    }
+    GLFWwindow* window = glfwCreateWindow(scene ? static_cast<int>(scene->widthPx) : 1280, scene ? static_cast<int>(scene->heightPx) : 720,
+                                          "Trade Viewer", nullptr, nullptr);
     if (!window) {
         Core::Log::error("Failed to create a window");
         glfwTerminate();
@@ -251,34 +354,64 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    app->setTrades(loaded ? std::move(*loaded) : Viewer::generateSyntheticDay());
-    const auto stats = Core::Data::getStats(app->getTrades());
-    Core::Log::info("{} {} trades from {} to {} UTC, {:.6f} in total", stats.count, loaded ? "loaded" : "synthetic",
-                    formatUtc(stats.firstUs), formatUtc(stats.lastUs), stats.totalAmount);
-
     WindowState state{ .app = app.get() };
-    glfwSetWindowUserPointer(window, &state);
-    connectInput(window);
-    float contentScale = 1.0f;
-    glfwGetWindowContentScale(window, &contentScale, nullptr);
-    app->setPixelRatio(contentScale);
-    Core::Log::info("Scroll to zoom, drag to pan, point at a trade for its details (in the title); R: 12:00-13:00, D: whole day, M: marker size by area or log, S: summaries on or off");
-    logLegend(*app, state.markerScale);
+    if (scene) {
+        int widthPx = 0;
+        int heightPx = 0;
+        glfwGetFramebufferSize(window, &widthPx, &heightPx);
+        if (std::cmp_not_equal(widthPx, scene->widthPx) || std::cmp_not_equal(heightPx, scene->heightPx)) {
+            Core::Log::warn("The window is {} × {} pixels, not the scene's {} × {}", widthPx, heightPx, scene->widthPx, scene->heightPx);
+        }
+        // A still picture: no input, and the scene's own size and pixel ratio.
+        Viewer::Scene::show(*scene, *app);
+        Core::Log::info("Scene {}: {}", scene->name, scene->description);
+    } else {
+        app->setTrades(loaded ? std::move(*loaded) : Viewer::generateSyntheticDay());
+        const auto stats = Core::Data::getStats(app->getTrades());
+        Core::Log::info("{} {} trades from {} to {} UTC, {:.6f} in total", stats.count, loaded ? "loaded" : "synthetic",
+                        formatUtc(stats.firstUs), formatUtc(stats.lastUs), stats.totalAmount);
+
+        glfwSetWindowUserPointer(window, &state);
+        connectInput(window);
+        float contentScale = 1.0f;
+        glfwGetWindowContentScale(window, &contentScale, nullptr);
+        app->setPixelRatio(contentScale);
+        Core::Log::info("Scroll to zoom, drag to pan, point at a trade for its details (in the title); R: 12:00-13:00, D: whole day, M: marker size by area or log, S: summaries on or off");
+        logLegend(*app, state.markerScale);
+    }
+    if (snapshot) {
+        // The next frame: the first.
+        app->readPixels([&snapshot, scene, window](const std::expected<std::vector<std::uint8_t>, std::string>& pixels) {
+            int widthPx = 0;
+            int heightPx = 0;
+            glfwGetFramebufferSize(window, &widthPx, &heightPx);
+            writeSnapshot(*snapshot, scene ? scene->widthPx : static_cast<std::uint32_t>(widthPx),
+                          scene ? scene->heightPx : static_cast<std::uint32_t>(heightPx), pixels);
+        });
+    }
 
     while (!glfwWindowShouldClose(window)) {
         // Sleep until the next event when there's nothing to draw.
-        // GPU results that arrive meanwhile wait for that event.
-        if (!app->needsRender() && !state.repaint) {
+        // GPU results that arrive meanwhile wait for that event, except a
+        // snapshot's, which is polled for.
+        if (snapshot && !snapshot->done) {
+            glfwWaitEventsTimeout(0.001);
+        } else if (!app->needsRender() && !state.repaint) {
             glfwWaitEvents();
         } else {
             glfwPollEvents();
         }
         app->processEvents();
+        if (snapshot && snapshot->done) {
+            break;
+        }
 
-        int widthPx = 0;
-        int heightPx = 0;
-        glfwGetFramebufferSize(window, &widthPx, &heightPx);
-        app->resize(static_cast<std::uint32_t>(widthPx), static_cast<std::uint32_t>(heightPx));
+        if (!scene) {
+            int widthPx = 0;
+            int heightPx = 0;
+            glfwGetFramebufferSize(window, &widthPx, &heightPx);
+            app->resize(static_cast<std::uint32_t>(widthPx), static_cast<std::uint32_t>(heightPx));
+        }
         app->update(glfwGetTime() * 1000.0);
         if (app->needsRender() || state.repaint) {
             app->render();
@@ -290,5 +423,5 @@ int main(int argc, char** argv)
     app.reset();
     glfwDestroyWindow(window);
     glfwTerminate();
-    return 0;
+    return snapshot && !snapshot->written ? 1 : 0;
 }

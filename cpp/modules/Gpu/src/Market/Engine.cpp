@@ -23,6 +23,7 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace Gpu::Market {
 
@@ -118,12 +119,19 @@ struct Engine::Impl
 
     void render();
 
+    /** Copies `image`, this frame's surface texture, back to every callback waiting for a frame. */
+    void readBack(const Image& image);
+
     /** Where frames go: a surface (window or canvas) or an offscreen texture. */
     struct Output
     {
         Handle<WGPUSurface> surface;  // set for a window or canvas
         Handle<WGPUTexture> offscreen;  // set for an offscreen target
         WGPUTextureFormat format = WGPUTextureFormat_Undefined;
+        bool readable = false;  // whether the surface's textures can be copied back
+        // Configured to be copied back, from the first readPixels() on: the
+        // extra usage may cost drivers an optimization, so only tests pay it.
+        bool copied = false;
         std::uint32_t width = 0;  // physical pixels
         std::uint32_t height = 0;
     };
@@ -153,6 +161,7 @@ struct Engine::Impl
     Profiling profiling;
     Output output;
     std::optional<Passes> passes;  // set once the output format is known
+    std::vector<PixelsCallback> pendingReads;  // waiting for the next frame on a surface
 
     Plot::Type::Insets insets{};
     bool showColumns = false;  // summaries instead of trades
@@ -245,6 +254,12 @@ std::expected<void, std::string> Engine::Impl::finishOutput()
         return std::unexpected("The WebGPU surface reports no supported formats");
     }
     output.format = pickSurfaceFormat(std::span(capabilities.formats, capabilities.formatCount));
+#ifdef __EMSCRIPTEN__
+    // A canvas takes any usage, though Emscripten's capabilities list none.
+    output.readable = true;
+#else
+    output.readable = (capabilities.usages & WGPUTextureUsage_CopySrc) != 0;
+#endif
     wgpuSurfaceCapabilitiesFreeMembers(capabilities);
     // Unconfigured until the first resize().
     return {};
@@ -279,7 +294,7 @@ void Engine::Impl::configure()
     WGPUSurfaceConfiguration configuration{};
     configuration.device = context.device.get();
     configuration.format = output.format;
-    configuration.usage = WGPUTextureUsage_RenderAttachment;
+    configuration.usage = WGPUTextureUsage_RenderAttachment | (output.copied ? WGPUTextureUsage_CopySrc : WGPUTextureUsage_None);
     configuration.width = output.width;
     configuration.height = output.height;
     configuration.alphaMode = WGPUCompositeAlphaMode_Auto;
@@ -376,6 +391,7 @@ void Engine::Impl::render()
         const Handle commands(wgpuCommandEncoderFinish(encoder.get(), nullptr));
         const WGPUCommandBuffer submitted = commands.get();
         wgpuQueueSubmit(context.queue.get(), 1, &submitted);
+        readBack(*image);
         present();
     }
     dirty = false;
@@ -390,6 +406,14 @@ void Engine::Impl::render()
         .gpuBytes = resources.getTotalBytes(),
     });
     profiling.profiler->endFrame(profiling.lastFrame);
+}
+
+void Engine::Impl::readBack(const Image& image)
+{
+    // Before presenting: afterwards the texture's contents are gone.
+    for (auto& onDone : std::exchange(pendingReads, {})) {
+        Readback::texture(context, image.texture.get(), output.format, output.width, output.height, std::move(onDone));
+    }
 }
 
 // Public interface
@@ -520,15 +544,29 @@ void Engine::processEvents()
 {
     wgpuInstanceProcessEvents(mImpl->context.instance.get());
 }
+#endif
 
 void Engine::readPixels(PixelsCallback onDone)
 {
-    if (!mImpl->output.offscreen) {
-        onDone(std::unexpected("Only offscreen targets can be read back"));
+    if (mImpl->output.offscreen) {
+        Readback::texture(mImpl->context, mImpl->output.offscreen.get(), mImpl->output.format, mImpl->output.width,
+                          mImpl->output.height, std::move(onDone));
         return;
     }
-    Readback::texture(mImpl->context, mImpl->output.offscreen.get(), mImpl->output.width, mImpl->output.height, std::move(onDone));
+    auto& output = mImpl->output;
+    if (!output.readable) {
+        onDone(std::unexpected("This surface's frames can't be copied back"));
+        return;
+    }
+    if (!output.copied) {
+        output.copied = true;
+        // Unconfigured until the first resize(), which then configures it so.
+        if (output.width > 0) {
+            mImpl->configure();
+        }
+    }
+    mImpl->pendingReads.push_back(std::move(onDone));
+    mImpl->dirty = true;
 }
-#endif
 
 } // namespace Gpu::Market
