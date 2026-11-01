@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { SceneResult } from '../src/scene';
+import { waitForAdapter } from './adapter';
 
 /**
  * Draws every image-test scene (scene.html) and saves the engine's copy of
@@ -22,13 +23,11 @@ async function waitUntilDrawn(page: Page) {
   expect(error, error).toBeUndefined();
 }
 
-// A freshly launched browser may have no adapter for a moment (see smoke.spec.ts).
+// A freshly launched browser may have no adapter for a moment (see adapter.ts).
 test.beforeAll(async ({ browser }) => {
   const page = await browser.newPage();
   await page.goto(`${test.info().project.use.baseURL}/scene.html`);
-  await expect
-    .poll(() => page.evaluate(async () => (await navigator.gpu?.requestAdapter()) != null), { timeout: 15_000 })
-    .toBe(true);
+  await waitForAdapter(page);
   await page.close();
 });
 

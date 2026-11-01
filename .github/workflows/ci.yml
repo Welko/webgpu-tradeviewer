@@ -331,20 +331,22 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # The site, for main to publish; there's none to add to when the web
+      # job failed, and nothing would publish it anyway.
       - uses: actions/download-artifact@v8
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && needs.web.result == 'success'
         with:
           name: site
           path: docs
 
       - name: Add the comparison to the site
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && needs.web.result == 'success'
         run: |
           mkdir -p docs/ci/renderings
           cp renderings/report/rendering-comparison.html docs/ci/renderings/index.html
 
       - uses: actions/upload-pages-artifact@v5
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && needs.web.result == 'success'
         with:
           path: docs
 

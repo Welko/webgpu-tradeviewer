@@ -166,7 +166,7 @@ gh run download <run id> --name renderings-native --dir /tmp/ci-renderings
 node tools/compare-renderings.mjs --update-reference /tmp/ci-renderings
 ```
 
-Firefox enables WebGPU (with the `dom.webgpu.enabled` pref) only under Wayland: under X11 or with no display, it reports WebGPU as blocklisted. CI runs it under a headless Weston.
+Firefox enables WebGPU (with the `dom.webgpu.enabled` pref) only under Wayland: under X11 or with no display, it reports WebGPU as blocklisted. CI runs it under a headless Weston. There, Firefox now and then finds no adapter for as long as the tests wait, so CI retries its tests up to twice, in a new browser each time; the run's page marks a test that passed on a retry as flaky.
 
 ## Choosing the GPU
 

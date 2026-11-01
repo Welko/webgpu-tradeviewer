@@ -46,6 +46,10 @@ export default defineConfig({
     {
       name: 'firefox',
       testMatch: 'scenes.spec.ts',
+      // In CI, Firefox now and then finds no WebGPU adapter for as long as we
+      // wait (main's run #27; the same commit passed on dev). A retry starts
+      // a new browser, and the run's page marks the test flaky.
+      retries: process.env.CI ? 2 : 0,
       use: {
         browserName: 'firefox',
         // Off by default in Playwright's Firefox on Linux.

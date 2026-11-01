@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { deflateRawSync, gzipSync } from 'node:zlib';
+import { waitForAdapter } from './adapter';
 
 /** Collects console errors and uncaught exceptions from the page. */
 function collectErrors(page: Page): string[] {
@@ -123,15 +124,11 @@ const frameRequests = (page: Page) =>
 
 const lastFrame = (page: Page) => page.evaluate(() => (window as unknown as { lastFrame: Frame | null }).lastFrame);
 
-// In a freshly launched headless Chromium, the first adapter request returns
-// null while SwiftShader starts up; later ones succeed. Warm up the browser
-// so the tests see what a user would.
+// Warm up the browser, so the tests see what a user would (see adapter.ts).
 test.beforeAll(async ({ browser }) => {
   const page = await browser.newPage();
   await page.goto(test.info().project.use.baseURL!);
-  await expect
-    .poll(() => page.evaluate(async () => (await navigator.gpu?.requestAdapter()) != null), { timeout: 15_000 })
-    .toBe(true);
+  await waitForAdapter(page);
   await page.close();
 });
 
