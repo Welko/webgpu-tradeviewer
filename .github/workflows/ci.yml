@@ -129,6 +129,7 @@ jobs:
       # The table, and the numbers in benchmark.json, which tools/check-benchmark.mjs
       # accept downloads to make them the baseline.
       - uses: actions/upload-artifact@v7
+        id: benchmark-artifact
         with:
           name: benchmark
           path: benchmark/
@@ -136,11 +137,14 @@ jobs:
 
       # Memory exactly, times within a margin, against the last accepted
       # numbers in tools/benchmark-baseline.csv. Any change past them fails,
-      # faster or smaller too, and the summary gives the command that accepts
-      # this run's numbers.
+      # faster or smaller too, and the summary gives the commands that accept
+      # this run's numbers, with and without the GitHub CLI.
       - name: Check memory and times against the baseline
+        env:
+          ARTIFACT_URL: ${{ steps.benchmark-artifact.outputs.artifact-url }}
         run: |
-          if node tools/check-benchmark.mjs check benchmark/benchmark.json --summary "$RUNNER_TEMP/check.md" --run-id "$GITHUB_RUN_ID"; then
+          if node tools/check-benchmark.mjs check benchmark/benchmark.json --summary "$RUNNER_TEMP/check.md" \
+            --run-id "$GITHUB_RUN_ID" --artifact-url "$ARTIFACT_URL"; then
             status=0
           else
             status=$?

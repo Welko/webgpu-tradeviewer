@@ -14,10 +14,11 @@
  * flaky are shown, never checked.
  *
  * Usage:
- *   node tools/check-benchmark.mjs check <benchmark.json> [--summary <summary.md>] [--run-id <id>]
+ *   node tools/check-benchmark.mjs check <benchmark.json> [--summary <summary.md>] [--run-id <id>] [--artifact-url <url>]
  *     compares, writes the tables as Markdown (for a CI job summary), and
- *     exits with 1 on any change past the margins; --run-id is the CI run,
- *     for the command that accepts it
+ *     exits with 1 on any change past the margins; in CI, --run-id and
+ *     --artifact-url give the commands that accept the run, with gh and
+ *     without
  *   node tools/check-benchmark.mjs accept <run-id | benchmark.json> <description>
  *     appends the numbers as the new baseline: a CI run's, downloaded with
  *     the GitHub CLI (gh), so the times are CI's own; or a file's. The commit
@@ -177,7 +178,31 @@ function section(title, against, metrics, compared) {
   return parts;
 }
 
-function check(resultsPath, summaryPath, runId) {
+/** The commands that make these numbers the baseline: from CI's artifact, downloaded by hand or with gh, or from the file. */
+function describeAccepting(resultsPath, runId, artifactUrl) {
+  const command = (source) => `node tools/check-benchmark.mjs accept ${source} "<what changed and why>"`;
+  const parts = ['', '### These numbers changed', 'If that\'s meant, make them the baseline, saying why, and commit `tools/benchmark-baseline.csv`.'];
+  if (artifactUrl) {
+    parts.push(
+      '',
+      `Download [this run's \`benchmark\` artifact](${artifactUrl}), then:`,
+      '',
+      '```bash',
+      'unzip -o ~/Downloads/benchmark.zip -d ~/Downloads/benchmark',
+      command('~/Downloads/benchmark/benchmark.json'),
+      '```',
+    );
+  }
+  if (runId) {
+    parts.push('', `${artifactUrl ? 'Or, with' : 'With'} the GitHub CLI (\`gh\`) signed in, which downloads it:`, '', '```bash', command(runId), '```');
+  }
+  if (!artifactUrl && !runId) {
+    parts.push('', '```bash', command(resultsPath), '```');
+  }
+  return parts;
+}
+
+function check(resultsPath, summaryPath, runId, artifactUrl) {
   const results = readJson(resultsPath);
   const { rows } = readBaseline();
   const platform = rows.filter((row) => row.platform === results.platform);
@@ -214,16 +239,7 @@ function check(resultsPath, summaryPath, runId) {
     ),
   ];
   if (memoryFailed || timesFailed) {
-    const source = runId ?? resultsPath;
-    parts.push(
-      '',
-      '### These numbers changed',
-      'If that\'s meant, make them the baseline, saying why, and commit `tools/benchmark-baseline.csv`:',
-      '',
-      '```bash',
-      `node tools/check-benchmark.mjs accept ${source} "<what changed and why>"`,
-      '```',
-    );
+    parts.push(...describeAccepting(resultsPath, runId, artifactUrl));
   }
   const summary = `${parts.join('\n')}\n`;
   if (summaryPath) {
@@ -287,7 +303,7 @@ function option(args, name) {
 
 const [command, ...args] = process.argv.slice(2);
 if (command === 'check' && args[0]) {
-  process.exit(check(args[0], option(args, '--summary'), option(args, '--run-id')));
+  process.exit(check(args[0], option(args, '--summary'), option(args, '--run-id'), option(args, '--artifact-url')));
 } else if (command === 'accept' && args[0] && args[1]?.trim()) {
   process.exit(accept(args[0], args[1].trim()));
 } else {

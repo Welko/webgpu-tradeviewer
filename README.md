@@ -314,13 +314,14 @@ Failing when things get faster too makes a gain part of the baseline, so losing 
 
 Some numbers are too unsteady to fail a build on, such as a browser's GPU times; the benchmark marks them `flaky`. They're shown on the run's page and kept in the baseline like the rest, marked "recorded only", and never checked.
 
-**The baseline only changes by hand,** so it's also the log of every change in cost: each row has the date, the commit measured, the platform and GPU, a description of what changed and why, and every number. When a change is meant, the failing run's page gives the command that makes its numbers the baseline; add the description and commit the CSV:
+**The baseline only changes by hand,** so it's also the log of every change in cost: each row has the date, the commit measured, the platform and GPU, a description of what changed and why, and every number. When a change is meant, the failing run's page links its `benchmark` artifact and gives the commands that make its numbers the baseline; add the description and commit the CSV:
 
 ```bash
-node tools/check-benchmark.mjs accept <run-id> "Shrink the price tree to n entries"
+unzip -o ~/Downloads/benchmark.zip -d ~/Downloads/benchmark
+node tools/check-benchmark.mjs accept ~/Downloads/benchmark/benchmark.json "Shrink the price tree to n entries"
 ```
 
-It downloads the run's `benchmark` artifact with the [GitHub CLI](https://cli.github.com/) (`gh`), so the times are CI's own: times measured on another machine mean nothing to CI's runner. Without `gh`, download and unzip the artifact from the run's page, and pass its `benchmark.json` instead of the run id. CI's `benchmark.json` names the commit it measured (`BenchmarkApp --commit`). A local run's doesn't, so it counts as the commit checked out, marked `-dirty` with changes on top. A local run is enough for a memory change, which is the same everywhere:
+The numbers come from CI's run, so the times are CI's own: times measured on another machine mean nothing to CI's runner. The page also gives the same command with the run id instead, for those signed in to the [GitHub CLI](https://cli.github.com/) (`gh`), which downloads the artifact itself. CI's `benchmark.json` names the commit it measured (`BenchmarkApp --commit`). A local run's doesn't, so it counts as the commit checked out, marked `-dirty` with changes on top. A local run is enough for a memory change, which is the same everywhere:
 
 ```bash
 cpp/build/native-release/apps/BenchmarkApp/BenchmarkApp /tmp/benchmark.md data/binance_trades_2019-12-01_BTCUSDT.csv.gz
