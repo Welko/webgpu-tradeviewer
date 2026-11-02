@@ -1,6 +1,6 @@
 # The viewer without its platform (view state, input, engine), so BenchmarkApp
 # can drive the same code.
-add_library(ViewerAppLib STATIC src/App.cpp src/Scene.cpp)
+add_library(ViewerAppLib STATIC src/App.cpp src/GpuSession.cpp src/Scene.cpp)
 viewer_setup_target(ViewerAppLib)
 target_include_directories(ViewerAppLib PUBLIC include)
 target_link_libraries(ViewerAppLib PUBLIC Core Gpu)

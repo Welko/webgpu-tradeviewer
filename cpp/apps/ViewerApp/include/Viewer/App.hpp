@@ -10,6 +10,7 @@
 #include "Gpu/Market/Type.hpp"
 #include "Gpu/Plot/Type.hpp"
 #include "Gpu/Type.hpp"
+#include "Viewer/GpuSession.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -18,7 +19,6 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <variant>
 #include <vector>
 
 namespace Viewer {
@@ -195,14 +195,7 @@ public:
      * process crashing...), the next update() creates a new engine on a new
      * device, and sets it up as the old one was: trades, view, size, colors.
      */
-    struct GpuHealth
-    {
-        bool restarting = false;  // lost, and a new device is on its way
-        std::size_t restarts = 0;  // how many times it was lost and came back
-        std::optional<std::string> failure;  // why it couldn't come back; nothing draws
-        std::vector<std::string> errors;  // the first WebGPU errors nothing caught (see Engine::getErrors)
-        std::size_t errorCount = 0;
-    };
+    using GpuHealth = GpuSession::Health;
 
     [[nodiscard]] GpuHealth getGpuHealth() const;
 
@@ -251,11 +244,11 @@ private:
     /** Gives the engine the columns in mSummaries, or none while trades show. */
     void syncColumns();
 
-    /** Creates a new engine after the GPU was lost. */
-    void restartGpu();
+    /** mSummaries' columns as the engine takes them, or none while trades show. */
+    [[nodiscard]] std::optional<Gpu::Market::Type::Columns> getEngineColumns() const;
 
-    /** Gives a new engine everything the old one had. */
-    void setUpEngine();
+    /** Gives a new engine what the app shows: the trades, the columns and mSettings. */
+    [[nodiscard]] std::expected<void, std::string> setUpEngine(Gpu::Market::Engine& engine);
 
     /** Midnight UTC before the first trade, or the Unix epoch with none. */
     [[nodiscard]] std::int64_t getDayStartUs() const;
@@ -284,37 +277,6 @@ private:
         std::vector<Core::Data::ColumnSummary> columns;  // those with trades, so up to `across`
     };
 
-    /** The GPU works. */
-    struct GpuWorking
-    {};
-
-    /** The GPU was lost, and a new engine is on its way. */
-    struct GpuRestarting
-    {};
-
-    /** The GPU was lost and couldn't come back: nothing draws. */
-    struct GpuFailed
-    {
-        std::string reason;
-    };
-
-    /** How the engine is made, how the GPU is doing, and what each new engine is given besides the app's settings. */
-    struct EngineSetup
-    {
-        Gpu::Market::Engine::Params params;
-        Gpu::Type::Info info;  // of the engine in use, or the last one
-        std::variant<GpuWorking, GpuRestarting, GpuFailed> gpu = GpuWorking{};
-        std::size_t restarts = 0;  // times the GPU was lost and came back
-        bool profiling = false;
-        Gpu::Market::Engine::StatsCallback onStats{};
-        std::function<void()> onWake{};
-        // Expires with the app, for a new engine that arrives later.
-        std::shared_ptr<int> alive = std::make_shared<int>();
-    };
-
-    // Null only while a new one is being created, after the GPU was lost.
-    std::unique_ptr<Gpu::Market::Engine> mEngine;
-    EngineSetup mSetup;
     Core::Data::PreprocessedTrades mData;
     // What's drawn: the surface, the view (applyView() updates it), the looks
     // and what the cursor picks. The only copy; the engine gets it. The view's
@@ -323,6 +285,9 @@ private:
     Axes mAxes;
     Cursor mCursor;
     Summaries mSummaries;
+    // Last: it sets its first engine up from the members above as it's made,
+    // and its engine and callbacks go before them.
+    GpuSession mGpu;
 };
 
 } // namespace Viewer

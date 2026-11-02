@@ -53,11 +53,8 @@ void App::create(const Gpu::Market::Engine::Params& params, Callback onDone)
 }
 
 App::App(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market::Engine::Params params) noexcept
-    : mEngine(std::move(engine)),
-      mSetup{ .params = std::move(params), .info = mEngine->getInfo() }
-{
-    setUpEngine();
-}
+    : mGpu(std::move(engine), std::move(params), [this](Gpu::Market::Engine& newEngine) { return setUpEngine(newEngine); })
+{}
 
 const Core::Data::Trades& App::getTrades() const
 {
@@ -66,8 +63,8 @@ const Core::Data::Trades& App::getTrades() const
 
 std::expected<void, std::string> App::setTrades(Core::Data::Trades&& trades)
 {
-    if (mEngine) {
-        if (auto set = mEngine->setTrades(trades); !set) {
+    if (auto* engine = mGpu.getEngine()) {
+        if (auto set = engine->setTrades(trades); !set) {
             return set;
         }
     }
@@ -250,19 +247,22 @@ void App::updateSummaries()
 
 void App::syncSettings()
 {
-    if (mEngine) {
-        mEngine->setSettings(mSettings);
+    if (auto* engine = mGpu.getEngine()) {
+        engine->setSettings(mSettings);
     }
 }
 
 void App::syncColumns()
 {
-    if (!mEngine) {
-        return;
+    if (auto* engine = mGpu.getEngine()) {
+        engine->setColumns(getEngineColumns());
     }
+}
+
+std::optional<Gpu::Market::Type::Columns> App::getEngineColumns() const
+{
     if (mSummaries.across == 0) {
-        mEngine->setColumns(std::nullopt);
-        return;
+        return std::nullopt;
     }
     Gpu::Market::Type::Columns columns{ .across = mSummaries.across, .columns = {} };
     columns.columns.reserve(mSummaries.columns.size());
@@ -274,7 +274,7 @@ void App::syncColumns()
             .sellAmount = column.sellAmount,
         });
     }
-    mEngine->setColumns(columns);
+    return columns;
 }
 
 Core::Plot::Mapping App::getPlotMapping() const
@@ -363,7 +363,7 @@ void App::updatePick()
 
 const Gpu::Type::Info& App::getInfo() const
 {
-    return mSetup.info;
+    return mGpu.getInfo();
 }
 
 void App::resize(std::uint32_t widthPx, std::uint32_t heightPx)
@@ -382,144 +382,86 @@ void App::resize(std::uint32_t widthPx, std::uint32_t heightPx)
 
 void App::update(double nowMs)
 {
-    if (mEngine && mEngine->isLost()) {
-        restartGpu();
-    }
-    if (mEngine) {
-        mEngine->update(nowMs);
+    mGpu.restartIfLost();
+    if (auto* engine = mGpu.getEngine()) {
+        engine->update(nowMs);
     }
 }
 
 bool App::needsRender() const
 {
-    return mEngine && mEngine->needsRender();
+    const auto* engine = mGpu.getEngine();
+    return engine && engine->needsRender();
 }
 
 void App::render()
 {
-    if (mEngine) {
-        mEngine->render();
+    if (auto* engine = mGpu.getEngine()) {
+        engine->render();
     }
 }
 
 void App::setProfiling(bool enabled)
 {
-    mSetup.profiling = enabled;
-    if (mEngine) {
-        mEngine->setProfiling(enabled);
-    }
+    mGpu.setProfiling(enabled);
 }
 
 void App::setStatsCallback(Gpu::Market::Engine::StatsCallback onStats)
 {
-    mSetup.onStats = std::move(onStats);
-    if (mEngine) {
-        mEngine->setStatsCallback(mSetup.onStats);
-    }
+    mGpu.setStatsCallback(std::move(onStats));
 }
 
 void App::readPixels(Gpu::Market::Engine::PixelsCallback onDone)
 {
-    if (!mEngine) {
+    auto* engine = mGpu.getEngine();
+    if (!engine) {
         onDone(std::unexpected("The GPU is restarting"));
         return;
     }
-    mEngine->readPixels(std::move(onDone));
+    engine->readPixels(std::move(onDone));
 }
 
 #ifndef __EMSCRIPTEN__
 void App::processEvents()
 {
-    if (mEngine) {
-        mEngine->processEvents();
+    if (auto* engine = mGpu.getEngine()) {
+        engine->processEvents();
     }
 }
 #endif
 
 App::GpuHealth App::getGpuHealth() const
 {
-    const auto* failed = std::get_if<GpuFailed>(&mSetup.gpu);
-    GpuHealth health{
-        .restarting = std::holds_alternative<GpuRestarting>(mSetup.gpu),
-        .restarts = mSetup.restarts,
-        .failure = failed ? std::optional(failed->reason) : std::nullopt,
-        .errors = {},
-        .errorCount = 0,
-    };
-    if (mEngine) {
-        health.errors = mEngine->getErrors();
-        health.errorCount = mEngine->getErrorCount();
-    }
-    return health;
+    return mGpu.getHealth();
 }
 
 App::MemoryStats App::getMemoryStats() const
 {
     const auto bytes = mData.getBytes();
+    const auto* engine = mGpu.getEngine();
     return {
         .tradesBytes = bytes.trades,
         .totalsBytes = bytes.totals,
         .priceTreeBytes = bytes.priceTree,
         .summariesBytes = mSummaries.columns.capacity() * sizeof(Core::Data::ColumnSummary),
-        .gpuBytes = mEngine ? mEngine->getGpuBytes() : 0,
+        .gpuBytes = engine ? engine->getGpuBytes() : 0,
     };
 }
 
 void App::setWakeCallback(std::function<void()> onWake)
 {
-    mSetup.onWake = std::move(onWake);
+    mGpu.setWakeCallback(std::move(onWake));
 }
 
-void App::restartGpu()
+std::expected<void, std::string> App::setUpEngine(Gpu::Market::Engine& engine)
 {
-    Core::Log::warn("Restarting the GPU");
-    // The old engine goes first: a window or canvas takes one surface at a time.
-    mEngine.reset();
-    mSetup.gpu = GpuRestarting{};
-    // Natively, this calls back before returning; on the web, later.
-    Gpu::Market::Engine::create(mSetup.params,
-        [this, alive = std::weak_ptr(mSetup.alive)](Gpu::Market::Engine::CreatedResult result) {
-            if (alive.expired()) {
-                return;  // the app is gone
-            }
-            if (!result) {
-                Core::Log::error("The GPU couldn't restart: {}", result.error());
-                mSetup.gpu = GpuFailed{ .reason = std::move(result.error()) };
-            } else {
-                mEngine = std::move(*result);
-                mSetup.gpu = GpuWorking{};
-                mSetup.info = mEngine->getInfo();
-                ++mSetup.restarts;
-                setUpEngine();
-                Core::Log::info("The GPU is back: {} · {} · {}", mSetup.info.device, mSetup.info.backend, mSetup.info.adapter);
-            }
-            if (mSetup.onWake) {
-                mSetup.onWake();
-            }
-        });
-}
-
-void App::setUpEngine()
-{
-    // The engine doesn't outlive the app, so neither does its callback.
-    mEngine->setLostCallback([this] {
-        // update() restarts it, outside the engine's own calls.
-        if (mSetup.onWake) {
-            mSetup.onWake();
-        }
-    });
-    mEngine->setProfiling(mSetup.profiling);
-    if (mSetup.onStats) {
-        mEngine->setStatsCallback(mSetup.onStats);
+    // Fails only if the new GPU holds fewer than the old one did.
+    if (auto set = engine.setTrades(mData.getTrades()); !set) {
+        return set;
     }
-    if (auto set = mEngine->setTrades(mData.getTrades()); !set) {
-        // Only if the new GPU holds fewer than the old one did.
-        Core::Log::error("{}", set.error());
-        mSetup.gpu = GpuFailed{ .reason = std::move(set.error()) };
-        return;
-    }
-    syncColumns();
-    mEngine->setSettings(mSettings);
+    engine.setColumns(getEngineColumns());
+    engine.setSettings(mSettings);
+    return {};
 }
 
 } // namespace Viewer
