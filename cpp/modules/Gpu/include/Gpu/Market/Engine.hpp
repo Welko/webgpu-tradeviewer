@@ -41,6 +41,36 @@ public:
     };
 
     /**
+     * The settings of what a frame shows, set all at once: whoever drives
+     * the engine keeps one, and a new engine gets the same picture from it in
+     * one call. Only small values, cheap to compare and copy: the trades and
+     * columns, which can be large, have their own calls.
+     */
+    struct Settings
+    {
+        /** Surface size in physical pixels. Zero sizes are ignored: offscreen, the target's own stays. */
+        std::uint32_t widthPx = 0;
+        std::uint32_t heightPx = 0;
+        /** Physical pixels per CSS or window pixel, which marker sizes are given in. */
+        float pixelRatio = 1.0f;
+        /** Space to leave around the plot for axis labels. */
+        Plot::Type::Insets insets{};
+        /** Where to draw grid lines, usually at the axis ticks. */
+        Plot::Type::Grid grid{};
+        /** What part of the trades to show. */
+        Type::View view{};
+        Type::MarkerScale markerScale = Type::MarkerScale::Area;
+        /** The colors of everything drawn. */
+        Type::Theme theme{};
+        /** The column, by position in those set with setColumns(), to draw in the cursor color. */
+        std::optional<std::size_t> highlightedColumn{};
+        /** The trade, by index among those set, to ring, such as the one under the cursor. */
+        std::optional<std::size_t> highlightedTrade{};
+
+        bool operator==(const Settings&) const = default;
+    };
+
+    /**
      * Calls `onCreated` exactly once: natively before returning, on the web
      * later from the browser's event loop.
      */
@@ -52,17 +82,14 @@ public:
 
     [[nodiscard]] const Gpu::Type::Info& getInfo() const;
 
-    /** Surface size in physical pixels. Zero sizes are ignored. */
-    void resize(std::uint32_t widthPx, std::uint32_t heightPx);
+    /** Shows `settings` from the next frame on. Only the parts that changed cost anything. Settings' defaults until called. */
+    void setSettings(const Settings& settings);
 
-    /** Physical pixels per CSS or window pixel, which marker sizes are given in. */
-    void setPixelRatio(float ratio);
-
-    /** Space to leave around the plot for axis labels. None by default. */
-    void setPlotInsets(Plot::Type::Insets insets);
-
-    /** Where to draw grid lines, usually at the axis ticks. */
-    void setGrid(const Plot::Type::Grid& grid);
+    /**
+     * Draws these summaries instead of the view's trades, until called with
+     * nothing. For views too crowded to show every trade.
+     */
+    void setColumns(const std::optional<Type::Columns>& columns);
 
     /** The most trades the engine holds: as many as fit in the GPU's largest buffer, or Params::maxTrades. */
     [[nodiscard]] std::size_t getMaxTrades() const;
@@ -79,26 +106,6 @@ public:
 
     /** Makes room for `count` trades in total, up to getMaxTrades(), for appending without copies. */
     void reserveTrades(std::size_t count);
-
-    /** What part of the trades to show. */
-    void setView(const Type::View& view);
-
-    void setMarkerScale(Type::MarkerScale scale);
-
-    /**
-     * Draws these summaries instead of the view's trades, until called with
-     * nothing. For views too crowded to show every trade.
-     */
-    void setColumns(const std::optional<Type::Columns>& columns);
-
-    /** Draws the column at `position` in those set in the cursor color; none for nothing. */
-    void setHighlightedColumn(std::optional<std::size_t> position);
-
-    /** Rings the trade at `index` among those set, such as the one under the cursor; none for nothing. */
-    void setHighlightedTrade(std::optional<std::size_t> index);
-
-    /** The colors of everything drawn. Type::Theme's defaults until called. */
-    void setTheme(const Type::Theme& theme);
 
     /** Advances the engine's state to `nowMs`. */
     void update(double nowMs);

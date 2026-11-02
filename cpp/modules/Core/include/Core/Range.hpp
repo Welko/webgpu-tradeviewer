@@ -56,6 +56,8 @@ struct ValueRange
 {
     double low;
     double high;
+
+    bool operator==(const ValueRange&) const = default;
 };
 
 } // namespace Core

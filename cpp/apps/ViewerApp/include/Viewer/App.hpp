@@ -57,7 +57,7 @@ public:
     [[nodiscard]] Core::Data::TradeStats getViewStats() const;
 
     /** The time range on screen, left edge to right edge. */
-    [[nodiscard]] Core::TimeRange getView() const { return mView.time; }
+    [[nodiscard]] Core::TimeRange getView() const { return mSettings.view.time; }
 
     /** 12:00 to 13:00 UTC on the day of the first trade. */
     void resetView();
@@ -72,7 +72,7 @@ public:
         std::vector<Core::Plot::Axis::Tick> prices;
     };
 
-    [[nodiscard]] const Axes& getAxes() const { return mView.axes; }
+    [[nodiscard]] const Axes& getAxes() const { return mAxes; }
 
     /** Space to leave around the plot for axis labels, in physical pixels. */
     void setPlotInsets(Gpu::Plot::Type::Insets insets);
@@ -233,7 +233,7 @@ public:
 #endif
 
 private:
-    /** Shows mView.time: finds its trades and fits the price range to them. */
+    /** Shows mSettings.view.time: finds its trades and fits the price range to them. */
     void applyView();
 
     /** Ticks and grid lines for the current view and plot size. */
@@ -245,8 +245,11 @@ private:
     /** Picks the trade or column at the cursor again, after it or the view moved, and highlights it. */
     void updatePick();
 
-    /** Draws the columns in mSummaries, or the trades when there are none. */
-    void showColumns();
+    /** Gives the engine mSettings, after it changed. */
+    void syncSettings();
+
+    /** Gives the engine the columns in mSummaries, or none while trades show. */
+    void syncColumns();
 
     /** Creates a new engine after the GPU was lost. */
     void restartGpu();
@@ -264,32 +267,12 @@ private:
     [[nodiscard]] double getPlotWidthPx() const;
     [[nodiscard]] double getPlotHeightPx() const;
 
-    /** What's on screen; applyView() updates it all. */
-    struct View
-    {
-        Core::TimeRange time{};
-        Core::ValueRange price{};  // kept while the view has no trades
-        Core::IndexRange trades{};  // the trades in `time`
-        Axes axes;
-    };
-
-    /** The surface, and the plot inside it. */
-    struct Layout
-    {
-        std::uint32_t surfaceWidthPx = 0;  // physical pixels
-        std::uint32_t surfaceHeightPx = 0;
-        float pixelRatio = 1.0f;
-        Gpu::Plot::Type::Insets insets{};
-    };
-
-    /** Where the pointer is, and the trade it picks. */
+    /** Where the pointer is. What it picks is mSettings' highlights. */
     struct Cursor
     {
         bool onSurface = false;
         double xPx = 0.0;  // physical pixels from the surface's top left corner
         double yPx = 0.0;
-        std::optional<std::size_t> trade;
-        std::optional<std::size_t> column;  // by position in mSummaries.columns
     };
 
     /** Whether the view shows column summaries, when it's crowded, instead of its trades. */
@@ -315,7 +298,7 @@ private:
         std::string reason;
     };
 
-    /** How the engine is made, how the GPU is doing, and what each new engine is given besides the app's state. */
+    /** How the engine is made, how the GPU is doing, and what each new engine is given besides the app's settings. */
     struct EngineSetup
     {
         Gpu::Market::Engine::Params params;
@@ -333,12 +316,13 @@ private:
     std::unique_ptr<Gpu::Market::Engine> mEngine;
     EngineSetup mSetup;
     Core::Data::PreprocessedTrades mData;
-    View mView;
-    Layout mLayout;
+    // What's drawn: the surface, the view (applyView() updates it), the looks
+    // and what the cursor picks. The only copy; the engine gets it. The view's
+    // price range is kept while the view has no trades.
+    Gpu::Market::Engine::Settings mSettings;
+    Axes mAxes;
     Cursor mCursor;
     Summaries mSummaries;
-    Gpu::Market::Type::MarkerScale mMarkerScale = Gpu::Market::Type::MarkerScale::Area;
-    Gpu::Market::Type::Theme mTheme;
 };
 
 } // namespace Viewer

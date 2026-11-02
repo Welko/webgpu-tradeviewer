@@ -14,6 +14,8 @@ struct Insets
     std::uint32_t top;
     std::uint32_t right;
     std::uint32_t bottom;
+
+    bool operator==(const Insets&) const = default;
 };
 
 /** Where grid lines go, as fractions of the plot: from its left edge, or from its bottom edge. */
@@ -21,6 +23,8 @@ struct Grid
 {
     std::vector<float> verticalLines;
     std::vector<float> horizontalLines;
+
+    bool operator==(const Grid&) const = default;
 };
 
 /** The plot's colors. */
@@ -29,6 +33,8 @@ struct Theme
     Gpu::Type::Color background{ .red = 0.07f, .green = 0.08f, .blue = 0.10f };
     /** Of the grid lines, which are opaque. */
     Gpu::Type::Color grid{ .red = 0.145f, .green = 0.155f, .blue = 0.17f };
+
+    bool operator==(const Theme&) const = default;
 };
 
 } // namespace Gpu::Plot::Type

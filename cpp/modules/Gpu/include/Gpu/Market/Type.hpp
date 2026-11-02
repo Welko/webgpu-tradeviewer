@@ -27,6 +27,8 @@ struct Theme
     float markerOpacity = 0.6f;
     /** Of the ring around the trade under the cursor. */
     Gpu::Type::Color cursor{ .red = 1.0f, .green = 1.0f, .blue = 1.0f };
+
+    bool operator==(const Theme&) const = default;
 };
 
 /** One marker size a legend shows. */
@@ -61,6 +63,8 @@ struct Column
     Core::ValueRange price;  // lowest and highest traded
     double buyAmount;
     double sellAmount;
+
+    bool operator==(const Column&) const = default;
 };
 
 /**
@@ -73,6 +77,8 @@ struct Columns
 {
     std::uint32_t across = 0;
     std::vector<Column> columns;  // in any order
+
+    bool operator==(const Columns&) const = default;
 };
 
 /** The part of the trades on screen. */
@@ -84,6 +90,8 @@ struct View
     Core::ValueRange price;
     /** The trades in `time`: the ones drawn. */
     Core::IndexRange trades;
+
+    bool operator==(const View&) const = default;
 };
 
 } // namespace Gpu::Market::Type

@@ -166,7 +166,7 @@ TEST_CASE("Trades are drawn where their time and price fall, colored by side")
         return;
     }
     CHECK(engine->setTrades(buyThenSell()));
-    engine->setView(viewOf({ 0, 2 }));
+    engine->setSettings({ .view = viewOf({ 0, 2 }) });
     engine->render();
 
     const auto pixels = readPixels(*engine);
@@ -185,11 +185,13 @@ TEST_CASE("Insets keep trades and grid lines inside the plot")
     if (!engine) {
         return;
     }
-    // The plot is the top left 80 × 40 pixels.
-    engine->setPlotInsets({ .left = 0, .top = 0, .right = 20, .bottom = 10 });
     CHECK(engine->setTrades(buyThenSell()));
-    engine->setView(viewOf({ 0, 2 }));
-    engine->setGrid({ .verticalLines = { 0.5f }, .horizontalLines = { 0.25f } });
+    engine->setSettings({
+        // The plot is the top left 80 × 40 pixels.
+        .insets = { .left = 0, .top = 0, .right = 20, .bottom = 10 },
+        .grid = { .verticalLines = { 0.5f }, .horizontalLines = { 0.25f } },
+        .view = viewOf({ 0, 2 }),
+    });
     engine->render();
 
     const auto pixels = readPixels(*engine);
@@ -217,7 +219,7 @@ TEST_CASE("Only the view's trades are drawn")
         return;
     }
     CHECK(engine->setTrades(buyThenSell()));
-    engine->setView(viewOf({ 1, 2 }));
+    engine->setSettings({ .view = viewOf({ 1, 2 }) });
     engine->render();
 
     const auto pixels = readPixels(*engine);
@@ -237,15 +239,16 @@ namespace Style = Gpu::Market::Style;
 constexpr Rgba BackgroundColor{ .red = 18, .green = 20, .blue = 26, .alpha = 255 };
 const Theme DefaultTheme;
 
-/** One trade of `amount` BTC, drawn alone in the middle of a 100 × 100 engine. */
-std::optional<Pixels> drawOne(Engine& engine, double amount, Side side, MarkerScale scale, float pixelRatio)
+/** One trade of `amount` BTC, drawn alone in the middle of a 100 × 100 engine, with `settings` otherwise. */
+std::optional<Pixels> drawOne(Engine& engine, double amount, Side side, MarkerScale scale, float pixelRatio, Engine::Settings settings = {})
 {
     Trades trades;
     add(trades, NoonUs + 50, 100.0, amount, side);
     CHECK(engine.setTrades(trades));
-    engine.setView(viewOf({ 0, 1 }));
-    engine.setMarkerScale(scale);
-    engine.setPixelRatio(pixelRatio);
+    settings.view = viewOf({ 0, 1 });
+    settings.markerScale = scale;
+    settings.pixelRatio = pixelRatio;
+    engine.setSettings(settings);
     engine.render();
     return readPixels(engine);
 }
@@ -325,7 +328,7 @@ TEST_CASE("The highlighted trade gets a ring in the cursor color, just outside i
     }
     CHECK(isBackground(pixelAt(*plain, 100, 58, 50)));
 
-    engine->setHighlightedTrade(0);
+    engine->setSettings({ .view = viewOf({ 0, 1 }), .highlightedTrade = 0 });
     engine->render();
     const auto ringed = readPixels(*engine);
     if (!ringed) {
@@ -338,7 +341,7 @@ TEST_CASE("The highlighted trade gets a ring in the cursor color, just outside i
     CHECK(isBuy(pixelAt(*ringed, 100, 52, 50)));  // the marker itself is unchanged
     CHECK(isBackground(pixelAt(*ringed, 100, 62, 50)));
 
-    engine->setHighlightedTrade(std::nullopt);
+    engine->setSettings({ .view = viewOf({ 0, 1 }) });
     engine->render();
     const auto cleared = readPixels(*engine);
     if (!cleared) {
@@ -356,7 +359,7 @@ TEST_CASE("Columns are drawn instead of trades, as bars over their price range, 
     Trades trades;
     add(trades, NoonUs + 50, 100.0, 1.0, Side::Buy);  // drawn at (50, 50) when trades show
     CHECK(engine->setTrades(trades));
-    engine->setView(viewOf({ 0, 1 }));
+    engine->setSettings({ .view = viewOf({ 0, 1 }) });
     // 10 columns of 10 pixels. Prices 99 to 101 fill the height, top down.
     engine->setColumns(Gpu::Market::Type::Columns{
         .across = 10,
@@ -384,7 +387,7 @@ TEST_CASE("Columns are drawn instead of trades, as bars over their price range, 
     CHECK(isBackground(pixelAt(*pixels, 100, 75, 46)));
     CHECK(isBackground(pixelAt(*pixels, 100, 50, 50)));  // the trade isn't drawn
 
-    engine->setHighlightedColumn(1);
+    engine->setSettings({ .view = viewOf({ 0, 1 }), .highlightedColumn = 1 });
     engine->render();
     const auto highlighted = readPixels(*engine);
     if (!highlighted) {
@@ -415,9 +418,8 @@ TEST_CASE("A theme sets the background, grid and marker colors")
         .sell = { .red = 0.0f, .green = 0.0f, .blue = 0.0f },
         .markerOpacity = 1.0f,
     };
-    engine->setTheme(theme);
-    engine->setGrid({ .verticalLines = { 0.1f }, .horizontalLines = {} });
-    const auto pixels = drawOne(*engine, 1.0, Side::Buy, MarkerScale::Area, 1.0f);
+    const auto pixels = drawOne(*engine, 1.0, Side::Buy, MarkerScale::Area, 1.0f,
+                                { .grid = { .verticalLines = { 0.1f }, .horizontalLines = {} }, .theme = theme });
     if (!pixels) {
         return;
     }
@@ -447,7 +449,7 @@ TEST_CASE("Times are exact to the microsecond, decades after 1970")
     add(trades, StartUs + 2, 100.0, 1e-6, Side::Buy);
     add(trades, StartUs + 3, 100.0, 1e-6, Side::Sell);
     CHECK(engine->setTrades(trades));
-    engine->setView({ .time = { StartUs, StartUs + 10 }, .price = { .low = 99.0, .high = 101.0 }, .trades = { 0, 2 } });
+    engine->setSettings({ .view = { .time = { StartUs, StartUs + 10 }, .price = { .low = 99.0, .high = 101.0 }, .trades = { 0, 2 } } });
     engine->render();
 
     const auto pixels = readPixels(*engine);
@@ -478,7 +480,7 @@ TEST_CASE("Appending past the reserved room keeps the earlier trades")
     CHECK(engine->appendTrades(first));
     engine->render();
     CHECK(engine->appendTrades(second));
-    engine->setView(viewOf({ 0, 2 }));
+    engine->setSettings({ .view = viewOf({ 0, 2 }) });
     engine->render();
 
     const auto pixels = readPixels(*engine);
@@ -503,8 +505,8 @@ TEST_CASE("Zooming and panning allocate nothing")
     recordStats(*engine, reported);
     CHECK(engine->setTrades(buyThenSell()));
     for (std::int64_t step = 0; step < 50; ++step) {
-        engine->setView({ .time = { NoonUs + step, NoonUs + 100 + step * 3 }, .price = { .low = 99.0, .high = 101.0 },
-                          .trades = { 0, 2 } });
+        engine->setSettings({ .view = { .time = { NoonUs + step, NoonUs + 100 + step * 3 }, .price = { .low = 99.0, .high = 101.0 },
+                                     .trades = { 0, 2 } } });
         engine->render();
     }
     CHECK(reported.size() == 50);
@@ -540,7 +542,7 @@ TEST_CASE("Resizing an offscreen engine replaces its texture")
     std::vector<FrameStats> reported;
     recordStats(*engine, reported);
     engine->render();
-    engine->resize(32, 8);
+    engine->setSettings({ .widthPx = 32, .heightPx = 8 });
     CHECK(engine->needsRender());
     engine->render();
     CHECK_FALSE(engine->needsRender());

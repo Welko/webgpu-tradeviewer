@@ -15,6 +15,8 @@ struct Color
     float red = 0.0f;
     float green = 0.0f;
     float blue = 0.0f;
+
+    bool operator==(const Color&) const = default;
 };
 
 struct Info

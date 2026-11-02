@@ -119,7 +119,8 @@ struct Engine::Impl
     /** Configures the surface, or recreates the offscreen texture. */
     void configure();
 
-    void resize(std::uint32_t newWidthPx, std::uint32_t newHeightPx);
+    /** Applies the parts of `next` that differ from `settings`, or all of it. */
+    void setSettings(const Settings& next, bool everything);
 
     /** This frame's image, or nothing to skip it (zero size, or the surface was reconfigured). */
     [[nodiscard]] std::optional<Image> acquire();
@@ -173,7 +174,7 @@ struct Engine::Impl
     std::optional<Passes> passes;  // set once the output format is known
     std::vector<PixelsCallback> pendingReads;  // waiting for the next frame on a surface
 
-    Plot::Type::Insets insets{};
+    Settings settings;  // as last set
     std::optional<std::size_t> maxTrades;  // Params::maxTrades
     bool showColumns = false;  // summaries instead of trades
     double nowMs = 0.0;  // the time frames show, for time-based effects
@@ -222,6 +223,7 @@ void Engine::create(const Params& params, CreatedCallback onDone)
             .trades = TradesPass(impl->context, impl->resources, impl->output.format),
             .columns = ColumnsPass(impl->context, impl->resources, impl->output.format),
         });
+        impl->setSettings(impl->settings, true);
         impl->profiling.profiler = Profiler::create(impl->context,
             [&statsQueue = impl->profiling.statsQueue](std::uint64_t frame, Profiler::Times times) {
                 statsQueue.setTimes(frame, std::move(times));
@@ -273,7 +275,7 @@ std::expected<void, std::string> Engine::Impl::finishOutput()
     output.readable = (capabilities.usages & WGPUTextureUsage_CopySrc) != 0;
 #endif
     wgpuSurfaceCapabilitiesFreeMembers(capabilities);
-    // Unconfigured until the first resize().
+    // Unconfigured until the first size is set.
     return {};
 }
 
@@ -319,15 +321,45 @@ void Engine::Impl::configure()
     wgpuSurfaceConfigure(output.surface.get(), &configuration);
 }
 
-void Engine::Impl::resize(std::uint32_t newWidthPx, std::uint32_t newHeightPx)
+void Engine::Impl::setSettings(const Settings& next, bool everything)
 {
-    if (newWidthPx == 0 || newHeightPx == 0 || (newWidthPx == output.width && newHeightPx == output.height)) {
-        return;
+    const auto changed = [&](auto member) { return everything || settings.*member != next.*member; };
+    // Zero sizes are ignored: offscreen, the target's own stays.
+    if (next.widthPx > 0 && next.heightPx > 0 && (next.widthPx != output.width || next.heightPx != output.height)) {
+        output.width = next.widthPx;
+        output.height = next.heightPx;
+        configure();
     }
-    output.width = newWidthPx;
-    output.height = newHeightPx;
-    configure();
-    dirty = true;
+    if (changed(&Settings::pixelRatio)) {
+        passes->trades.setPixelRatio(next.pixelRatio);
+        passes->columns.setPixelRatio(next.pixelRatio);
+    }
+    if (changed(&Settings::grid)) {
+        passes->grid.setGrid(next.grid);
+    }
+    if (changed(&Settings::view)) {
+        passes->trades.setView(next.view);
+        passes->columns.setView(next.view);
+    }
+    if (changed(&Settings::markerScale)) {
+        passes->trades.setMarkerScale(next.markerScale);
+    }
+    if (changed(&Settings::theme)) {
+        passes->grid.setTheme(next.theme.plot);
+        passes->trades.setTheme(next.theme);
+        passes->columns.setTheme(next.theme);
+    }
+    if (changed(&Settings::highlightedColumn)) {
+        passes->columns.setHighlight(next.highlightedColumn);
+    }
+    if (changed(&Settings::highlightedTrade)) {
+        passes->trades.setHighlight(next.highlightedTrade);
+    }
+    // The insets are read as each frame is drawn.
+    if (everything || settings != next) {
+        settings = next;
+        dirty = true;
+    }
 }
 
 std::optional<Engine::Impl::Image> Engine::Impl::acquire()
@@ -394,7 +426,7 @@ void Engine::Impl::render()
     const Handle encoder(wgpuDeviceCreateCommandEncoder(context.device.get(), nullptr));
     {
         const Core::Profiling::Scope scope(encodeMs, timed);
-        const auto plot = Plot::Area::within(output.width, output.height, insets);
+        const auto plot = Plot::Area::within(output.width, output.height, settings.insets);
         passes->grid.encode(encoder.get(), image->view.get(), plot, *profiling.profiler);
         if (showColumns) {
             passes->columns.encode(encoder.get(), image->view.get(), plot, *profiling.profiler);
@@ -445,27 +477,17 @@ const Gpu::Type::Info& Engine::getInfo() const
     return mImpl->context.info;
 }
 
-void Engine::resize(std::uint32_t widthPx, std::uint32_t heightPx)
+void Engine::setSettings(const Settings& settings)
 {
-    mImpl->resize(widthPx, heightPx);
+    mImpl->setSettings(settings, false);
 }
 
-void Engine::setPixelRatio(float ratio)
+void Engine::setColumns(const std::optional<Type::Columns>& columns)
 {
-    mImpl->passes->trades.setPixelRatio(ratio);
-    mImpl->passes->columns.setPixelRatio(ratio);
-    mImpl->dirty = true;
-}
-
-void Engine::setPlotInsets(Plot::Type::Insets insets)
-{
-    mImpl->insets = insets;
-    mImpl->dirty = true;
-}
-
-void Engine::setGrid(const Plot::Type::Grid& grid)
-{
-    mImpl->passes->grid.setGrid(grid);
+    mImpl->showColumns = columns.has_value();
+    if (columns) {
+        mImpl->passes->columns.setColumns(*columns);
+    }
     mImpl->dirty = true;
 }
 
@@ -507,48 +529,6 @@ void Engine::reserveTrades(std::size_t count)
 {
     // Can't fail: no more than the buffer takes.
     [[maybe_unused]] const auto reserved = mImpl->passes->trades.reserve(std::min(count, getMaxTrades()));
-}
-
-void Engine::setView(const Type::View& view)
-{
-    mImpl->passes->trades.setView(view);
-    mImpl->passes->columns.setView(view);
-    mImpl->dirty = true;
-}
-
-void Engine::setMarkerScale(Type::MarkerScale scale)
-{
-    mImpl->passes->trades.setMarkerScale(scale);
-    mImpl->dirty = true;
-}
-
-void Engine::setHighlightedTrade(std::optional<std::size_t> index)
-{
-    mImpl->passes->trades.setHighlight(index);
-    mImpl->dirty = true;
-}
-
-void Engine::setColumns(const std::optional<Type::Columns>& columns)
-{
-    mImpl->showColumns = columns.has_value();
-    if (columns) {
-        mImpl->passes->columns.setColumns(*columns);
-    }
-    mImpl->dirty = true;
-}
-
-void Engine::setHighlightedColumn(std::optional<std::size_t> position)
-{
-    mImpl->passes->columns.setHighlight(position);
-    mImpl->dirty = true;
-}
-
-void Engine::setTheme(const Type::Theme& theme)
-{
-    mImpl->passes->grid.setTheme(theme.plot);
-    mImpl->passes->trades.setTheme(theme);
-    mImpl->passes->columns.setTheme(theme);
-    mImpl->dirty = true;
 }
 
 void Engine::update(double nowMs)
@@ -597,7 +577,7 @@ void Engine::readPixels(PixelsCallback onDone)
     }
     if (!output.copied) {
         output.copied = true;
-        // Unconfigured until the first resize(), which then configures it so.
+        // Unconfigured until the first size is set, which then configures it so.
         if (output.width > 0) {
             mImpl->configure();
         }
