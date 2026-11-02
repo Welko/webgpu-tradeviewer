@@ -17,7 +17,7 @@ GpuSession::GpuSession(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market:
 
 void GpuSession::restartIfLost()
 {
-    if (!mEngine || !mEngine->isLost()) {
+    if (!mEngine || !mEngine->getHealth().lost) {
         return;
     }
     Core::Log::warn("Restarting the GPU");
@@ -76,8 +76,9 @@ GpuSession::Health GpuSession::getHealth() const
         .errorCount = 0,
     };
     if (mEngine) {
-        health.errors = mEngine->getErrors();
-        health.errorCount = mEngine->getErrorCount();
+        const auto& device = mEngine->getHealth();
+        health.errors = device.errors;
+        health.errorCount = device.errorCount;
     }
     return health;
 }

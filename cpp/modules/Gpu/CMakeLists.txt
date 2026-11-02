@@ -22,6 +22,7 @@ add_library(Gpu STATIC
     src/Plot/GridPass.cpp
     src/Profiler.cpp
     src/Readback.cpp
+    src/RenderTarget.cpp
 )
 viewer_setup_target(Gpu)
 gpu_embed_shader(Gpu src/Market/ColumnsPass.wgsl)

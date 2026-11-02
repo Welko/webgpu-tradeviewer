@@ -40,18 +40,15 @@ struct Context
     };
 
     /**
-     * What the device reported on its own, outside any call: errors nothing
-     * caught, and its loss. Shared with the device's callbacks, which may
-     * run after the context is gone.
+     * What the device reported on its own (see Type::Health), and what the
+     * device's callbacks need besides. Shared with them, since they may run
+     * after the context is gone.
      */
-    struct Health
+    struct Health : Type::Health
     {
-        // The first errors, in order; more are only logged and counted.
+        // Errors kept; more are only logged and counted.
         static constexpr std::size_t KeptErrors = 16;
 
-        std::vector<std::string> errors;
-        std::size_t errorCount = 0;
-        std::optional<std::string> lost;  // why, once the device is lost
         // Set before the device is released on purpose, which loses it too.
         bool released = false;
         // Called once the device is lost, unless released on purpose.

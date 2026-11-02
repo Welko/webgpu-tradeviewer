@@ -143,12 +143,11 @@ public:
     void readPixels(PixelsCallback onDone);
 
     /**
-     * Whether the GPU device is gone, after a driver reset or a crash of the
-     * browser's GPU process, for example. Nothing draws any more, and every
-     * call does nothing: the app must create a new engine and set it up
-     * again.
+     * What the GPU reported on its own: errors nothing caught, and whether
+     * the device is lost. Once it is, nothing draws any more and every call
+     * does nothing: the app must create a new engine and set it up again.
      */
-    [[nodiscard]] bool isLost() const;
+    [[nodiscard]] const Gpu::Type::Health& getHealth() const;
 
     /**
      * Called once when the device is lost: natively from processEvents(), on
@@ -158,15 +157,6 @@ public:
 
     /** Loses the device, as a GPU reset would: WebGPU's destroy(). For tests of what follows. */
     void loseDevice();
-
-    /**
-     * The first WebGPU errors nothing caught (up to 16), such as validation
-     * errors, which mean a bug, or running out of GPU memory.
-     */
-    [[nodiscard]] const std::vector<std::string>& getErrors() const;
-
-    /** How many such errors there were, including those not kept. */
-    [[nodiscard]] std::size_t getErrorCount() const;
 
     /** The GPU memory the engine's buffers and textures take, a window's or canvas's own excepted. */
     [[nodiscard]] std::uint64_t getGpuBytes() const;

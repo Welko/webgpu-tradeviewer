@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <optional>
@@ -33,6 +34,19 @@ struct Info
      * fields above are hidden. May name another GPU on multi-GPU machines.
      */
     std::string webglRenderer;
+};
+
+/**
+ * What the GPU device reported on its own, outside any call: errors nothing
+ * caught, such as validation errors, which mean a bug, or running out of GPU
+ * memory; and its loss, after a driver reset or a crash of the browser's GPU
+ * process, for example.
+ */
+struct Health
+{
+    std::vector<std::string> errors;  // the first ones (up to 16), in order
+    std::size_t errorCount = 0;  // including those not kept
+    std::optional<std::string> lost;  // why, once the device is lost
 };
 
 /** What one drawn frame cost, and what the GPU held. */

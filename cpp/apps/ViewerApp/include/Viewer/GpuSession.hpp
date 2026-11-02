@@ -46,7 +46,7 @@ public:
         bool restarting = false;  // lost, and a new device is on its way
         std::size_t restarts = 0;  // how many times it was lost and came back
         std::optional<std::string> failure;  // why it couldn't come back; nothing draws
-        std::vector<std::string> errors;  // the first WebGPU errors nothing caught (see Engine::getErrors)
+        std::vector<std::string> errors;  // the first WebGPU errors nothing caught (see Engine::getHealth)
         std::size_t errorCount = 0;
     };
 
