@@ -1,4 +1,5 @@
 import { defineConfig, type ReporterDescription } from '@playwright/test';
+import { chromiumLaunchOptions } from './scripts/chromium.mjs';
 
 // Set in CI, as for the C++ tests (see cpp/cmake/testing.cmake).
 const junitDir = process.env.TRADEVIEWER_JUNIT_DIR;
@@ -24,23 +25,9 @@ export default defineConfig({
     {
       name: 'chromium',
       use: {
-        // Full Chromium in its new headless mode; the default headless shell has no WebGPU.
         browserName: 'chromium',
-        channel: 'chromium',
-        launchOptions: {
-          args: [
-            '--enable-unsafe-webgpu',
-            '--enable-features=Vulkan',
-            // SwiftShader for ANGLE too, not the machine's Vulkan driver: CI has
-            // none, and without one the canvas reads back blank.
-            '--use-angle=swiftshader',
-            '--use-vulkan=swiftshader',
-            '--use-webgpu-adapter=swiftshader',
-            // Not --disable-vulkan-surface, which some guides add: with it,
-            // headless Chromium never composites the WebGPU canvas, so it can't
-            // be read back.
-          ],
-        },
+        channel: chromiumLaunchOptions.channel,
+        launchOptions: { args: chromiumLaunchOptions.args },
       },
     },
     {

@@ -162,6 +162,70 @@ val toWeb(const std::vector<Viewer::Scene::Patch>& patches)
     return array;
 }
 
+/** Why a frame has no GPU times, as JavaScript reads it. */
+const char* toWeb(Gpu::Type::FrameStats::UntimedReason reason)
+{
+    using Reason = Gpu::Type::FrameStats::UntimedReason;
+    switch (reason) {
+    case Reason::Undefined:
+        return "undefined";
+    case Reason::ProfilingOff:
+        return "profilingOff";
+    case Reason::Unsupported:
+        return "unsupported";
+    case Reason::NoFreeSlot:
+        return "noFreeSlot";
+    case Reason::NotStarted:
+        return "notStarted";
+    case Reason::ReadbackFailed:
+        return "readbackFailed";
+    case Reason::Overflow:
+        return "overflow";
+    }
+    return "undefined";
+}
+
+/**
+ * A frame's stats as { frame, cpu, gpu, untimed, buffers, textures, gpuBytes }:
+ * `cpu` is { acquireMs, encodeMs, submitMs } or null; `gpu` is { totalMs,
+ * passes: [{ name, gpuMs }] }, or null with `untimed` saying why.
+ */
+val toWeb(const Gpu::Type::FrameStats& stats)
+{
+    val object = val::object();
+    object.set("frame", static_cast<double>(stats.frame));
+    if (stats.cpu) {
+        val cpu = val::object();
+        cpu.set("acquireMs", stats.cpu->acquireMs);
+        cpu.set("encodeMs", stats.cpu->encodeMs);
+        cpu.set("submitMs", stats.cpu->submitMs);
+        object.set("cpu", cpu);
+    } else {
+        object.set("cpu", val::null());
+    }
+    if (stats.gpu) {
+        val passes = val::array();
+        for (const auto& pass : stats.gpu->passes) {
+            val entry = val::object();
+            entry.set("name", pass.name);
+            entry.set("gpuMs", pass.gpuMs);
+            passes.call<void>("push", entry);
+        }
+        val gpu = val::object();
+        gpu.set("totalMs", stats.gpu->totalMs);
+        gpu.set("passes", passes);
+        object.set("gpu", gpu);
+        object.set("untimed", val::null());
+    } else {
+        object.set("gpu", val::null());
+        object.set("untimed", toWeb(stats.gpu.error()));
+    }
+    object.set("buffers", stats.buffers);
+    object.set("textures", stats.textures);
+    object.set("gpuBytes", static_cast<double>(stats.gpuBytes));
+    return object;
+}
+
 /** A time range in milliseconds since the epoch, for Date. */
 struct WebTimeRange
 {
@@ -492,6 +556,30 @@ public:
         }
     }
 
+    /** Turns frame timing on or off. Off by default. */
+    void setProfiling(bool enabled)
+    {
+        if (*mApp) {
+            (*mApp)->setProfiling(enabled);
+        }
+    }
+
+    /**
+     * Calls `onStats(stats)` once per drawn frame, in order, once its GPU
+     * times are in (see toWeb()), or stops with null. It mustn't call render().
+     */
+    void setStatsCallback(val onStats)
+    {
+        if (!*mApp) {
+            return;
+        }
+        if (onStats.isNull()) {
+            (*mApp)->setStatsCallback(nullptr);
+            return;
+        }
+        (*mApp)->setStatsCallback([onStats](const Gpu::Type::FrameStats& stats) { onStats(toWeb(stats)); });
+    }
+
     /** Starts reading a trades file, which appendChunk() then receives piece by piece. */
     void beginLoad()
     {
@@ -673,7 +761,9 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("readPixels", &WebViewer::readPixels)
         .function("gpuHealth", &WebViewer::getGpuHealth)
         .function("memoryStats", &WebViewer::getMemoryStats)
-        .function("setWakeCallback", &WebViewer::setWakeCallback);
+        .function("setWakeCallback", &WebViewer::setWakeCallback)
+        .function("setProfiling", &WebViewer::setProfiling)
+        .function("setStatsCallback", &WebViewer::setStatsCallback);
 
     emscripten::function("scenes", &getScenes);
 }

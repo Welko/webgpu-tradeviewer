@@ -12,6 +12,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8080", "--bind", "127.0.0.1"],
       "port": 8080
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--prefix", "web", "vite", "preview", "web", "--port", "4173", "--strictPort"],
+      "port": 4173
     }
   ]
 }

@@ -146,6 +146,22 @@ export interface MemoryStats {
   heapBytes: number;
 }
 
+/** What Viewer.setStatsCallback() reports for each drawn frame. */
+export interface FrameStats {
+  /** Which frame this is, counting from 1. */
+  frame: number;
+  /** Where the frame's CPU time went, while profiling is on. */
+  cpu: { acquireMs: number; encodeMs: number; submitMs: number } | null;
+  /** How long the frame took on the GPU, from timestamp queries; null when `untimed`. */
+  gpu: { totalMs: number; passes: { name: string; gpuMs: number }[] } | null;
+  /** Why there are no GPU times, such as 'unsupported' without timestamp-query; null with them. */
+  untimed: string | null;
+  /** Live GPU objects, and the memory they take. */
+  buffers: number;
+  textures: number;
+  gpuBytes: number;
+}
+
 // One wasm instance for the page; each component creates its own Viewer in it.
 let modulePromise: Promise<MainModule> | null = null;
 const abortListeners = new Set<(reason: string) => void>();

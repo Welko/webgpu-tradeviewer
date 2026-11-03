@@ -10,7 +10,6 @@
 #include "Gpu/Profiler.hpp"
 #include "Gpu/Resource.hpp"
 
-#include "Core/Log.hpp"
 #include "Core/Profiling.hpp"
 
 #include <webgpu/webgpu.h>
@@ -22,7 +21,6 @@
 #include <optional>
 #include <string>
 #include <utility>
-#include <vector>
 
 namespace Gpu::Market {
 

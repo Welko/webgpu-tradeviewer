@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
  * Catches regressions in memory and speed between commits, from the numbers
- * BenchmarkApp writes to benchmark.json, against tools/regression-baseline.csv.
+ * the benchmarks write to benchmark.json, against tools/regression-baseline.csv:
+ * BenchmarkApp natively, web/scripts/benchmark.mjs in Chromium. Each platform
+ * ("native", "web") has rows of its own.
  *
  * The baseline only changes by hand, through `accept`: each row is a change
  * someone meant, with the commit that made it and why. Memory is the same on
@@ -26,10 +28,11 @@
  *   node tools/check-regressions.mjs baseline-commit <platform>
  *     prints the commit to compare times with: the platform's last row's,
  *     skipping rows measured with uncommitted changes, which can't be built
- *   node tools/check-regressions.mjs accept <run-id | benchmark.json> <description>
+ *   node tools/check-regressions.mjs accept <run-id | benchmark.json> <description> [--platform <platform>]
  *     appends the memory as the new baseline, and the commit as the one to
- *     compare times with: a CI run's, downloaded with the GitHub CLI (gh), or
- *     a file's. The commit measured is the one the file names (CI's do), else
+ *     compare times with: a CI run's, downloaded with the GitHub CLI (gh)
+ *     from its benchmark-<platform> artifact (native by default), or a
+ *     file's. The commit measured is the one the file names (CI's do), else
  *     the one checked out
  */
 import { execFileSync } from 'node:child_process';
@@ -210,23 +213,30 @@ function describeRuns(results) {
   return results.runs > 1 ? `, the median of ${results.runs} runs` : '';
 }
 
+/** CI's artifact holding a platform's benchmark.json. */
+function getArtifactName(platform) {
+  return `benchmark-${platform}`;
+}
+
 /** The commands that make these numbers the baseline: from CI's artifact, downloaded by hand or with gh, or from the file. */
-function describeAccepting(resultsPath, runId, artifactUrl) {
-  const command = (source) => `node tools/check-regressions.mjs accept ${source} "<what changed and why>"`;
+function describeAccepting(resultsPath, platform, runId, artifactUrl) {
+  const command = (source, extra = '') => `node tools/check-regressions.mjs accept ${source} "<what changed and why>"${extra}`;
+  const artifact = getArtifactName(platform);
   const parts = ['', '### These numbers changed', 'If that\'s meant, make them the baseline, saying why, and commit `tools/regression-baseline.csv`.'];
   if (artifactUrl) {
     parts.push(
       '',
-      `Download [this run's \`benchmark\` artifact](${artifactUrl}), then:`,
+      `Download [this run's \`${artifact}\` artifact](${artifactUrl}), then:`,
       '',
       '```bash',
-      'unzip -o ~/Downloads/benchmark.zip -d ~/Downloads/benchmark',
-      command('~/Downloads/benchmark/benchmark.json'),
+      `unzip -o ~/Downloads/${artifact}.zip -d ~/Downloads/${artifact}`,
+      command(`~/Downloads/${artifact}/benchmark.json`),
       '```',
     );
   }
   if (runId) {
-    parts.push('', `${artifactUrl ? 'Or, with' : 'With'} the GitHub CLI (\`gh\`) signed in, which downloads it:`, '', '```bash', command(runId), '```');
+    const withGh = command(runId, ` --platform ${platform}`);
+    parts.push('', `${artifactUrl ? 'Or, with' : 'With'} the GitHub CLI (\`gh\`) signed in, which downloads it:`, '', '```bash', withGh, '```');
   }
   if (!artifactUrl && !runId) {
     parts.push('', '```bash', command(resultsPath), '```');
@@ -272,7 +282,7 @@ function check(resultsPath, baselineRunPath, summaryPath, runId, artifactUrl) {
   ];
   const failed = memory.failed || times.failed;
   if (failed) {
-    parts.push(...describeAccepting(resultsPath, runId, artifactUrl));
+    parts.push(...describeAccepting(resultsPath, results.platform, runId, artifactUrl));
   }
   const summary = `${parts.join('\n')}\n`;
   if (summaryPath) {
@@ -297,11 +307,11 @@ function git(...args) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 }
 
-/** A CI run's benchmark.json, downloaded with gh. */
-function fetchRun(runId) {
+/** A CI run's benchmark.json for `platform`, downloaded with gh. */
+function fetchRun(runId, platform) {
   const directory = mkdtempSync(join(tmpdir(), 'benchmark-'));
   try {
-    execFileSync('gh', ['run', 'download', runId, '--name', 'benchmark', '--dir', directory], { cwd: root, stdio: 'inherit' });
+    execFileSync('gh', ['run', 'download', runId, '--name', getArtifactName(platform), '--dir', directory], { cwd: root, stdio: 'inherit' });
     return readJson(join(directory, 'benchmark.json'));
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -314,8 +324,8 @@ function getLocalCommit() {
   return `${git('rev-parse', '--short=7', 'HEAD')}${dirty ? '-dirty' : ''}`;
 }
 
-function accept(source, description) {
-  const results = existsSync(source) ? readJson(source) : fetchRun(source);
+function accept(source, description, platform) {
+  const results = existsSync(source) ? readJson(source) : fetchRun(source, platform);
   const commit = results.commit?.slice(0, 7) ?? getLocalCommit();
   const memory = results.metrics.filter((m) => m.unit === 'bytes');
   const baseline = readBaseline();
@@ -361,7 +371,7 @@ if (command === 'check' && args[0]) {
   console.log(row.commit);
   process.exit(0);
 } else if (command === 'accept' && args[0] && args[1]?.trim()) {
-  process.exit(accept(args[0], args[1].trim()));
+  process.exit(accept(args[0], args[1].trim(), option(args, '--platform') ?? 'native'));
 } else {
   console.error(readFileSync(fileURLToPath(import.meta.url), 'utf8').match(/Usage:[\s\S]*?(?=\n \*\/)/)[0].replace(/\n \*/g, '\n'));
   process.exit(2);
