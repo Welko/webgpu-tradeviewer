@@ -308,10 +308,11 @@ jobs:
           npm run build
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      # The views BenchmarkApp measures natively, in Chromium on SwiftShader
-      # (benchmark.html, run by web/scripts/benchmark.mjs): three runs of each
-      # commit's site, served on ports of their own, taking turns to go
-      # first; each number's median goes in benchmark.json. The file is read
+      # Memory, reading the trades and the views BenchmarkApp measures
+      # natively, in Chromium, without drawing (benchmark.html, run by
+      # web/scripts/benchmark.mjs): three runs of each commit's site, served
+      # on ports of their own, taking turns to go first; each number's median
+      # goes in benchmark.json. The file is read
       # once first, so no run reads it cold. Without a baseline, three runs of
       # this commit alone.
       - name: Benchmark this commit and the baseline's
@@ -349,8 +350,7 @@ jobs:
           if [ -n "$BASELINE_COMMIT" ]; then
             node ../tools/check-regressions.mjs median ../benchmark/baseline/benchmark.json ../benchmark/baseline/runs/*.json
           fi
-          { echo "### Frame times in Chromium on SwiftShader (a CPU Vulkan driver), this commit's first run"; cat ../benchmark/runs/1.md; } \
-            >> "$GITHUB_STEP_SUMMARY"
+          { echo "### View updates in Chromium (wasm), this commit's first run"; cat ../benchmark/runs/1.md; } >> "$GITHUB_STEP_SUMMARY"
 
       # Both commits' runs and medians: benchmark.json is what accept takes.
       - uses: actions/upload-artifact@v7
@@ -360,7 +360,7 @@ jobs:
           path: benchmark/
           if-no-files-found: error
 
-      # As natively. A browser's GPU times are marked flaky: shown, never checked.
+      # As natively.
       - name: Check memory and times against the baseline
         env:
           ARTIFACT_URL: ${{ steps.benchmark-artifact.outputs.artifact-url }}

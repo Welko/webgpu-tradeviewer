@@ -1,22 +1,25 @@
 /**
  * Measures what showing trades costs in this browser, as BenchmarkApp does
- * natively (see cpp/apps/BenchmarkApp/src/Main.cpp): benchmark.html, or
- * benchmark.html?trades=<url> for a trades file (.csv or .csv.gz) instead of
- * the synthetic day. Once done, the body's data-status is "done" or "error",
- * and window.benchmarkResult holds what web/scripts/benchmark.mjs writes to
- * benchmark.json, with the table.
+ * natively (see cpp/apps/BenchmarkApp/src/Main.cpp), without drawing:
+ * benchmark.html, or benchmark.html?trades=<url> for a trades file (.csv or
+ * .csv.gz) instead of the synthetic day. Once done, the body's data-status
+ * is "done" or "error", and window.benchmarkResult holds what
+ * web/scripts/benchmark.mjs writes to benchmark.json, with the table.
+ *
+ * Frames aren't measured: CI has no GPU, and on Chromium's software renderer
+ * (SwiftShader) they took up to 12 s each, for CPU times far below what the
+ * checks can tell apart and GPU times that say nothing about real GPUs.
+ * Commit 3f8e4be measured them, should CI ever get GPUs.
  */
-import { createViewer, type FrameStats, type Viewer } from './viewer/viewerModule';
+import { createViewer, type Viewer } from './viewer/viewerModule';
 
 // Task 3's viewport, at a pixel ratio of 1, as natively.
 const WidthPx = 1600;
 const HeightPx = 900;
-// Fewer frames than natively's 10 and 60: in CI, Chromium draws on the CPU
-// (SwiftShader), where 12:00–13:00 takes half a second a frame.
-const WarmUpFrames = 5;
-const MeasuredFrames = 30;
-// How long a frame's stats may take to arrive.
-const StatsTimeoutMs = 10_000;
+const WarmUpUpdates = 10;
+const MeasuredUpdates = 60;
+// What the table says instead of frame times, which BenchmarkApp measures natively.
+const NotMeasured = 'not measured: no GPU in CI';
 
 /** A number compared between commits (see tools/check-regressions.mjs). */
 export interface Metric {
@@ -37,7 +40,7 @@ export interface BenchmarkResult {
   gpu: string;
   trades: number;
   metrics: Metric[];
-  /** The frame times as a Markdown table. */
+  /** The view updates as a Markdown table. */
   table: string;
 }
 
@@ -51,53 +54,16 @@ declare global {
 /** A view to measure, and how to get there. */
 interface Case {
   name: string;
-  /** Starts its metrics' keys. */
+  /** Starts its metric's key. */
   key: string;
   show: (viewer: Viewer) => void;
 }
 
-/** One view's measured frames, in milliseconds. */
-interface Samples {
-  tradesDrawn: number;
-  viewUpdate: number[];
-  /** Acquire, encode and submit. */
-  cpuFrame: number[];
-  acquire: number[];
-  encode: number[];
-  submit: number[];
-  /** By pass name, in drawing order of first appearance. */
-  passes: Map<string, number[]>;
-  gpuTotal: number[];
-  /** Why frames had no GPU times, if any didn't. */
-  untimed: Set<string>;
-}
-
 /** The value `share` of the way up `values`, by the nearest-rank method. */
 function getPercentile(values: number[], share: number): number {
-  if (values.length === 0) {
-    return 0;
-  }
   const sorted = [...values].sort((a, b) => a - b);
   const rank = Math.ceil(share * sorted.length);
   return sorted[Math.min(Math.max(rank, 1), sorted.length) - 1];
-}
-
-/** "median (95th percentile)". */
-function describe(values: number[] | undefined): string {
-  if (!values || values.length === 0) {
-    return '–';
-  }
-  return `${getPercentile(values, 0.5).toFixed(3)} (${getPercentile(values, 0.95).toFixed(3)})`;
-}
-
-/** 12:00–13:00, zoomed by `factor` around the middle. */
-function zoomFromHour(viewer: Viewer, factor: number) {
-  viewer.resetView();
-  viewer.zoomAt(WidthPx / 2, factor);
-}
-
-function nextAnimationFrame(): Promise<void> {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
 /**
@@ -117,15 +83,6 @@ function measureMemory(viewer: Viewer): Metric[] {
     metric('memory_gpu_bytes', 'Memory: GPU buffers and textures', memory.gpuBytes),
     metric('memory_heap_bytes', 'Memory: the whole wasm heap', memory.heapBytes),
   ];
-}
-
-/**
- * Whether performance.now() counts in microseconds: only on a cross-origin
- * isolated page, which vite preview makes this one (see vite.config.ts).
- * Otherwise Chromium rounds to 0.1 ms.
- */
-function describeTimer(): string {
-  return crossOriginIsolated ? 'Timer: microseconds.' : 'Timer: 0.1 ms steps (the page isn\'t cross-origin isolated).';
 }
 
 /**
@@ -168,113 +125,26 @@ async function loadTrades(viewer: Viewer, url: string): Promise<{ loadMs: number
   return { loadMs, setTradesMs: performance.now() - setStart };
 }
 
-/** Collects every frame's stats, and waits for them to arrive. */
-class StatsCollector {
-  readonly reported: FrameStats[] = [];
-  private wake: (() => void) | null = null;
-
-  constructor(viewer: Viewer) {
-    viewer.setStatsCallback((stats: FrameStats) => {
-      this.reported.push(stats);
-      this.wake?.();
-    });
-  }
-
-  /** Waits until `count` frames have been reported. */
-  async waitFor(count: number): Promise<void> {
-    const deadline = performance.now() + StatsTimeoutMs;
-    while (this.reported.length < count) {
-      if (performance.now() > deadline) {
-        throw new Error(`A frame's stats never arrived: ${this.reported.length} reported, waiting for ${count}`);
-      }
-      await new Promise<void>((resolve) => {
-        this.wake = resolve;
-        setTimeout(resolve, 100);
-      });
-    }
-  }
-}
-
-/** One view's frames: each in its own animation frame, as the viewer draws them, and measured alone. */
-async function measure(viewer: Viewer, benchmark: Case, collector: StatsCollector): Promise<Samples> {
-  const samples: Samples = {
-    tradesDrawn: 0,
-    viewUpdate: [],
-    cpuFrame: [],
-    acquire: [],
-    encode: [],
-    submit: [],
-    passes: new Map(),
-    gpuTotal: [],
-    untimed: new Set(),
-  };
-  const firstMeasured = collector.reported.length + WarmUpFrames;
-  for (let frame = 0; frame < WarmUpFrames + MeasuredFrames; frame++) {
-    await nextAnimationFrame();
+/** How long showing a view takes on the CPU, each time: finding its trades, the axes, any summaries. */
+function measureUpdates(viewer: Viewer, benchmark: Case): number[] {
+  const times: number[] = [];
+  for (let update = 0; update < WarmUpUpdates + MeasuredUpdates; update++) {
     const start = performance.now();
     benchmark.show(viewer);
-    const updateMs = performance.now() - start;
-    if (frame >= WarmUpFrames) {
-      samples.viewUpdate.push(updateMs);
-    }
-    viewer.render();
-    await collector.waitFor(collector.reported.length + 1);
-  }
-  samples.tradesDrawn = viewer.viewStats().count;
-  for (const stats of collector.reported.slice(firstMeasured, firstMeasured + MeasuredFrames)) {
-    if (!stats.cpu) {
-      throw new Error('A measured frame has no CPU times: profiling is compiled out');
-    }
-    samples.cpuFrame.push(stats.cpu.acquireMs + stats.cpu.encodeMs + stats.cpu.submitMs);
-    samples.acquire.push(stats.cpu.acquireMs);
-    samples.encode.push(stats.cpu.encodeMs);
-    samples.submit.push(stats.cpu.submitMs);
-    // Browsers may have no timestamp-query; then only the CPU is timed.
-    if (!stats.gpu) {
-      samples.untimed.add(stats.untimed ?? 'unknown');
-      continue;
-    }
-    samples.gpuTotal.push(stats.gpu.totalMs);
-    for (const pass of stats.gpu.passes) {
-      const times = samples.passes.get(pass.name) ?? [];
-      times.push(pass.gpuMs);
-      samples.passes.set(pass.name, times);
+    if (update >= WarmUpUpdates) {
+      times.push(performance.now() - start);
     }
   }
-  return samples;
+  return times;
 }
 
-/** The frame times as Markdown, as BenchmarkApp writes them. */
-function writeTable(gpu: string, cases: Case[], results: Samples[]): string {
-  // Views can draw different passes: crowded ones summarize trades in columns.
-  const passNames = [...new Set(results.flatMap((samples) => [...samples.passes.keys()]))];
-  const untimed = [...new Set(results.flatMap((samples) => [...samples.untimed]))];
-  const lines = [
-    `GPU: ${gpu}. ${WidthPx} × ${HeightPx} pixels; ${MeasuredFrames} frames per view after ${WarmUpFrames} to warm up. ` +
-      `Milliseconds: median (95th percentile). ${describeTimer()}${untimed.length > 0 ? ` Some frames have no GPU times: ${untimed.join(', ')}.` : ''}`,
-    '',
-    `| View | Trades drawn | View update (CPU) | Acquire (CPU) | Encode (CPU) | Submit (CPU) |${passNames.map((pass) => ` GPU: ${pass} |`).join('')} GPU total |`,
-    `|---|--:|--:|--:|--:|--:|${passNames.map(() => '--:|').join('')}--:|`,
-  ];
-  cases.forEach((benchmark, i) => {
-    const samples = results[i];
-    const cells = [
-      benchmark.name,
-      String(samples.tradesDrawn),
-      describe(samples.viewUpdate),
-      describe(samples.acquire),
-      describe(samples.encode),
-      describe(samples.submit),
-      ...passNames.map((pass) => describe(samples.passes.get(pass))),
-      describe(samples.gpuTotal),
-    ];
-    lines.push(`| ${cells.join(' | ')} |`);
-  });
-  return `${lines.join('\n')}\n`;
+/** 12:00–13:00, zoomed by `factor` around the middle. */
+function zoomFromHour(viewer: Viewer, factor: number) {
+  viewer.resetView();
+  viewer.zoomAt(WidthPx / 2, factor);
 }
 
 async function run(): Promise<BenchmarkResult> {
-  // Kept, not deleted: the page shows the last frame.
   const viewer = await createViewer('#benchmark', 'default');
   viewer.resize(WidthPx, HeightPx);
   viewer.setPixelRatio(1);
@@ -284,18 +154,14 @@ async function run(): Promise<BenchmarkResult> {
   const gpu = [device, info.backend, info.adapter].filter(Boolean).join(' · ');
 
   // The synthetic day is on show from the start.
-  const memory = measureMemory(viewer);
+  const metrics = measureMemory(viewer);
 
-  const metrics: Metric[] = [];
   const trades = new URLSearchParams(location.search).get('trades');
   if (trades) {
     const { loadMs, setTradesMs } = await loadTrades(viewer, trades);
     metrics.push({ key: 'load_ms', label: 'Reading the trades', unit: 'ms', value: loadMs, flaky: false });
     metrics.push({ key: 'set_trades_ms', label: 'Showing them: derived data and upload', unit: 'ms', value: setTradesMs, flaky: false });
   }
-
-  const collector = new StatsCollector(viewer);
-  viewer.setProfiling(true);
 
   // Each view says whether crowded views may be summarized, so none depends on the one before.
   const show =
@@ -304,39 +170,35 @@ async function run(): Promise<BenchmarkResult> {
       viewer.setSummariesAllowed(summaries);
       view(viewer);
     };
-  // Not the whole day with every trade, as natively: on SwiftShader, each
-  // of its frames takes 12 seconds.
   const cases: Case[] = [
+    { name: 'Whole day, every trade', key: 'day_every_trade', show: show(false, (v) => v.showDay()) },
     { name: 'Whole day', key: 'day', show: show(true, (v) => v.showDay()) },
     { name: '12:00–13:00', key: 'hour', show: show(true, (v) => v.resetView()) },
     { name: '1 minute', key: 'minute', show: show(true, (v) => zoomFromHour(v, 1 / 60)) },
     { name: '1 second', key: 'second', show: show(true, (v) => zoomFromHour(v, 1 / 3600)) },
   ];
-  const results: Samples[] = [];
+  const rows = [
+    `GPU: ${gpu}. ${WidthPx} × ${HeightPx} pixels; ${MeasuredUpdates} updates per view after ${WarmUpUpdates} to warm up, ` +
+      'nothing drawn. Milliseconds: median (95th percentile).',
+    '',
+    '| View | Trades in view | View update (CPU) | Frame (CPU) | Frame (GPU) |',
+    '|---|--:|--:|--:|--:|',
+  ];
   for (const benchmark of cases) {
-    results.push(await measure(viewer, benchmark, collector));
+    const times = measureUpdates(viewer, benchmark);
+    const median = getPercentile(times, 0.5);
+    metrics.push({ key: `${benchmark.key}_update_ms`, label: `${benchmark.name}: view update (CPU)`, unit: 'ms', value: median, flaky: false });
+    const update = `${median.toFixed(3)} (${getPercentile(times, 0.95).toFixed(3)})`;
+    rows.push(`| ${benchmark.name} | ${viewer.viewStats().count} | ${update} | ${NotMeasured} | ${NotMeasured} |`);
   }
-  viewer.setStatsCallback(null);
+  rows.push(
+    '',
+    "Frames aren't drawn: CI's Chromium draws on the CPU (SwiftShader), where one frame of the whole day with every trade " +
+      "took 12 s. A frame's CPU time is the same C++ as natively, a fraction of a millisecond, and the native benchmark " +
+      'measures it. Commit 3f8e4be measured frames here too.',
+  );
 
-  cases.forEach((benchmark, i) => {
-    const samples = results[i];
-    const time = (suffix: string, label: string, values: number[], flaky: boolean) =>
-      metrics.push({ key: `${benchmark.key}_${suffix}`, label: `${benchmark.name}: ${label}`, unit: 'ms', value: getPercentile(values, 0.5), flaky });
-    time('update_ms', 'view update (CPU)', samples.viewUpdate, false);
-    time('frame_cpu_ms', 'frame (CPU)', samples.cpuFrame, false);
-    // A browser's GPU times vary too much between runs, Chromium's software renderer's above all.
-    if (samples.gpuTotal.length > 0) {
-      time('frame_gpu_ms', 'frame (GPU)', samples.gpuTotal, true);
-    }
-  });
-
-  return {
-    platform: 'web',
-    gpu,
-    trades: viewer.tradeStats().count,
-    metrics: [...memory, ...metrics],
-    table: writeTable(gpu, cases, results),
-  };
+  return { platform: 'web', gpu, trades: viewer.tradeStats().count, metrics, table: `${rows.join('\n')}\n` };
 }
 
 run()

@@ -7,15 +7,15 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='5' cy='10' r='3' fill='%23e64d4d'/%3E%3Ccircle cx='11' cy='6' r='4' fill='%2333cc73'/%3E%3C/svg%3E" />
     <style>
       body { margin: 16px; font: 14px system-ui, sans-serif; background: #12141a; color: #d8dbe2; }
-      canvas { display: block; margin-top: 12px; width: 800px; height: 450px; }
       pre { white-space: pre-wrap; }
     </style>
   </head>
   <body data-status="running">
     <h1>Benchmark</h1>
-    <p>What showing trades costs in this browser, as BenchmarkApp measures it natively. Takes a minute.</p>
+    <p>What showing trades costs in this browser, as BenchmarkApp measures it natively, without drawing.</p>
     <pre id="result">Running…</pre>
-    <canvas id="benchmark" width="1600" height="900"></canvas>
+    <!-- The viewer needs one, for its GPU buffers; nothing is drawn. -->
+    <canvas id="benchmark" width="1600" height="900" hidden></canvas>
     <script type="module" src="/src/benchmark.ts"></script>
   </body>
 </html>
