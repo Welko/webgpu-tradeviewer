@@ -239,14 +239,14 @@ namespace Style = Gpu::Market::Style;
 constexpr Rgba BackgroundColor{ .red = 18, .green = 20, .blue = 26, .alpha = 255 };
 const Theme DefaultTheme;
 
-/** One trade of `amount` BTC, drawn alone in the middle of a 100 × 100 engine, with `settings` otherwise. */
+/** One trade of `amount`, drawn alone in the middle of a 100 × 100 engine, with `settings` otherwise, its scale aside. */
 std::optional<Pixels> drawOne(Engine& engine, double amount, Side side, MarkerScale scale, float pixelRatio, Engine::Settings settings = {})
 {
     Trades trades;
     add(trades, NoonUs + 50, 100.0, amount, side);
     CHECK(engine.setTrades(trades));
     settings.view = viewOf({ 0, 1 });
-    settings.markerScale = scale;
+    settings.markerSizing.scale = scale;
     settings.pixelRatio = pixelRatio;
     engine.setSettings(settings);
     engine.render();
@@ -259,7 +259,7 @@ double blend(float color, int background, float opacity = DefaultTheme.markerOpa
     return color * 255.0 * opacity + background * (1.0 - opacity);
 }
 
-/** How many pixels of a buy marker's middle row it covers at least half of: its diameter, to a pixel. */
+/** How many pixels of a buy marker's middle row it covers at least half of: its width there, to a pixel. */
 int measureDiameter(const Pixels& pixels)
 {
     const double halfCovered = (BackgroundColor.green + blend(DefaultTheme.buy.green, BackgroundColor.green)) / 2.0;
@@ -279,7 +279,7 @@ TEST_CASE("Markers are drawn at the legend's sizes, scaled by the pixel ratio")
         return;
     }
     for (const auto scale : { MarkerScale::Area, MarkerScale::Log }) {
-        for (const auto& size : Style::getLegend(scale, DefaultTheme).sizes) {
+        for (const auto& size : Style::getLegend({ .scale = scale }, DefaultTheme).sizes) {
             for (const float pixelRatio : { 1.0f, 2.0f }) {
                 CAPTURE(scale);
                 CAPTURE(size.amount);
@@ -288,7 +288,9 @@ TEST_CASE("Markers are drawn at the legend's sizes, scaled by the pixel ratio")
                 if (!pixels) {
                     return;
                 }
-                CHECK(std::abs(measureDiameter(*pixels) - 2.0 * size.radiusCssPx * pixelRatio) <= 1.0);
+                // The middle row's pixel centers lie half a pixel off the marker's center.
+                const double radiusPx = size.radiusCssPx * pixelRatio;
+                CHECK(std::abs(measureDiameter(*pixels) - 2.0 * std::sqrt(radiusPx * radiusPx - 0.25)) <= 1.0);
             }
         }
     }
@@ -300,7 +302,7 @@ TEST_CASE("Markers have the legend's colors, at its opacity")
     if (!engine) {
         return;
     }
-    const auto legend = Style::getLegend(MarkerScale::Area, DefaultTheme);
+    const auto legend = Style::getLegend({ .scale = MarkerScale::Area }, DefaultTheme);
     for (const auto side : { Side::Buy, Side::Sell }) {
         CAPTURE(side == Side::Buy ? "buy" : "sell");
         const auto pixels = drawOne(*engine, 1.0, side, MarkerScale::Area, 1.0f);
@@ -321,8 +323,10 @@ TEST_CASE("The highlighted trade gets a ring in the cursor color, just outside i
     if (!engine) {
         return;
     }
-    // A marker of radius 6 centered at (50, 50); the ring runs from 7.5 to 9.5 pixels out.
-    const auto plain = drawOne(*engine, 1.0, Side::Buy, MarkerScale::Area, 1.0f);
+    // A marker of radius 6 centered at (50, 50): by default, the area scale
+    // reaches 16 at 1, so 9/64 gets 16 × 3/8. The ring runs from
+    // 7.5 to 9.5 pixels out.
+    const auto plain = drawOne(*engine, 9.0 / 64.0, Side::Buy, MarkerScale::Area, 1.0f);
     if (!plain) {
         return;
     }

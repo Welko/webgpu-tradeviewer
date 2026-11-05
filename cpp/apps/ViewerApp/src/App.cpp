@@ -69,6 +69,7 @@ std::expected<void, std::string> App::setTrades(Core::Data::Trades&& trades)
         }
     }
     mData = Core::Data::PreprocessedTrades(std::move(trades));
+    mSettings.markerSizing = Gpu::Market::Style::fitMarkerSizing(mSettings.markerSizing.scale, mData.getTrades());
     mSettings.view.price = {};
     resetView();
     return {};
@@ -132,7 +133,7 @@ void App::panBy(double dxPx)
 
 void App::setMarkerScale(Gpu::Market::Type::MarkerScale scale)
 {
-    mSettings.markerScale = scale;
+    mSettings.markerSizing.scale = scale;
     updatePick();
     syncSettings();
 }
@@ -145,7 +146,7 @@ void App::setTheme(const Gpu::Market::Type::Theme& theme)
 
 Gpu::Market::Type::Legend App::getLegend() const
 {
-    return Gpu::Market::Style::getLegend(mSettings.markerScale, mSettings.theme);
+    return Gpu::Market::Style::getLegend(mSettings.markerSizing, mSettings.theme);
 }
 
 void App::setPixelRatio(float ratio)
@@ -353,7 +354,7 @@ void App::updatePick()
         } else {
             const Core::Plot::PickRule rule{ .pickRadius = PickRadiusCssPx * ratio, .maxMarkerRadius = Gpu::Market::Style::MarkerMaxRadiusCssPx * ratio };
             trade = Core::Plot::pickTrade(mData.getTrades(), mSettings.view.trades, plot, pointerXPx, pointerYPx, rule,
-                                          [&](double amount) { return Gpu::Market::Style::getMarkerRadiusCssPx(amount, mSettings.markerScale) * ratio; });
+                                          [&](double amount) { return mSettings.markerSizing.getRadiusCssPx(amount) * ratio; });
         }
     }
     // A column's position stays right when the columns are replaced: it's into the new ones.

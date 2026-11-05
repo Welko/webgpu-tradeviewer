@@ -47,13 +47,13 @@ public:
 
     // Totals, in constant time.
 
-    /** The amount traded, in units of AmountUnit: exact, however it's added up. */
-    [[nodiscard]] std::int64_t getUnits(IndexRange indices) const { return mTotals.getUnits(indices); }
+    /** The amount traded, in whole units of the finest amount step (see Instrument::toAmountUnits): exact, however it's added up. */
+    [[nodiscard]] std::int64_t getAmountUnits(IndexRange indices) const { return mTotals.getAmountUnits(indices); }
 
-    [[nodiscard]] double getAmount(IndexRange indices) const { return static_cast<double>(getUnits(indices)) * AmountUnit; }
+    [[nodiscard]] double getAmount(IndexRange indices) const { return mTrades.instrument.toAmount(getAmountUnits(indices)); }
 
-    /** Of the buys alone, in units of AmountUnit. */
-    [[nodiscard]] std::int64_t getBuyUnits(IndexRange indices) const { return mTotals.getBuyUnits(indices); }
+    /** Of the buys alone, in whole units of the finest amount step. */
+    [[nodiscard]] std::int64_t getBuyAmountUnits(IndexRange indices) const { return mTotals.getBuyAmountUnits(indices); }
 
     [[nodiscard]] std::size_t getBuyCount(IndexRange indices) const { return mTotals.getBuyCount(indices); }
 
@@ -68,9 +68,9 @@ private:
 
         explicit RunningTotals(const Trades& trades);
 
-        [[nodiscard]] std::int64_t getUnits(IndexRange indices) const { return mRunning[indices.last] - mRunning[indices.first]; }
+        [[nodiscard]] std::int64_t getAmountUnits(IndexRange indices) const { return mRunning[indices.last] - mRunning[indices.first]; }
 
-        [[nodiscard]] std::int64_t getBuyUnits(IndexRange indices) const
+        [[nodiscard]] std::int64_t getBuyAmountUnits(IndexRange indices) const
         {
             return mRunningBuys[indices.last] - mRunningBuys[indices.first];
         }

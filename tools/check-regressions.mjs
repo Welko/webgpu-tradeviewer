@@ -311,7 +311,15 @@ function git(...args) {
 function fetchRun(runId, platform) {
   const directory = mkdtempSync(join(tmpdir(), 'benchmark-'));
   try {
-    execFileSync('gh', ['run', 'download', runId, '--name', getArtifactName(platform), '--dir', directory], { cwd: root, stdio: 'inherit' });
+    try {
+      execFileSync('gh', ['run', 'download', runId, '--name', getArtifactName(platform), '--dir', directory], { cwd: root, stdio: 'inherit' });
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        console.error(`Downloading run ${runId} needs the GitHub CLI (gh), which isn't installed. Download its ${getArtifactName(platform)} artifact from the run's page and pass its benchmark.json instead.`);
+        process.exit(1);
+      }
+      throw error;
+    }
     return readJson(join(directory, 'benchmark.json'));
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -325,7 +333,17 @@ function getLocalCommit() {
 }
 
 function accept(source, description, platform) {
-  const results = existsSync(source) ? readJson(source) : fetchRun(source, platform);
+  // A run id is all digits; anything else is a file, which must be there.
+  if (!existsSync(source) && !/^\d+$/.test(source)) {
+    console.error(`No such file: ${source}`);
+    return 1;
+  }
+  // A run id is all digits; anything else is a file, which must exist.
+  if (!/^\d+$/.test(source) && !existsSync(source)) {
+    console.error(`No such file: ${source}`);
+    return 1;
+  }
+  const results = /^\d+$/.test(source) ? fetchRun(source, platform) : readJson(source);
   const commit = results.commit?.slice(0, 7) ?? getLocalCommit();
   const memory = results.metrics.filter((m) => m.unit === 'bytes');
   const baseline = readBaseline();

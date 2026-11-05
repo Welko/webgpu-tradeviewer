@@ -162,8 +162,8 @@ void Engine::Impl::setSettings(const Settings& next, bool everything)
         passes->trades.setView(next.view);
         passes->columns.setView(next.view);
     }
-    if (changed(&Settings::markerScale)) {
-        passes->trades.setMarkerScale(next.markerScale);
+    if (changed(&Settings::markerSizing)) {
+        passes->trades.setMarkerSizing(next.markerSizing);
     }
     if (changed(&Settings::theme)) {
         passes->grid.setTheme(next.theme.plot);

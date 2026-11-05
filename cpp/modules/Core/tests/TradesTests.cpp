@@ -3,6 +3,7 @@
 
 #include <doctest/doctest.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 
@@ -60,13 +61,30 @@ TEST_CASE("Totals of amounts are exact for any range")
     auto trades = tradesAt({ 1, 2, 3, 4 });
     // Doubles add 0.1 + 0.2 to 0.30000000000000004; units of 1e-8 don't.
     trades.amount = { 0.1, 0.2, 0.00000001, 12.5 };
+    trades.instrument.amountDecimals = 8;
     const PreprocessedTrades preprocessed(std::move(trades));
 
-    CHECK(preprocessed.getUnits({ 0, 2 }) == 30'000'000);
+    CHECK(preprocessed.getAmountUnits({ 0, 2 }) == 30'000'000);
     CHECK(preprocessed.getAmount({ 0, 2 }) == 0.3);
-    CHECK(preprocessed.getUnits({ 2, 3 }) == 1);
-    CHECK(preprocessed.getUnits({ 0, 4 }) == 1'280'000'001);
-    CHECK(preprocessed.getUnits({ 3, 3 }) == 0);
-    CHECK(PreprocessedTrades().getUnits({ 0, 0 }) == 0);
+    CHECK(preprocessed.getAmountUnits({ 2, 3 }) == 1);
+    CHECK(preprocessed.getAmountUnits({ 0, 4 }) == 1'280'000'001);
+    CHECK(preprocessed.getAmountUnits({ 3, 3 }) == 0);
+    CHECK(PreprocessedTrades().getAmountUnits({ 0, 0 }) == 0);
     CHECK(Core::Data::getStats(preprocessed.getTrades()).totalAmount == preprocessed.getAmount({ 0, 4 }));
+}
+
+TEST_CASE("Amount percentiles are the amounts that far up the sorted trades")
+{
+    // 1 to 1000, shuffled.
+    Trades trades;
+    for (std::size_t i = 0; i < 1000; ++i) {
+        trades.timeUs.push_back(NoonUs + static_cast<std::int64_t>(i));
+        trades.price.push_back(100.0);
+        trades.amount.push_back(static_cast<double>((i * 337) % 1000 + 1));
+        trades.side.push_back(Core::Data::Side::Buy);
+    }
+    CHECK(Core::Data::getAmountPercentiles(trades, 0.01, 0.999) == Core::ValueRange{ .low = 10.0, .high = 999.0 });
+    CHECK(Core::Data::getAmountPercentiles(trades, 0.5, 1.0) == Core::ValueRange{ .low = 500.0, .high = 1000.0 });
+    CHECK(Core::Data::getAmountPercentiles(trades, 0.0, 0.0) == Core::ValueRange{ .low = 1.0, .high = 1.0 });
+    CHECK(Core::Data::getAmountPercentiles(Trades{}, 0.01, 0.999) == Core::ValueRange{ .low = 0.0, .high = 0.0 });
 }

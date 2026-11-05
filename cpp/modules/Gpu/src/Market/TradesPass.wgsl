@@ -11,11 +11,11 @@ struct Markers {
     // Radii in CSS or window pixels.
     minRadiusCssPx: f32,
     maxRadiusCssPx: f32,
-    areaRadiusAt1BtcCssPx: f32,
-    // The log scale grows from minRadiusCssPx at logLowest BTC to
-    // maxRadiusCssPx at logHighest BTC.
-    logLowest: f32,
-    logHighest: f32,
+    // Fitted to the trades (Style::MarkerSizing): the area scale reaches
+    // maxRadiusCssPx at highAmount; the log scale grows from minRadiusCssPx
+    // at lowAmount to maxRadiusCssPx at highAmount.
+    lowAmount: f32,
+    highAmount: f32,
     cursorColor: vec3f,  // of the ring around the highlighted trade
 };
 
@@ -54,14 +54,14 @@ fn sinceStartUs(time: vec2u) -> f32 {
     return f32(high) * 4294967296.0 + f32(low);
 }
 
-/** In physical pixels. Style::getMarkerRadiusCssPx() computes the same in CSS or window pixels. */
+/** In physical pixels. Style::MarkerSizing::getRadiusCssPx() computes the same in CSS or window pixels. */
 fn markerRadiusPx(amount: f32) -> f32 {
     let markers = view.markers;
     var radiusCssPx: f32;
     if (markers.scale == 0u) {
-        radiusCssPx = markers.areaRadiusAt1BtcCssPx * sqrt(amount);
+        radiusCssPx = markers.maxRadiusCssPx * sqrt(amount / markers.highAmount);
     } else {
-        let along = log2(amount / markers.logLowest) / log2(markers.logHighest / markers.logLowest);
+        let along = log2(amount / markers.lowAmount) / log2(markers.highAmount / markers.lowAmount);
         radiusCssPx = mix(markers.minRadiusCssPx, markers.maxRadiusCssPx, along);
     }
     return clamp(radiusCssPx, markers.minRadiusCssPx, markers.maxRadiusCssPx) * view.pixelRatio;

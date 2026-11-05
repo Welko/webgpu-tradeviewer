@@ -2,6 +2,8 @@
 
 #include "Gpu/Market/Type.hpp"
 
+#include "Core/Data/Trades.hpp"
+
 namespace Gpu::Market::Style {
 
 // The shapes trades are drawn with: marker sizes, and column summaries' bars.
@@ -11,11 +13,11 @@ namespace Gpu::Market::Style {
 // Marker radii. Every scale stays between these.
 inline constexpr float MarkerMinRadiusCssPx = 1.5f;
 inline constexpr float MarkerMaxRadiusCssPx = 16.0f;
-inline constexpr float MarkerAreaRadiusAt1BtcCssPx = 6.0f;
-// The log scale grows from MarkerMinRadiusCssPx at MarkerLogLowest BTC to
-// MarkerMaxRadiusCssPx at MarkerLogHighest BTC.
-inline constexpr float MarkerLogLowest = 1e-4f;
-inline constexpr float MarkerLogHighest = 100.0f;
+
+// How far up the trades sorted by amount, from 0 to 1, marker sizes are fitted
+// to: past these, a few extreme trades would shrink all the others.
+inline constexpr double MarkerFitLowShare = 0.01;
+inline constexpr double MarkerFitHighShare = 0.999;
 
 // Column summaries, drawn instead of markers in crowded views: bars at least
 // this tall, so a column of one price still shows, and this opaque for the
@@ -23,13 +25,36 @@ inline constexpr float MarkerLogHighest = 100.0f;
 inline constexpr float ColumnMinHeightCssPx = 2.0f;
 inline constexpr float ColumnMinOpacity = 0.35f;
 
-/** The radius of a marker for `amount` BTC, as the shader computes it. */
-[[nodiscard]] float getMarkerRadiusCssPx(double amount, Type::MarkerScale scale);
+/**
+ * How a trade's amount becomes its marker's size. The area scale reaches the
+ * largest marker at `highAmount`; the log scale grows from the smallest at
+ * `lowAmount` to the largest at `highAmount`. Both amounts are above zero, and
+ * `highAmount` at least ten times `lowAmount`.
+ */
+struct MarkerSizing
+{
+    Type::MarkerScale scale = Type::MarkerScale::Area;
+    double lowAmount = 0.01;
+    double highAmount = 1.0;
+
+    /** The radius of a marker for `amount`, as the shader computes it. */
+    [[nodiscard]] float getRadiusCssPx(double amount) const;
+
+    bool operator==(const MarkerSizing&) const = default;
+};
 
 /**
- * Colors from `theme`, and reference sizes for a legend: where the scale
- * stops growing, and a few round amounts in between.
+ * `scale` fitted to `trades`, between MarkerFitLowShare and MarkerFitHighShare
+ * of the way up them by amount, so any market's trades get the full range of
+ * sizes. Trades of a single amount still get a scale, and no trades the
+ * default one. Sorts a copy of the amounts: for when trades change.
  */
-[[nodiscard]] Type::Legend getLegend(Type::MarkerScale scale, const Type::Theme& theme);
+[[nodiscard]] MarkerSizing fitMarkerSizing(Type::MarkerScale scale, const Core::Data::Trades& trades);
+
+/**
+ * Colors from `theme`, and reference sizes for a legend of `sizing`: where the
+ * scale stops growing, and a few round amounts between.
+ */
+[[nodiscard]] Type::Legend getLegend(const MarkerSizing& sizing, const Type::Theme& theme);
 
 } // namespace Gpu::Market::Style

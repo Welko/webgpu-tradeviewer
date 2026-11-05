@@ -4,6 +4,7 @@
 #include "Gpu/GrowableBuffer.hpp"
 #include "Gpu/Handle.hpp"
 #include "Gpu/Plot/Area.hpp"
+#include "Gpu/Market/Style.hpp"
 #include "Gpu/Market/Type.hpp"
 #include "Gpu/Profiler.hpp"
 #include "Gpu/Resource.hpp"
@@ -52,7 +53,7 @@ public:
     [[nodiscard]] std::expected<void, std::string> append(const Core::Data::Trades& trades);
 
     void setView(const Type::View& view) { mView = view; }
-    void setMarkerScale(Type::MarkerScale scale) { mMarkerScale = scale; }
+    void setMarkerSizing(const Style::MarkerSizing& sizing) { mMarkerSizing = sizing; }
     void setTheme(const Type::Theme& theme) { mTheme = theme; }
 
     /** The trade to ring, by its position among those appended; none for nothing. */
@@ -73,7 +74,7 @@ private:
     GrowableBuffer mTrades;
 
     Type::View mView{};
-    Type::MarkerScale mMarkerScale = Type::MarkerScale::Area;
+    Style::MarkerSizing mMarkerSizing;
     Type::Theme mTheme;
     std::optional<std::size_t> mHighlight;
     float mPixelRatio = 1.0f;

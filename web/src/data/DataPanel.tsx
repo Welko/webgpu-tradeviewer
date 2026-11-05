@@ -1,5 +1,6 @@
 import { useEffect, useState, type DragEvent } from 'react';
-import type { MemoryStats, TradeStats, Viewer } from '../viewer/viewerModule';
+import { formatAmount } from '../viewer/format';
+import type { Instrument, MemoryStats, TradeStats, Viewer } from '../viewer/viewerModule';
 import { utc } from '../utc';
 import { MemoryBreakdown } from './MemoryBreakdown';
 import { BinanceSampleUrl, loadBinanceSample, loadFile, type OnProgress } from './loadTrades';
@@ -20,6 +21,7 @@ function megabytes(bytes: number): string {
 export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTradesChanged: () => void }) {
   const [source, setSource] = useState(Synthetic);
   const [stats, setStats] = useState<TradeStats>(() => viewer.tradeStats());
+  const [instrument, setInstrument] = useState(() => viewer.instrument() as Instrument);
   const [memory, setMemory] = useState(() => viewer.memoryStats() as MemoryStats | null);
   const [load, setLoad] = useState<LoadState>({ kind: 'idle' });
 
@@ -27,6 +29,7 @@ export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTrade
   useEffect(() => {
     setSource(Synthetic);
     setStats(viewer.tradeStats());
+    setInstrument(viewer.instrument() as Instrument);
     setMemory(viewer.memoryStats() as MemoryStats | null);
     setLoad({ kind: 'idle' });
   }, [viewer]);
@@ -37,6 +40,7 @@ export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTrade
       await loading((loaded, total) => setLoad({ kind: 'loading', what, loaded, total }));
       setSource(what);
       setStats(viewer.tradeStats());
+      setInstrument(viewer.instrument() as Instrument);
       setMemory(viewer.memoryStats() as MemoryStats | null);
       onTradesChanged();
       setLoad({ kind: 'idle' });
@@ -69,7 +73,9 @@ export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTrade
         <dt>To</dt>
         <dd>{utc(stats.lastMs)}</dd>
         <dt>Traded</dt>
-        <dd>{stats.totalAmount.toLocaleString('en-US', { maximumFractionDigits: 6 })} BTC</dd>
+        <dd data-testid="traded">
+          {formatAmount(stats.totalAmount, instrument)} {instrument.base}
+        </dd>
       </dl>
       {memory && (
         <MemoryBreakdown memory={memory} count={stats.count} onOpen={() => setMemory(viewer.memoryStats() as MemoryStats | null)} />

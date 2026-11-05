@@ -227,14 +227,17 @@ test('the legend shows both sides and the sizes of the chosen scale', async ({ p
   await expect(legend).toContainText('Buy');
   await expect(legend).toContainText('Sell');
 
-  // Each size ends where the scale stops growing.
+  // Fitted to the synthetic day's amounts: each size ends where the scale
+  // stops growing, at its 1st and 99.9th percentiles, with round amounts between.
   const sizes = page.getByTestId('legend-size');
-  await expect(sizes).toHaveText(['≤ 0.0625', '0.25', '1', '4', '≥ 7.11']);
+  await expect(sizes).toHaveText(['≤ 0.0512', '0.1', '0.5', '2', '≥ 5.83']);
   const radius = (index: number) => sizes.nth(index).locator('circle').getAttribute('r');
-  expect(Number(await radius(2))).toBe(6);
+  expect(Number(await radius(0))).toBe(1.5);
+  expect(Number(await radius(4))).toBe(16);
+  await expect(legend).toContainText('BTC');
 
   await page.getByLabel('Size').selectOption('log');
-  await expect(sizes).toHaveText(['≤ 0.0001', '0.01', '1', '≥ 100']);
+  await expect(sizes).toHaveText(['≤ 0.00051', '0.01', '1', '≥ 5.83']);
   expect(Number(await radius(3))).toBe(16);
 
   expect(errors).toEqual([]);
@@ -354,6 +357,35 @@ test('shows synthetic trades until a file is opened', async ({ page }) => {
   await fileInput.setInputFiles({ name: 'page.csv', mimeType: 'text/csv', buffer: Buffer.from('<html>\n') });
   await expect(page.getByRole('alert')).toHaveText('page.csv: Line 1: no "timestamp" column');
   await expect(page.getByTestId('trade-count')).toHaveText('2');
+
+  expect(errors).toEqual([]);
+});
+
+test('labels and decimals come from the file: its symbol, or else its name', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/');
+  await waitUntilReady(page);
+  const heading = page.getByRole('heading', { level: 1 });
+  // The synthetic day imitates the brief's market.
+  await expect(heading).toHaveText('BTC/USDT trades');
+
+  const ethBtc = gzipSync(
+    'exchange,symbol,timestamp,local_timestamp,id,side,price,amount\n' +
+      'binance,ETHBTC,1575158403572000,1575158403820370,1,sell,0.020311,12.5\n' +
+      'binance,ETHBTC,1575158403579000,1575158403820405,2,buy,0.020312,0.125\n',
+  );
+  await page.locator('input[type=file]').setInputFiles({ name: 'trades.csv.gz', mimeType: 'application/gzip', buffer: ethBtc });
+  await expect(heading).toHaveText('ETH/BTC trades');
+  await expect(page.getByTestId('traded')).toHaveText('12.625 ETH');
+  await page.getByRole('button', { name: 'Whole day' }).click();
+  await expect(page.getByTestId('view-amount')).toHaveText('12.625');
+  await expect(page.getByTestId('legend')).toContainText('ETH');
+
+  // Binance's files name no symbol; their names do.
+  const name = 'LTCBUSD-trades-2019-12-01.csv';
+  await page.locator('input[type=file]').setInputFiles({ name, mimeType: 'text/csv', buffer: Buffer.from(TwoBinanceTrades) });
+  await expect(page.getByTestId('source')).toHaveText(name);
+  await expect(heading).toHaveText('LTC/BUSD trades');
 
   expect(errors).toEqual([]);
 });

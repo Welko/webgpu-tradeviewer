@@ -1,6 +1,6 @@
 # Trade Viewer
 
-A C++ WebGPU viewer for Binance BTC/USDT market data. It builds to WebAssembly with Emscripten and is hosted in a React page. It also runs natively.
+A C++ WebGPU viewer for market trades, built around a day of Binance BTC/USDT and working with any other market's files. It builds to WebAssembly with Emscripten and is hosted in a React page. It also runs natively.
 
 Status: scaffold only. The viewer creates a WebGPU device and clears the surface each frame.
 
@@ -194,7 +194,12 @@ The web can't list GPUs. It can only send a `powerPreference` hint when it reque
 
 ## Data
 
-The viewer starts with a synthetic day of made-up trades, labeled as such. To see real trades, open a Tardis trades file (`.csv` or `.csv.gz`) on the page or pass it to the native app. The page can also load the same day from [Binance's public data](https://data.binance.vision), straight from Binance. This repository and its site never host the data: Tardis's terms of service don't allow it (clause 9.2).
+The viewer starts with a synthetic day of made-up trades, labeled as such. Most of them are small and a few far larger, in about the same proportions as the brief's real day. To see real trades, open a Tardis trades file (`.csv` or `.csv.gz`) on the page or pass it to the native app. The page can also load the same day from [Binance's public data](https://data.binance.vision), straight from Binance. This repository and its site never host the data: Tardis's terms of service don't allow it (clause 9.2).
+
+Nothing assumes BTC/USDT. `Core::Data::Instrument` says what a file's trades are in, and comes with them:
+
+- **Names**, for every label: the base asset (what's bought and sold, such as BTC) and the quote asset (what prices are in, such as USDT). They come from Tardis's `symbol` column, or else the file's name, since Binance's files have no symbol: `BTCUSDT-trades-2019-12-01.zip`. A symbol with a separator (`BTC-USD`) splits there; one without (`BTCUSDT`) splits before the longest of a list of common quote assets. With neither, the labels say "base" and "quote".
+- **Decimals**: the most any amount and any price in the file has, trailing zeros left out, which totals are counted in and numbers are shown with.
 
 ```bash
 mkdir -p data
@@ -220,7 +225,7 @@ The axes tick at round values: prices in steps of 1, 2 or 5 times a power of ten
 
 Time ranges are half-open: a trade at the end time belongs to the next range.
 
-The toolbar (web) and the window title (native) show how many trades are in view and their total amount. Amounts are added up in whole units of 10⁻⁸ BTC, the smallest step Binance trades in, so totals are exact. Running totals, built once when trades load, give the total of any range in constant time.
+The toolbar (web) and the window title (native) show how many trades are in view and their total amount. Amounts are added up in whole units of the file's smallest step (10⁻⁶ BTC on the brief's day, at most 10⁻¹⁰), so totals are exact. Running totals, built once when trades load, give the total of any range in constant time.
 
 ### Summaries when zoomed out
 
@@ -233,7 +238,7 @@ A view with more than 32 trades per pixel column, on average, draws a summary of
 
 Columns hold whole microseconds: column i of n spans [start + i·length / n, start + (i + 1)·length / n), so every trade is in exactly one, and the counts and amounts add up to the view's. Each column is found by binary search, and its price range and amounts come from structures built once when trades load, so a column costs O(log n) whatever it holds:
 
-- **Running totals by side**: amounts in whole 10⁻⁸ BTC units, as for the view's total, plus the buys' amounts and count.
+- **Running totals by side**: amounts in whole units of the file's smallest step, as for the view's total, plus the buys' amounts and count.
 - **A min/max tree**: a segment tree of prices over blocks of 16 trades, about 2 bytes per trade. A lookup reads its two ends' partly covered blocks from the trades, at most 30 prices, so the tree only works with the trades it was built from: `PreprocessedTrades` keeps the trades, running totals and tree together, built at once from trades it takes over (`Trades&&`, so they're never copied by accident). The totals and the tree are its private parts: every question about a range of trades goes through it, which costs nothing measurable; a leaf per trade took 32 bytes per trade, more than the trades themselves. It also fits the price axis, which read every trade in view before: at the whole day, the view update now takes 0.12 ms instead of about 2 ms (`BenchmarkApp`, release build).
 
 Other kinds of summary (separate buy and sell bars, a density grid, keeping markers in quiet columns) are planned, with a menu to choose between them.
@@ -250,7 +255,7 @@ Picking runs on the CPU in double precision. Trades are sorted by time, so a bin
 
 ### Legend
 
-The web toolbar has a legend: the buy and sell colors, and marker sizes for a few amounts on the chosen scale. Sizes stay between 1.5 and 16 pixels, so the legend's first and last sizes stand for every smaller (≤) or larger (≥) amount too. The area scale reaches its limits at 0.0625 and 7.11 BTC, and the log scale at 0.0001 and 100 BTC. Natively, the log shows the same legend at startup and whenever `M` changes the scale.
+The web toolbar has a legend: the buy and sell colors, and marker sizes for a few amounts on the chosen scale. Sizes stay between 1.5 and 16 pixels, so the legend's first and last sizes stand for every smaller (≤) or larger (≥) amount too. Both scales are fitted to the file's amounts when it loads (`Gpu::Market::Style::fitMarkerSizing`), so any market gets the full range of sizes: sorted by size, the largest marker goes to the trade 99.9% of the way up, so a few extreme trades don't shrink all the others. The area scale's radius grows with the square root of the amount from there, and the log scale runs from the trade 1% of the way up to that largest marker. On the brief's day that's up to 5.9 BTC, from 0.052 BTC on the area scale and 0.00002 BTC on the log scale. Natively, the log shows the same legend at startup and whenever `M` changes the scale.
 
 The sizes are set in one place, `Gpu/Market/Style.hpp`, and the colors in the theme (below). The trades shader gets both as uniforms, and the legend is built from the same values, so the two can't drift apart. A GPU test draws one trade of each legend amount and measures it: its diameter matches the legend to within a pixel, at pixel ratios 1 and 2, and its color matches the legend's color at its opacity.
 
@@ -264,11 +269,11 @@ Colors are sRGB values, as CSS gives them, and the engine writes them as they ar
 
 `tools/check_ranges.py` checks three fixed ranges. It compares `TradeStatsApp`, a command-line tool that runs the viewer's own code, with its own calculation: Python's `csv` module and exact decimals, sharing nothing but the file. The third range starts and ends exactly on trades, 2 at its start time and 6 at its end time, so it tests the half-open edges. Results on the brief's Tardis file:
 
-| Range (UTC, half-open) | Independent: trades | Independent: amount (BTC) | Viewer's code | Result |
+| Range (UTC, half-open) | Independent: trades | Independent: amount | Viewer's code | Result |
 |---|--:|--:|---|---|
-| Initial view: 2019-12-01T12:00:00 – 2019-12-01T13:00:00 | 13,017 | 1488.29839300 | 13,017 trades, 1488.29839300 BTC | agrees |
-| Whole day: 2019-12-01T00:00:00 – 2019-12-02T00:00:00 | 420,562 | 60767.74476200 | 420,562 trades, 60767.74476200 BTC | agrees |
-| Edges on trades: 2019-12-01T12:30:00.224 – 2019-12-01T12:30:51.531 | 153 | 11.54819700 | 153 trades, 11.54819700 BTC | agrees |
+| Initial view: 2019-12-01T12:00:00 – 2019-12-01T13:00:00 | 13,017 | 1488.29839300 | 13,017 trades, 1488.298393 | agrees |
+| Whole day: 2019-12-01T00:00:00 – 2019-12-02T00:00:00 | 420,562 | 60767.74476200 | 420,562 trades, 60767.744762 | agrees |
+| Edges on trades: 2019-12-01T12:30:00.224 – 2019-12-01T12:30:51.531 | 153 | 11.54819700 | 153 trades, 11.548197 | agrees |
 
 CI runs the same check on Binance's public copy of the day, which has 11 more trades (420,573 for the whole day), and shows its table on each run's page. To run it locally:
 
@@ -284,12 +289,12 @@ On an Intel HD 520 with the synthetic day (release build, medians):
 
 | View | Drawn | GPU total | View update (CPU) |
 |---|---|--:|--:|
-| Whole day, every trade | 432,544 markers | 22.0 ms | 0.11 ms |
-| Whole day | 1600 bars | 0.21–0.26 ms | 1.3 ms |
-| 12:00–13:00 | 17,900 markers | 0.74–0.82 ms | 0.04–0.05 ms |
-| 1 minute | 290 markers | 0.22–0.24 ms | 0.06 ms |
+| Whole day, every trade | 432,544 markers | 22.0 ms | 0.04 ms |
+| Whole day | 1600 bars | 0.26 ms | 1.9 ms |
+| 12:00–13:00 | 17,900 markers | 1.46 ms | 0.04 ms |
+| 1 minute | 290 markers | 0.20 ms | 0.07 ms |
 
-Summaries make the whole day about 100 times cheaper on the GPU. Working them out costs 1.3 ms of CPU per view change, mostly cache misses in the tree; reading the day's trades in order once might be faster at that zoom, which is worth measuring.
+Summaries make the whole day about 100 times cheaper on the GPU. Working them out costs 1.9 ms of CPU per view change, mostly cache misses in the tree; reading the day's trades in order once might be faster at that zoom, which is worth measuring.
 
 Each marker is one equilateral triangle around its disc, the smallest triangle around a circle. Measured with every trade of the day drawn, two runs each:
 

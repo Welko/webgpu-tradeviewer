@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { utc, utcMicroseconds } from '../utc';
-import type { PickedColumn, PickedTrade } from './viewerModule';
+import { formatAmount, formatPrice } from './format';
+import type { Instrument, PickedColumn, PickedTrade } from './viewerModule';
 
 // From the anchor to the tooltip's nearest corner, in CSS pixels.
 const OffsetCssPx = 14;
@@ -9,13 +10,16 @@ const FlipWidthCssPx = 260;
 const FlipHeightCssPx = 90;
 
 interface Placement {
+  /** What the trades are in, for units and decimals. */
+  instrument: Instrument;
   cssPixelsPerPixel: number;
   canvasWidthCssPx: number;
   canvasHeightCssPx: number;
 }
 
+/** A count. */
 function number(value: number): string {
-  return value.toLocaleString('en-US', { maximumFractionDigits: 8 });
+  return value.toLocaleString('en-US');
 }
 
 /**
@@ -30,7 +34,7 @@ function Tooltip({
   canvasHeightCssPx,
   testId,
   children,
-}: Placement & { anchorXPx: number; anchorYPx: number; testId: string; children: ReactNode }) {
+}: Omit<Placement, 'instrument'> & { anchorXPx: number; anchorYPx: number; testId: string; children: ReactNode }) {
   const leftCssPx = anchorXPx * cssPixelsPerPixel;
   const topCssPx = anchorYPx * cssPixelsPerPixel;
   const across = leftCssPx + OffsetCssPx + FlipWidthCssPx > canvasWidthCssPx ? `calc(-100% - ${OffsetCssPx}px)` : `${OffsetCssPx}px`;
@@ -43,7 +47,7 @@ function Tooltip({
 }
 
 /** The picked trade's time, price, amount and side, beside its marker. */
-export function TradeTooltip({ trade, ...placement }: Placement & { trade: PickedTrade }) {
+export function TradeTooltip({ trade, instrument, ...placement }: Placement & { trade: PickedTrade }) {
   return (
     <Tooltip anchorXPx={trade.centerXPx} anchorYPx={trade.centerYPx} testId="trade-tooltip" {...placement}>
       <div className={`trade-side ${trade.side}`} data-testid="trade-side">
@@ -51,15 +55,15 @@ export function TradeTooltip({ trade, ...placement }: Placement & { trade: Picke
       </div>
       <div data-testid="trade-time">{utcMicroseconds(trade.timeUs)}</div>
       <div>
-        <span data-testid="trade-price">{number(trade.price)}</span> USDT ·{' '}
-        <span data-testid="trade-amount">{number(trade.amount)}</span> BTC
+        <span data-testid="trade-price">{formatPrice(trade.price, instrument)}</span> {instrument.quote} ·{' '}
+        <span data-testid="trade-amount">{formatAmount(trade.amount, instrument)}</span> {instrument.base}
       </div>
     </Tooltip>
   );
 }
 
 /** What the picked column summary holds, beside the top of its bar. */
-export function ColumnTooltip({ column, ...placement }: Placement & { column: PickedColumn }) {
+export function ColumnTooltip({ column, instrument, ...placement }: Placement & { column: PickedColumn }) {
   const sells = column.count - column.buyCount;
   return (
     <Tooltip anchorXPx={column.centerXPx} anchorYPx={column.topPx} testId="column-tooltip" {...placement}>
@@ -70,11 +74,11 @@ export function ColumnTooltip({ column, ...placement }: Placement & { column: Pi
         {number(column.count)} trades: {number(column.buyCount)} buys, {number(sells)} sells
       </div>
       <div data-testid="column-price">
-        {number(column.priceLow)} – {number(column.priceHigh)} USDT
+        {formatPrice(column.priceLow, instrument)} – {formatPrice(column.priceHigh, instrument)} {instrument.quote}
       </div>
       <div data-testid="column-amounts">
-        <span className="trade-side buy">{number(column.buyAmount)}</span> BTC bought ·{' '}
-        <span className="trade-side sell">{number(column.sellAmount)}</span> BTC sold
+        <span className="trade-side buy">{formatAmount(column.buyAmount, instrument)}</span> {instrument.base} bought ·{' '}
+        <span className="trade-side sell">{formatAmount(column.sellAmount, instrument)}</span> {instrument.base} sold
       </div>
     </Tooltip>
   );

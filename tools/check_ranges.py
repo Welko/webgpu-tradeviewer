@@ -58,7 +58,7 @@ def main():
     stats, path = sys.argv[1:]
     trades = list(read_trades(path))
 
-    print("| Range (UTC, half-open) | Independent: trades | Independent: amount (BTC) | Viewer's code | Result |")
+    print("| Range (UTC, half-open) | Independent: trades | Independent: amount | Viewer's code | Result |")
     print("|---|--:|--:|---|---|")
     failed = False
     for name, start, end in RANGES:
@@ -71,7 +71,7 @@ def main():
         agree = int(viewer_count) == count and Decimal(viewer_amount) == amount
         failed |= not agree
 
-        print(f"| {name}: {start} – {end} | {count:,} | {amount:.8f} | {int(viewer_count):,} trades, {viewer_amount} BTC "
+        print(f"| {name}: {start} – {end} | {count:,} | {amount:.8f} | {int(viewer_count):,} trades, {viewer_amount} "
               f"| {'agrees' if agree else 'DIFFERS'} |")
     sys.exit(1 if failed else 0)
 

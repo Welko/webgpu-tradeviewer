@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Gpu/Market/Style.hpp"
 #include "Gpu/Market/Type.hpp"
 #include "Gpu/Plot/Type.hpp"
 #include "Gpu/Type.hpp"
@@ -59,7 +60,8 @@ public:
         Plot::Type::Grid grid{};
         /** What part of the trades to show. */
         Type::View view{};
-        Type::MarkerScale markerScale = Type::MarkerScale::Area;
+        /** How a trade's amount becomes its marker's size. */
+        Style::MarkerSizing markerSizing{};
         /** The colors of everything drawn. */
         Type::Theme theme{};
         /** The column, by position in those set with setColumns(), to draw in the cursor color. */

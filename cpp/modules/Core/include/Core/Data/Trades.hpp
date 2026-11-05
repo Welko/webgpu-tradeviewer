@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Data/Instrument.hpp"
 #include "Core/Range.hpp"
 
 #include <algorithm>
@@ -18,13 +19,14 @@ enum class Side : std::uint8_t
     Sell,
 };
 
-/** Trades in time order, one vector per column. */
+/** Trades in time order, one vector per column, and what they're in. */
 struct Trades
 {
     std::vector<std::int64_t> timeUs;  // exchange time, microseconds since the Unix epoch (UTC)
-    std::vector<double> price;
-    std::vector<double> amount;  // in the base asset (BTC)
+    std::vector<double> price;  // in the quote asset
+    std::vector<double> amount;  // in the base asset
     std::vector<Side> side;
+    Instrument instrument{};
 
     [[nodiscard]] std::size_t size() const { return timeUs.size(); }
     [[nodiscard]] bool empty() const { return timeUs.empty(); }
@@ -55,21 +57,6 @@ struct Trades
     }
 };
 
-/**
- * Amounts are summed in whole units of 1e-8, the finest step Binance trades
- * in, so totals are exact and the same however they're added up.
- */
-constexpr double AmountUnit = 1e-8;
-
-namespace detail {
-
-inline std::int64_t toAmountUnits(double amount)
-{
-    return std::llround(amount / AmountUnit);
-}
-
-} // namespace detail
-
 /** How many trades there are, when, and how much they traded. */
 struct TradeStats
 {
@@ -84,16 +71,38 @@ inline TradeStats getStats(const Trades& trades)
     if (trades.empty()) {
         return {};
     }
+    // In whole units of the finest step, so the total is exact.
     std::int64_t totalUnits = 0;
     for (const double amount : trades.amount) {
-        totalUnits += detail::toAmountUnits(amount);
+        totalUnits += trades.instrument.toAmountUnits(amount);
     }
     return {
         .count = trades.size(),
         .firstUs = trades.timeUs.front(),
         .lastUs = trades.timeUs.back(),
-        .totalAmount = static_cast<double>(totalUnits) * AmountUnit,
+        .totalAmount = trades.instrument.toAmount(totalUnits),
     };
+}
+
+/**
+ * The amounts `lowShare` and `highShare` of the way up the trades sorted by
+ * amount, each share from 0 to 1 (0.5 is the median), by the nearest-rank
+ * method. Zero without trades. Sorts a copy of the amounts, so it's for now
+ * and then, not for every frame.
+ */
+inline ValueRange getAmountPercentiles(const Trades& trades, double lowShare, double highShare)
+{
+    if (trades.empty()) {
+        return {};
+    }
+    std::vector<double> amounts = trades.amount;
+    const auto at = [&](double share) {
+        const auto rank = static_cast<std::size_t>(std::ceil(share * static_cast<double>(amounts.size())));
+        const auto nth = amounts.begin() + static_cast<std::ptrdiff_t>(std::clamp<std::size_t>(rank, 1, amounts.size()) - 1);
+        std::ranges::nth_element(amounts, nth);
+        return *nth;
+    };
+    return { .low = at(lowShare), .high = at(highShare) };
 }
 
 /** Where the trades in `range` are, start inclusive and end exclusive. */

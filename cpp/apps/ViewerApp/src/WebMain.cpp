@@ -500,6 +500,26 @@ public:
         }
     }
 
+    /**
+     * What the trades are in, as { base, quote, amountDecimals,
+     * priceDecimals }: the assets' names, such as "BTC" and "USDT", and the
+     * most decimals the file gives amounts and prices with. Null until
+     * init() succeeds.
+     */
+    val getInstrument() const
+    {
+        if (!*mApp) {
+            return val::null();
+        }
+        const auto& instrument = (*mApp)->getInstrument();
+        val object = val::object();
+        object.set("base", instrument.base);
+        object.set("quote", instrument.quote);
+        object.set("amountDecimals", instrument.amountDecimals);
+        object.set("priceDecimals", instrument.priceDecimals);
+        return object;
+    }
+
     /** The trades on show. Empty until init() succeeds. */
     WebTradeStats getTradeStats() const
     {
@@ -580,10 +600,14 @@ public:
         (*mApp)->setStatsCallback([onStats](const Gpu::Type::FrameStats& stats) { onStats(toWeb(stats)); });
     }
 
-    /** Starts reading a trades file, which appendChunk() then receives piece by piece. */
-    void beginLoad()
+    /**
+     * Starts reading a trades file, which appendChunk() then receives piece
+     * by piece. Its name gives the assets when the file doesn't, as
+     * Binance's don't: BTCUSDT-trades-2019-12-01.zip.
+     */
+    void beginLoad(const std::string& fileName)
     {
-        mParser.emplace();
+        mParser.emplace(fileName);
     }
 
     /** Parses a Uint8Array of the file. An error message, or "" if all is well. */
@@ -754,6 +778,7 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("setMarkerScale", &WebViewer::setMarkerScale)
         .function("setPixelRatio", &WebViewer::setPixelRatio)
         .function("tradeStats", &WebViewer::getTradeStats)
+        .function("instrument", &WebViewer::getInstrument)
         .function("beginLoad", &WebViewer::beginLoad)
         .function("appendChunk", &WebViewer::appendChunk)
         .function("finishLoad", &WebViewer::finishLoad)

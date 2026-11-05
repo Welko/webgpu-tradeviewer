@@ -17,7 +17,7 @@ std::expected<Trades, std::string> readTradeFile(const std::string& path)
     if (!file) {
         return std::unexpected(std::format("Can't open {}", path));
     }
-    TradeParser parser;
+    TradeParser parser(path);
     std::array<char, 64 * 1024> buffer{};
     while (true) {
         const int read = gzread(file.get(), buffer.data(), static_cast<unsigned>(buffer.size()));

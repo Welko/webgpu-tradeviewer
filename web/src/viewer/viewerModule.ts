@@ -34,6 +34,17 @@ export interface Theme {
   cursor: Color;
 }
 
+/** What Viewer.instrument() returns: what the trades are in, read from their file. */
+export interface Instrument {
+  /** The asset bought and sold, such as "BTC"; "base" if the file doesn't say. */
+  base: string;
+  /** The asset prices are in, such as "USDT"; "quote" if the file doesn't say. */
+  quote: string;
+  /** The most decimals the file gives amounts and prices with. */
+  amountDecimals: number;
+  priceDecimals: number;
+}
+
 /** What Viewer.pickedColumn() returns: the column summary under the pointer. */
 export interface PickedColumn {
   /** The column's time range in microseconds since 1970, UTC, start inclusive and end exclusive. */
@@ -41,7 +52,7 @@ export interface PickedColumn {
   endUs: number;
   count: number;
   buyCount: number;
-  /** In BTC. */
+  /** In the base asset. */
   buyAmount: number;
   sellAmount: number;
   priceLow: number;
@@ -65,7 +76,7 @@ export interface PickedTrade {
   /** Microseconds since 1970, UTC. */
   timeUs: number;
   price: number;
-  /** In BTC. */
+  /** In the base asset. */
   amount: number;
   side: 'buy' | 'sell';
   /** Its marker's center, from the canvas's top left corner. */
@@ -75,7 +86,7 @@ export interface PickedTrade {
 
 /** One marker size in a legend. Where the scale stops growing, a size also stands for all amounts past it. */
 export interface LegendSize {
-  /** In BTC. */
+  /** In the base asset. */
   amount: number;
   radiusCssPx: number;
   bound: 'exact' | 'atMost' | 'atLeast';

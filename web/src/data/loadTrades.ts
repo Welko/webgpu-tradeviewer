@@ -12,13 +12,13 @@ export type OnProgress = (loaded: number, total: number | null) => void;
 export async function loadFile(viewer: Viewer, file: File, onProgress: OnProgress): Promise<void> {
   if (file.name.endsWith('.zip')) {
     const zip = await readAll(file.stream().pipeThrough(counting(file.size, onProgress)));
-    return parse(viewer, unzipFirstFile(zip));
+    return parse(viewer, unzipFirstFile(zip), file.name);
   }
   let stream = file.stream().pipeThrough(counting(file.size, onProgress));
   if (file.name.endsWith('.gz')) {
     stream = stream.pipeThrough(new DecompressionStream('gzip'));
   }
-  return parse(viewer, stream);
+  return parse(viewer, stream, file.name);
 }
 
 /** Downloads and loads the Binance sample. */
@@ -29,12 +29,15 @@ export async function loadBinanceSample(viewer: Viewer, onProgress: OnProgress):
   }
   const total = Number(response.headers.get('content-length')) || null;
   const zip = await readAll(response.body.pipeThrough(counting(total, onProgress)));
-  return parse(viewer, unzipFirstFile(zip));
+  return parse(viewer, unzipFirstFile(zip), BinanceSampleUrl.slice(BinanceSampleUrl.lastIndexOf('/') + 1));
 }
 
-/** Feeds the CSV text in `stream` to the viewer's parser, chunk by chunk. */
-async function parse(viewer: Viewer, stream: ReadableStream<Bytes>): Promise<void> {
-  viewer.beginLoad();
+/**
+ * Feeds the CSV text in `stream` to the viewer's parser, chunk by chunk.
+ * `fileName` names the assets when the file doesn't, as Binance's don't.
+ */
+async function parse(viewer: Viewer, stream: ReadableStream<Bytes>, fileName: string): Promise<void> {
+  viewer.beginLoad(fileName);
   const reader = stream.getReader();
   for (;;) {
     const { done, value } = await reader.read();

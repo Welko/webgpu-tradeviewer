@@ -45,6 +45,9 @@ public:
     /** The trades on show: none until setTrades(). */
     [[nodiscard]] const Core::Data::Trades& getTrades() const;
 
+    /** What the trades are in: their assets' names, for labels, and their decimals. */
+    [[nodiscard]] const Core::Data::Instrument& getInstrument() const { return getTrades().instrument; }
+
     /**
      * Replaces the trades, which must be in time order, and resets the view.
      * Takes them, since they're large: pass them with std::move. Fails if the
@@ -93,6 +96,9 @@ public:
 
     /** Colors and reference sizes of the markers, at the current marker scale and theme. */
     [[nodiscard]] Gpu::Market::Type::Legend getLegend() const;
+
+    /** How a trade's amount becomes its marker's size: the current scale, fitted to the trades. */
+    [[nodiscard]] const Gpu::Market::Style::MarkerSizing& getMarkerSizing() const { return mSettings.markerSizing; }
 
     /** Physical pixels per CSS or window pixel. Pointer positions are in physical pixels. */
     void setPixelRatio(float ratio);

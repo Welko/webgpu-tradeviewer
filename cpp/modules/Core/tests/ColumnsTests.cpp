@@ -104,9 +104,10 @@ TEST_CASE("Running totals split amounts and counts by side, exactly")
     add(trades, 0, 100.0, 0.1, Side::Buy);
     add(trades, 1, 100.0, 0.2, Side::Sell);
     add(trades, 2, 100.0, 0.3, Side::Buy);
+    trades.instrument.amountDecimals = 8;
     const PreprocessedTrades preprocessed(std::move(trades));
-    CHECK(preprocessed.getBuyUnits({ 0, 3 }) == 40'000'000);
-    CHECK(preprocessed.getUnits({ 0, 3 }) - preprocessed.getBuyUnits({ 0, 3 }) == 20'000'000);
+    CHECK(preprocessed.getBuyAmountUnits({ 0, 3 }) == 40'000'000);
+    CHECK(preprocessed.getAmountUnits({ 0, 3 }) - preprocessed.getBuyAmountUnits({ 0, 3 }) == 20'000'000);
     CHECK(preprocessed.getBuyCount({ 0, 3 }) == 2);
     CHECK(preprocessed.getBuyCount({ 1, 2 }) == 0);
 }
@@ -157,9 +158,10 @@ TEST_CASE("Columns account for every trade in view, whatever the count")
             CHECK(column.trades.first == next);
             CHECK(column.index < across);
             next = column.trades.last;
-            units += Core::Data::detail::toAmountUnits(column.buyAmount) + Core::Data::detail::toAmountUnits(column.sellAmount);
+            const auto& instrument = preprocessed.getTrades().instrument;
+            units += instrument.toAmountUnits(column.buyAmount) + instrument.toAmountUnits(column.sellAmount);
         }
         CHECK(next == inView.last);
-        CHECK(units == preprocessed.getUnits(inView));
+        CHECK(units == preprocessed.getAmountUnits(inView));
     }
 }

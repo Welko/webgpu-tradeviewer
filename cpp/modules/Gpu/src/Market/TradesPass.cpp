@@ -33,15 +33,13 @@ struct GpuMarkers
     std::uint32_t scale;  // 0 area, 1 log
     float minRadiusCssPx;
     float maxRadiusCssPx;
-    float areaRadiusAt1BtcCssPx;
-    float logLowest;
-    float logHighest;
-    std::array<float, 3> padding;  // cursorColor starts on 16 bytes
+    float lowAmount;
+    float highAmount;
     std::array<float, 3> cursorColor;
-    float padding2;  // uniform structs are sized in 16-byte steps
+    float padding;  // uniform structs are sized in 16-byte steps
 };
 // The size WGSL's layout rules give Markers in TradesPass.wgsl, which this must match field for field.
-static_assert(sizeof(GpuMarkers) == 80);
+static_assert(sizeof(GpuMarkers) == 64);
 
 /** The shader's View uniform (TradesPass.wgsl). */
 struct Uniforms
@@ -57,7 +55,7 @@ struct Uniforms
     GpuMarkers markers;
 };
 // The size WGSL's layout rules give View in TradesPass.wgsl, which this must match field for field.
-static_assert(sizeof(Uniforms) == 112);
+static_assert(sizeof(Uniforms) == 96);
 
 std::array<float, 3> toGpu(Gpu::Type::Color color)
 {
@@ -228,15 +226,13 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot
             .buyColor = toGpu(mTheme.buy),
             .opacity = mTheme.markerOpacity,
             .sellColor = toGpu(mTheme.sell),
-            .scale = mMarkerScale == Type::MarkerScale::Area ? 0u : 1u,
+            .scale = mMarkerSizing.scale == Type::MarkerScale::Area ? 0u : 1u,
             .minRadiusCssPx = Style::MarkerMinRadiusCssPx,
             .maxRadiusCssPx = Style::MarkerMaxRadiusCssPx,
-            .areaRadiusAt1BtcCssPx = Style::MarkerAreaRadiusAt1BtcCssPx,
-            .logLowest = Style::MarkerLogLowest,
-            .logHighest = Style::MarkerLogHighest,
-            .padding = {},
+            .lowAmount = static_cast<float>(mMarkerSizing.lowAmount),
+            .highAmount = static_cast<float>(mMarkerSizing.highAmount),
             .cursorColor = toGpu(mTheme.cursor),
-            .padding2 = 0.0f,
+            .padding = 0.0f,
         },
     };
     wgpuQueueWriteBuffer(mContext->queue.get(), mUniforms.get(), 0, &uniforms, sizeof(uniforms));

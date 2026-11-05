@@ -1,13 +1,16 @@
 import { utc } from '../utc';
 import { useState } from 'react';
 import { Legend } from './Legend';
-import type { Legend as LegendData, Summaries, TimeRange, TradeStats, Viewer } from './viewerModule';
+import { formatAmount } from './format';
+import type { Instrument, Legend as LegendData, Summaries, TimeRange, TradeStats, Viewer } from './viewerModule';
 
 interface ViewControlsProps {
   viewer: Viewer;
   view: TimeRange;
   /** The trades in `view`. */
   viewStats: TradeStats;
+  /** What the trades are in, for units and decimals. */
+  instrument: Instrument;
   /** What the markers mean at the chosen size scale. */
   legend: LegendData;
   /** Set while the view is crowded enough to show column summaries instead of trades. */
@@ -21,7 +24,7 @@ interface ViewControlsProps {
  * ranges, the markers' size scale, whether crowded views are summarized, and
  * the legend.
  */
-export function ViewControls({ viewer, view, viewStats, legend, summaries, onChange }: ViewControlsProps) {
+export function ViewControls({ viewer, view, viewStats, instrument, legend, summaries, onChange }: ViewControlsProps) {
   const [everyTrade, setEveryTrade] = useState(false);
   const act = (action: () => void) => () => {
     action();
@@ -35,7 +38,7 @@ export function ViewControls({ viewer, view, viewStats, legend, summaries, onCha
       </span>
       <span title="Trades from the start time up to, but not including, the end time">
         <span data-testid="view-count">{viewStats.count.toLocaleString('en-US')}</span> trades,{' '}
-        <span data-testid="view-amount">{viewStats.totalAmount.toLocaleString('en-US', { maximumFractionDigits: 8 })}</span> BTC
+        <span data-testid="view-amount">{formatAmount(viewStats.totalAmount, instrument)}</span> {instrument.base}
       </span>
       <button type="button" className="button" onClick={act(() => viewer.resetView())}>
         12:00–13:00
@@ -72,7 +75,7 @@ export function ViewControls({ viewer, view, viewStats, legend, summaries, onCha
           {Math.round(viewStats.count / Math.max(1, summaries.withTrades)).toLocaleString('en-US')} trades each
         </span>
       )}
-      <Legend legend={legend} summarized={summaries !== null} />
+      <Legend legend={legend} base={instrument.base} summarized={summaries !== null} />
     </div>
   );
 }

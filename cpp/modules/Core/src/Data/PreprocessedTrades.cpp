@@ -36,7 +36,7 @@ PreprocessedTrades::RunningTotals::RunningTotals(const Trades& trades)
     mRunningBuys.reserve(trades.size() + 1);
     mBuyCounts.reserve(trades.size() + 1);
     for (std::size_t i = 0; i < trades.size(); ++i) {
-        const std::int64_t units = detail::toAmountUnits(trades.amount[i]);
+        const std::int64_t units = trades.instrument.toAmountUnits(trades.amount[i]);
         const bool buy = trades.side[i] == Side::Buy;
         mRunning.push_back(mRunning.back() + units);
         mRunningBuys.push_back(mRunningBuys.back() + (buy ? units : 0));

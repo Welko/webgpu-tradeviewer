@@ -42,7 +42,7 @@ struct LegendSize
         AtLeast,  ///< This amount and all larger ones.
     };
 
-    double amount = 0.0;  // BTC
+    double amount = 0.0;  // in the base asset
     float radiusCssPx = 0.0f;
     Bound bound = Bound::Exact;
 };

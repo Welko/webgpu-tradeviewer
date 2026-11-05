@@ -102,7 +102,8 @@ async function loadTrades(viewer: Viewer, url: string): Promise<{ loadMs: number
   if (new URL(url, location.href).pathname.endsWith('.gz')) {
     stream = stream.pipeThrough(new DecompressionStream('gzip'));
   }
-  viewer.beginLoad();
+  // Its name gives the assets when the file doesn't, as Binance's don't.
+  viewer.beginLoad(new URL(url, location.href).pathname.split('/').pop() ?? '');
   const reader = stream.getReader();
   for (;;) {
     const { done, value } = await reader.read();

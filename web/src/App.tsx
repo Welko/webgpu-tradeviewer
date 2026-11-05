@@ -22,7 +22,7 @@ export function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>BTC/USDT trades</h1>
+        <h1>{status.kind === 'ready' ? `${status.instrument.base}/${status.instrument.quote} trades` : 'Trades'}</h1>
         <span
           className={status.kind === 'error' || (status.kind === 'ready' && status.problem) ? 'status error' : 'status'}
           data-status={status.kind}

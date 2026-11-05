@@ -95,6 +95,13 @@ void sortByTime(Trades& trades)
 
 } // namespace
 
+TradeParser::TradeParser(std::string_view fileName)
+{
+    auto names = findSymbolIn(fileName).value_or(AssetNames{});
+    // The decimals grow to the most any line has.
+    mTrades.instrument = { .base = std::move(names.base), .quote = std::move(names.quote), .amountDecimals = 0, .priceDecimals = 0 };
+}
+
 std::expected<void, std::string> TradeParser::append(std::string_view chunk)
 {
     if (!mPartialLine.empty()) {
@@ -182,6 +189,7 @@ std::expected<void, std::string> TradeParser::parseHeader(std::string_view line)
         .side = column("side"),
         .price = column("price"),
         .amount = column("amount"),
+        .symbol = column("symbol"),
     };
     return {};
 }
@@ -199,20 +207,29 @@ std::expected<void, std::string> TradeParser::parseTrade(std::string_view line)
     std::optional<double> price;
     std::optional<double> amount;
     std::optional<Side> side;
+    std::string_view priceText;
+    std::string_view amountText;
     if (mFormat == Format::Tardis) {
         timeUs = number<std::int64_t>(fields[mColumns.timestamp]);
-        price = number<double>(fields[mColumns.price]);
-        amount = number<double>(fields[mColumns.amount]);
+        priceText = fields[mColumns.price];
+        amountText = fields[mColumns.amount];
         side = tardisSide(fields[mColumns.side]);
+        // The symbol names the assets better than the file's name can.
+        if (auto names = mTrades.empty() && mColumns.symbol < count ? parseSymbol(fields[mColumns.symbol]) : std::nullopt) {
+            mTrades.instrument.base = std::move(names->base);
+            mTrades.instrument.quote = std::move(names->quote);
+        }
     } else {
         timeUs = number<std::int64_t>(fields[4]);
         if (timeUs && *timeUs < FirstMicrosecondTime) {
             *timeUs *= 1000;
         }
-        price = number<double>(fields[1]);
-        amount = number<double>(fields[2]);
+        priceText = fields[1];
+        amountText = fields[2];
         side = binanceSide(fields[5]);
     }
+    price = number<double>(priceText);
+    amount = number<double>(amountText);
     if (!timeUs || !price || !amount || !side || *price <= 0.0 || *amount <= 0.0) {
         return std::unexpected(formatError(std::format("can't read \"{}\"", line)));
     }
@@ -220,6 +237,9 @@ std::expected<void, std::string> TradeParser::parseTrade(std::string_view line)
     if (!mTrades.empty() && *timeUs < mTrades.timeUs.back()) {
         mSorted = false;
     }
+    auto& instrument = mTrades.instrument;
+    instrument.amountDecimals = std::clamp(countDecimals(amountText), instrument.amountDecimals, Instrument::MaxDecimals);
+    instrument.priceDecimals = std::max(instrument.priceDecimals, countDecimals(priceText));
     mTrades.timeUs.push_back(*timeUs);
     mTrades.price.push_back(*price);
     mTrades.amount.push_back(*amount);

@@ -61,7 +61,8 @@ void logLegend(const Viewer::App& app, Gpu::Market::Type::MarkerScale scale)
     std::string sizes;
     for (const auto& size : app.getLegend().sizes) {
         const char* prefix = size.bound == Bound::AtMost ? "<= " : size.bound == Bound::AtLeast ? ">= " : "";
-        sizes += std::format("{}{}{:.4g} BTC {:.3g} px", sizes.empty() ? "" : ", ", prefix, size.amount, size.radiusCssPx);
+        sizes += std::format("{}{}{:.4g} {} {:.3g} px", sizes.empty() ? "" : ", ",
+        prefix, size.amount, app.getInstrument().base, size.radiusCssPx);
     }
     Core::Log::info("Buys green, sells red; marker radius by {}: {}", scale == Gpu::Market::Type::MarkerScale::Area ? "area" : "log", sizes);
 }
@@ -234,22 +235,26 @@ std::string formatUtc(std::int64_t timeUs)
  */
 std::string getWindowTitle(const Viewer::App& app)
 {
+    const auto& instrument = app.getInstrument();
+    // In the instrument's own decimals.
+    const auto amount = [&](double value) { return std::format("{:.{}f} {}", value, instrument.amountDecimals, instrument.base); };
+    const auto price = [&](double value) { return std::format("{:.{}f}", value, instrument.priceDecimals); };
     if (const auto column = app.getPickedColumn()) {
         const auto& summary = column->summary;
-        return std::format("Trade Viewer · {} to {} UTC · {} trades ({} buys), {} to {} USDT, {:.8f} BTC bought, {:.8f} sold",
+        return std::format("Trade Viewer · {} to {} UTC · {} trades ({} buys), {} to {} {}, {} bought, {} sold",
                            formatUtc(column->time.startUs), formatUtc(column->time.endUs), summary.trades.size(), summary.buyCount,
-                           summary.price.low, summary.price.high, summary.buyAmount, summary.sellAmount);
+                           price(summary.price.low), price(summary.price.high), instrument.quote, amount(summary.buyAmount),
+                           amount(summary.sellAmount));
     }
     if (const auto picked = app.getPickedTrade()) {
         const auto ms = picked->timeUs / 1000 - (picked->timeUs % 1000 < 0 ? 1 : 0);
-        return std::format("Trade Viewer · {} {} BTC at {} USDT · {}{:03} UTC", picked->side == Core::Data::Side::Buy ? "Buy" : "Sell",
-                           picked->amount, picked->price, formatUtc(ms * 1000), picked->timeUs - ms * 1000);
+        return std::format("Trade Viewer · {} {} at {} {} · {}{:03} UTC", picked->side == Core::Data::Side::Buy ? "Buy" : "Sell",
+                           amount(picked->amount), price(picked->price), instrument.quote, formatUtc(ms * 1000), picked->timeUs - ms * 1000);
     }
     const auto view = app.getView();
     const auto stats = app.getViewStats();
-    return std::format("Trade Viewer · {} to {} UTC · {} trades, {:.8f} BTC{}", formatUtc(view.startUs), formatUtc(view.endUs),
-                       stats.count, stats.totalAmount,
-                       app.getColumnsAcross() > 0 ? " · summarized: one bar per pixel column" : "");
+    return std::format("Trade Viewer · {} to {} UTC · {} trades, {}{}", formatUtc(view.startUs), formatUtc(view.endUs), stats.count,
+                       amount(stats.totalAmount), app.getColumnsAcross() > 0 ? " · summarized: one bar per pixel column" : "");
 }
 
 /**

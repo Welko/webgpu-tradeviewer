@@ -3,7 +3,7 @@
 // compares this with its own, independent calculation.
 //
 // Usage: TradeStatsApp <trades.csv[.gz]> <startUs> <endUs>
-// Prints: <count> <amount>, the amount with exactly 8 decimals.
+// Prints: <count> <amount>, the amount exactly, in the file's own decimals.
 
 #include "Core/Data/PreprocessedTrades.hpp"
 #include "Core/Data/TradeFile.hpp"
@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <format>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -48,8 +49,11 @@ int main(int argc, char** argv)
 
     const Core::Data::PreprocessedTrades preprocessed(std::move(*trades));
     const auto indices = Core::Data::getTradesIn(preprocessed.getTrades(), { .startUs = *startUs, .endUs = *endUs });
-    const std::int64_t units = preprocessed.getUnits(indices);
-    constexpr std::int64_t UnitsPerWhole = 100'000'000;  // 1 / Core::Data::AmountUnit
-    std::fputs(std::format("{} {}.{:08}\n", indices.size(), units / UnitsPerWhole, units % UnitsPerWhole).c_str(), stdout);
+    // From the whole units, so no rounding to a double gets in the way.
+    const std::int64_t units = preprocessed.getAmountUnits(indices);
+    const int decimals = preprocessed.getTrades().instrument.amountDecimals;
+    const auto perWhole = static_cast<std::int64_t>(preprocessed.getTrades().instrument.getUnitsPerWhole());
+    const std::string fraction = decimals > 0 ? std::format(".{:0{}}", units % perWhole, decimals) : "";
+    std::fputs(std::format("{} {}{}\n", indices.size(), units / perWhole, fraction).c_str(), stdout);
     return 0;
 }

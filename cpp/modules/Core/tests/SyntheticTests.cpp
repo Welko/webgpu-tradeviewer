@@ -3,6 +3,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 
 namespace {
@@ -26,6 +27,17 @@ TEST_CASE("Synthetic trades fill the range plausibly, in time order")
     CHECK(std::ranges::all_of(trades.amount, [](double amount) { return amount > 0.0; }));
     CHECK(std::ranges::count(trades.side, Core::Data::Side::Buy) > 8'000);
     CHECK(std::ranges::count(trades.side, Core::Data::Side::Sell) > 8'000);
+}
+
+TEST_CASE("Synthetic amounts are mostly small, with a few far larger, like the real day's")
+{
+    auto amounts = Core::Data::generateSyntheticTrades(StartUs, StartUs + 24 * HourUs, 1).amount;
+    std::ranges::sort(amounts);
+    const auto at = [&](double share) { return amounts[static_cast<std::size_t>(share * static_cast<double>(amounts.size()))]; };
+    // The real day: 0.043, and 5.9.
+    CHECK(at(0.5) == doctest::Approx(0.043).epsilon(0.1));
+    CHECK(at(0.999) == doctest::Approx(5.9).epsilon(0.2));
+    CHECK(amounts.back() <= 60.0);
 }
 
 TEST_CASE("The same seed gives the same synthetic trades")

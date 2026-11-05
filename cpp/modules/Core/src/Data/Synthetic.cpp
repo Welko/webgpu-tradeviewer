@@ -10,7 +10,12 @@ namespace {
 constexpr double TradesPerSecond = 5.0;
 constexpr double StartPrice = 7500.0;
 constexpr double MaxPriceStep = 1e-4;  // per trade, relative
-constexpr double MeanAmount = 0.14;  // close to the real day's
+// Most trades are small and a few are far larger, as on the real day: these
+// give a median of about 0.043, a 99.9th percentile of about 5.9 and a mean
+// of about 0.13, close to the real day's. The largest there was 63.
+constexpr double AmountScale = 0.08;
+constexpr double AmountTail = 1.6;
+constexpr double MaxAmount = 60.0;
 
 /** SplitMix64: small, and the same on every platform, unlike the standard distributions. */
 class Random
@@ -33,6 +38,9 @@ public:
     /** Exponentially distributed with the given mean. */
     double exponential(double mean) { return -std::log(uniform()) * mean; }
 
+    /** From a Lomax distribution: most values below `scale`, and the smaller `tail`, the larger the few above it. */
+    double lomax(double scale, double tail) { return scale * (std::pow(uniform(), -1.0 / tail) - 1.0); }
+
 private:
     std::uint64_t mState;
 };
@@ -43,6 +51,8 @@ Trades generateSyntheticTrades(std::int64_t startUs, std::int64_t endUs, std::ui
 {
     Random random(seed);
     Trades trades;
+    // Like the brief's day on Binance: amounts in steps of 10^-6, prices of 10^-2.
+    trades.instrument = { .base = "BTC", .quote = "USDT", .amountDecimals = 6, .priceDecimals = 2 };
     double price = StartPrice;
     std::int64_t timeUs = startUs;
     while (true) {
@@ -52,7 +62,7 @@ Trades generateSyntheticTrades(std::int64_t startUs, std::int64_t endUs, std::ui
             return trades;
         }
         price *= 1.0 + (2.0 * random.uniform() - 1.0) * MaxPriceStep;
-        const double amount = std::round(random.exponential(MeanAmount) * 1e6) / 1e6;
+        const double amount = std::round(std::min(random.lomax(AmountScale, AmountTail), MaxAmount) * 1e6) / 1e6;
 
         trades.timeUs.push_back(timeUs);
         trades.price.push_back(std::round(price * 100.0) / 100.0);

@@ -2,7 +2,6 @@
 
 #include "Core/Data/Trades.hpp"
 #include "Core/Log.hpp"
-#include "Gpu/Market/Style.hpp"
 #include "Gpu/Market/Type.hpp"
 
 #include <algorithm>
@@ -105,7 +104,7 @@ void findRing(const App& app, std::vector<Scene::Patch>& patches)
     if (!picked) {
         return;
     }
-    const double middlePx = Gpu::Market::Style::getMarkerRadiusCssPx(picked->amount, Gpu::Market::Type::MarkerScale::Area) + 2.5;
+    const double middlePx = app.getMarkerSizing().getRadiusCssPx(picked->amount) + 2.5;
     const double xPx = std::floor(picked->centerXPx);
     // The row whose center is nearest the middle of the ring: within half a pixel.
     const double yPx = std::floor(picked->centerYPx - middlePx);

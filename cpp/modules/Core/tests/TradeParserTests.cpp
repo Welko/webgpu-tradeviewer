@@ -25,10 +25,11 @@ constexpr std::string_view Binance =
     "211646077,7540.78000000,0.03974100,299.67,1575158403572,True,True\n"
     "211646078,7540.79000000,1.50000000,11311.18,1575158403579,False,True\n";
 
-/** `text`, parsed in chunks of `chunkSize` bytes. */
-std::expected<Trades, std::string> parse(std::string_view text, std::size_t chunkSize = std::string_view::npos)
+/** `text`, parsed in chunks of `chunkSize` bytes, from a file called `fileName`. */
+std::expected<Trades, std::string> parse(std::string_view text, std::size_t chunkSize = std::string_view::npos,
+                                         std::string_view fileName = {})
 {
-    TradeParser parser;
+    TradeParser parser(fileName);
     for (std::size_t offset = 0; offset < text.size(); offset += chunkSize) {
         if (auto appended = parser.append(text.substr(offset, chunkSize)); !appended) {
             return std::unexpected(appended.error());
@@ -124,6 +125,47 @@ TEST_CASE("A file that can't be read gives the line and the reason")
           == "Line 3: can't read \"binance,1,hold,2,3\"");
     CHECK(errorOf("exchange,timestamp,side,price,amount\nbinance,1,buy,2,-3\n") == "Line 2: can't read \"binance,1,buy,2,-3\"");
     CHECK(errorOf("1,2.0,3.0,6.0,1575158403572,maybe,True\n") == "Line 1: can't read \"1,2.0,3.0,6.0,1575158403572,maybe,True\"");
+}
+
+TEST_CASE("The instrument comes from the file: the symbol column, else the file's name")
+{
+    const auto tardis = parse(Tardis, std::string_view::npos, "trades.csv.gz");
+    CHECK(tardis);
+    if (tardis) {
+        CHECK(tardis->instrument.base == "BTC");
+        CHECK(tardis->instrument.quote == "USDT");
+    }
+    const auto binance = parse(Binance, std::string_view::npos, "BTCUSDT-trades-2019-12-01.csv");
+    CHECK(binance);
+    if (binance) {
+        CHECK(binance->instrument.base == "BTC");
+        CHECK(binance->instrument.quote == "USDT");
+    }
+    const auto unnamed = parse(Binance);
+    CHECK(unnamed);
+    if (unnamed) {
+        CHECK(unnamed->instrument.base == "base");
+        CHECK(unnamed->instrument.quote == "quote");
+    }
+}
+
+TEST_CASE("The instrument's decimals are the most the file writes, trailing zeros left out")
+{
+    // Binance pads every number to 8 decimals.
+    for (const auto text : { Tardis, Binance }) {
+        const auto trades = parse(text);
+        CHECK(trades);
+        if (trades) {
+            CHECK(trades->instrument.amountDecimals == 6);
+            CHECK(trades->instrument.priceDecimals == 2);
+        }
+    }
+    const auto whole = parse("exchange,timestamp,side,price,amount\nbinance,1,buy,0.00001234,5000\n");
+    CHECK(whole);
+    if (whole) {
+        CHECK(whole->instrument.amountDecimals == 0);
+        CHECK(whole->instrument.priceDecimals == 8);
+    }
 }
 
 TEST_CASE("A summary counts the trades, their time range and amount")

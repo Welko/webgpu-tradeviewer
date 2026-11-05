@@ -11,6 +11,7 @@ import {
   type MainModule,
   type Axes,
   type GpuHealth,
+  type Instrument,
   type Legend,
   type PickedColumn,
   type PickedTrade,
@@ -25,7 +26,7 @@ export type ViewerStatus =
    * restarting or failing, WebGPU errors, or the viewer having had to start
    * over.
    */
-  | { kind: 'ready'; gpu: GpuInfo; viewer: Viewer; refresh: () => void; problem: string | null }
+  | { kind: 'ready'; gpu: GpuInfo; viewer: Viewer; instrument: Instrument; refresh: () => void; problem: string | null }
   | { kind: 'error'; message: string };
 
 declare global {
@@ -103,6 +104,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
     viewer: Viewer;
     view: TimeRange;
     viewStats: TradeStats;
+    instrument: Instrument;
     axes: Axes;
     legend: Legend;
     picked: PickedTrade | null;
@@ -172,20 +174,26 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
         };
         let sizeCssPx = { width: canvas.clientWidth, height: canvas.clientHeight };
         let problem: string | null = null;
+        let instrument = created.instrument() as Instrument;
         const refresh = () => {
           if (dead) {
             return;
           }
           requestFrame();
           const now = describeHealth(created.gpuHealth() as GpuHealth | null) ?? abortedRef.current;
-          if (now !== problem) {
+          // Other trades may be in another instrument.
+          const current = created.instrument() as Instrument;
+          const sameInstrument = JSON.stringify(current) === JSON.stringify(instrument);
+          if (now !== problem || !sameInstrument) {
             problem = now;
-            onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created, refresh, problem });
+            instrument = current;
+            onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created, instrument, refresh, problem });
           }
           setShown({
             viewer: created,
             view: created.view(),
             viewStats: created.viewStats(),
+            instrument,
             axes: created.axes() as Axes,
             legend: created.legend() as Legend,
             picked: created.pickedTrade() as PickedTrade | null,
@@ -273,7 +281,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
         created.setWakeCallback(refresh);
         refresh();
 
-        onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created, refresh, problem });
+        onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created, instrument, refresh, problem });
       })
       .catch((error: unknown) => {
         if (!disposed) {
@@ -304,6 +312,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
           viewer={shown.viewer}
           view={shown.view}
           viewStats={shown.viewStats}
+          instrument={shown.instrument}
           legend={shown.legend}
           summaries={shown.summaries}
           onChange={shown.refresh}
@@ -315,6 +324,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
         {shown?.picked && (
           <TradeTooltip
             trade={shown.picked}
+            instrument={shown.instrument}
             cssPixelsPerPixel={shown.cssPixelsPerPixel}
             canvasWidthCssPx={shown.sizeCssPx.width}
             canvasHeightCssPx={shown.sizeCssPx.height}
@@ -323,6 +333,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
         {shown?.pickedColumn && (
           <ColumnTooltip
             column={shown.pickedColumn}
+            instrument={shown.instrument}
             cssPixelsPerPixel={shown.cssPixelsPerPixel}
             canvasWidthCssPx={shown.sizeCssPx.width}
             canvasHeightCssPx={shown.sizeCssPx.height}

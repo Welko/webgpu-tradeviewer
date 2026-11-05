@@ -32,11 +32,11 @@ function Disc({ radiusCssPx, color, opacity }: { radiusCssPx: number; color?: Co
 }
 
 /**
- * What the markers mean: color by side, and size by amount at the chosen
- * scale. The viewer supplies its own colors and sizes, so this matches what
- * it draws.
+ * What the markers mean: color by side, and size by amount of `base`, the
+ * asset traded, at the chosen scale. The viewer supplies its own colors and
+ * sizes, fitted to the trades, so this matches what it draws.
  */
-export function Legend({ legend, summarized }: { legend: LegendData; summarized: boolean }) {
+export function Legend({ legend, base, summarized }: { legend: LegendData; base: string; summarized: boolean }) {
   const gradient = `legend-gradient-${useId().replace(/:/g, '')}`;
   return (
     <div className="legend" data-testid="legend">
@@ -74,7 +74,7 @@ export function Legend({ legend, summarized }: { legend: LegendData; summarized:
               {formatAmount(size)}
             </span>
           ))}
-          BTC
+          {base}
         </span>
       )}
     </div>

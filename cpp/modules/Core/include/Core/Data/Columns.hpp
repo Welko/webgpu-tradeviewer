@@ -14,7 +14,7 @@ struct ColumnSummary
     std::size_t index;  // of the columns across, from the left, 0 first
     IndexRange trades;
     ValueRange price;
-    double buyAmount;  // BTC
+    double buyAmount;  // in the base asset
     double sellAmount;
     std::size_t buyCount;  // the rest are sells
 };
