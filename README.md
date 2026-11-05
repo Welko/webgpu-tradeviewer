@@ -182,9 +182,32 @@ The web can't list GPUs. It can only send a `powerPreference` hint when it reque
 | In a native window, the GPU device is lost | The app crashes: wgpu-native panics (see below). | Not tested: it's wgpu-native's behavior. |
 | WebGPU reports an error nothing caught (a validation error means a bug) | Logged, and the first 16 are kept. The page shows the first one in its header. | Every scene must draw with none. |
 | A file has more trades than the GPU's largest buffer holds | The device is requested with the adapter's largest buffer size, often far above WebGPU's default 256 MiB, and 20 bytes per trade. Past that, loading fails with a message, and the trades on show stay. | `ViewerAppTests` caps an app at the synthetic day's trades (`Engine::Params::maxTrades`) and loads one more. `GpuDeviceTests` checks that a GPU buffer refuses to grow past the limit, and stops growing at it. |
+| A file isn't what's expected: not trades, cut off, damaged, or holding impossible numbers | It says what's wrong and on which line, briefly, even for binary files, and the trades on show stay. See [Files that aren't what's expected](#files-that-arent-whats-expected). | `Core`'s `UnexpectedDataTests` and `TradeFileTests`; `web/tests/unexpected.spec.ts` opens them in a browser. |
+| Trades are valid but odd: one trade, all the same price, amounts from tiny to enormous, times far from today | They draw, and can be zoomed, panned and pointed at, with no WebGPU errors. | `ViewerAppTests`' `UnexpectedDataTests` draws each and checks for markers; the browser test also checks the page survives. |
+| The Binance sample can't be fetched | It says so, and the trades on show stay. | A browser test fails the request. |
 | The wasm heap runs out of memory | It can grow to 4 GiB, the most a wasm32 module can address. Past that, the module stops, and the page starts a new one with the synthetic day. It says the data is too large, how much memory the viewer had, and its most. | A browser test asks for 4 GiB at once, which fails without using any. |
 | The wasm module stops for another reason (a bug) | The page starts a new module with the synthetic day, and says something went wrong. The reason goes to the console. | A browser test aborts the module. |
 | Natively, memory runs out | It says "Out of memory" with the memory in use, without allocating, and aborts: exceptions are off. | Not tested: doctest can't test code that aborts. |
+
+### Files that aren't what's expected
+
+Reading stops at the first line it can't read, and says why. Nothing is shown from a file that fails, so a total on screen never comes from part of a file.
+
+| The file | What happens |
+|---|---|
+| Empty, or a header with no trades | "The file is empty", "The file has no trades" |
+| Not trades (HTML, JSON, a table with other columns) | `Line 1: no "timestamp" column` |
+| Another kind of market data, such as the order book file | `Line 2: the side "ask" isn't buy or sell` |
+| A price or amount of `nan`, `inf`, zero or below, or not a number | `Line 2: the price "nan" isn't a number above zero` |
+| A price or amount past 10¹⁸, a price below 10⁻¹⁸, or a time a browser can't show | `Line 2: the price "1e300" is out of range`. These limits keep every number drawable in the GPU's 32-bit floats. |
+| Amounts whose total wouldn't fit in 64 bits | Totals use fewer decimals until it fits; if whole units don't fit, "The amounts add up to too much to count exactly". |
+| Binary, or a line with no end | A short message with only printable text, stopping after 64 KiB of one line instead of holding the file in memory. |
+| A gzip or zip file cut off or damaged | "The file is damaged or cut off", natively "Can't read" and the reason. Never just the trades before the damage. |
+| A zip file that's password-protected, empty, or uses another compression | It says which. Natively, which doesn't read zip files, "This is a zip file: unzip it first". |
+
+What's in a file decides how it's read, not its name, so a gzipped file called `.csv` works. A byte order mark at the start, which some editors add, is ignored.
+
+Two things can't be told from the file. Times in other units read as a valid date near 1970: Tardis files are in microseconds, and Binance's in milliseconds or microseconds. The page shows the date, so the mistake is visible. And amounts with more than 10 decimals are rounded to 10 in totals, which matters only for assets split that finely.
 
 **Losing the device natively.** wgpu-native (v29) notices a lost device only on the next call to it, and some calls then panic instead of failing: submitting work, getting a window's texture for a frame, and presenting it. A real loss, such as a driver reset, surfaces at exactly those calls, so in a native window it crashes the app whatever the app checks. Recovering is for the web: browsers turn every call on a lost device into nothing, and the engine needs no checks there. Offscreen, natively, a loss surfaces at an earlier call, so the app's restart can be tested in C++. That needs one guard, since the frame's submit comes after: everything submits through `Gpu::Context::submit()`, which drops the commands once the device is lost. `Context.hpp` declares `wgpuQueueSubmit` deprecated, so any other call fails to compile, with a message saying to use `submit()`. The engine itself never checks.
 

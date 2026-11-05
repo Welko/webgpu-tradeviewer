@@ -120,11 +120,9 @@ TEST_CASE("A file that can't be read gives the line and the reason")
     CHECK(errorOf("exchange,symbol,timestamp,side,price,amount\n") == "The file has no trades");
     CHECK(errorOf("<html>\n") == "Line 1: no \"timestamp\" column");
     CHECK(errorOf("exchange,timestamp,side,amount\n") == "Line 1: no \"price\" column");
-    CHECK(errorOf("exchange,timestamp,side,price,amount\nbinance,1,buy,2\n") == "Line 2: expected 5 fields");
-    CHECK(errorOf("exchange,timestamp,side,price,amount\n\nbinance,1,hold,2,3\n")
-          == "Line 3: can't read \"binance,1,hold,2,3\"");
-    CHECK(errorOf("exchange,timestamp,side,price,amount\nbinance,1,buy,2,-3\n") == "Line 2: can't read \"binance,1,buy,2,-3\"");
-    CHECK(errorOf("1,2.0,3.0,6.0,1575158403572,maybe,True\n") == "Line 1: can't read \"1,2.0,3.0,6.0,1575158403572,maybe,True\"");
+    CHECK(errorOf("exchange,timestamp,side,price,amount\nbinance,1,buy,2\n") == "Line 2: expected 5 fields, found 4");
+    CHECK(errorOf("exchange,timestamp,side,price,amount\n\nbinance,1,hold,2,3\n") == "Line 3: the side \"hold\" isn't buy or sell");
+    CHECK(errorOf("exchange,timestamp,side,price,amount\nbinance,1,buy,2,-3\n") == "Line 2: the amount \"-3\" isn't a number above zero");
 }
 
 TEST_CASE("The instrument comes from the file: the symbol column, else the file's name")

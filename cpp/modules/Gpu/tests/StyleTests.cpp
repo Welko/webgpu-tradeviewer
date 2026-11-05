@@ -50,6 +50,14 @@ TEST_CASE("Marker sizing is fitted to the trades' amounts, keeping the scale, ho
           == Style::MarkerSizing{ .scale = MarkerScale::Area, .lowAmount = 10.0, .highAmount = 100.0 });
     // No trades: the default.
     CHECK(Style::fitMarkerSizing(MarkerScale::Log, {}) == Style::MarkerSizing{ .scale = MarkerScale::Log });
+    // Extremes stay within what the shader's 32-bit floats can hold, ratio included.
+    for (const auto& trades : { tradesOf({ 1e-300, 1e-300 }), tradesOf({ 1e-300, 1e15 }), tradesOf({ 1e15, 1e15 }) }) {
+        const auto sizing = Style::fitMarkerSizing(MarkerScale::Log, trades);
+        CHECK(sizing.lowAmount > 1e-37);
+        CHECK(sizing.highAmount < 1e37);
+        CHECK(sizing.highAmount / sizing.lowAmount < 1e37);
+        CHECK(sizing.highAmount >= 10.0 * sizing.lowAmount);
+    }
 }
 
 TEST_CASE("On the area scale, four times the amount doubles the radius, the largest at the high amount")
@@ -108,6 +116,8 @@ TEST_CASE("A legend spans the scale from where it stops shrinking to where it st
         Log,
         { .scale = MarkerScale::Area },
         { .scale = MarkerScale::Log },
+        // A very wide scale.
+        { .scale = MarkerScale::Log, .lowAmount = 1e-15, .highAmount = 1e15 },
         // A scale of one decade, as a single amount gets.
         { .scale = MarkerScale::Area, .lowAmount = 10.0, .highAmount = 100.0 },
         { .scale = MarkerScale::Log, .lowAmount = 10.0, .highAmount = 100.0 },
@@ -119,6 +129,7 @@ TEST_CASE("A legend spans the scale from where it stops shrinking to where it st
 
         const auto& sizes = legend.sizes;
         CHECK(sizes.size() >= 3);
+        CHECK(sizes.size() <= 6);
         if (sizes.size() < 3) {
             continue;
         }

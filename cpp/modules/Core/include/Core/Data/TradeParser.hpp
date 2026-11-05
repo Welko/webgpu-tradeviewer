@@ -24,7 +24,9 @@ namespace Core::Data {
  * column, else from the file's name (see findSymbolIn()), else the
  * Instrument defaults; its decimals from the most any amount and price has.
  *
- * Stops at the first line it can't read. After an error, discard the parser.
+ * Stops at the first line it can't read, saying which and why. Prices and
+ * amounts must be finite and above zero, and all numbers within limits that
+ * can be drawn and added up. After an error, discard the parser.
  */
 class TradeParser
 {
@@ -63,6 +65,7 @@ private:
     std::expected<void, std::string> parseLine(std::string_view line);
     std::expected<void, std::string> parseHeader(std::string_view line);
     std::expected<void, std::string> parseTrade(std::string_view line);
+    [[nodiscard]] std::expected<void, std::string> checkPartialLine() const;
     [[nodiscard]] std::string formatError(std::string_view message) const;
 
     Format mFormat = Format::Unknown;

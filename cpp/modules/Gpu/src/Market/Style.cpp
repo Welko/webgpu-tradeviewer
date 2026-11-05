@@ -8,6 +8,8 @@ namespace Gpu::Market::Style {
 
 namespace {
 
+constexpr double MarkerFitMinAmount = 1e-30;
+
 /** The nearest of 1, 2 and 5 times a power of ten to `amount`, by ratio, for a legend. */
 double roundNicely(double amount)
 {
@@ -42,12 +44,12 @@ std::vector<double> getReferences(const MarkerSizing& sizing, double smallest, d
             references.push_back(roundNicely(sizing.highAmount * share));
         }
     } else {
-        // Powers of ten; every second one if that's more than three.
+        // Powers of ten; only every second one or fewer, if that's more than three.
         const auto first = static_cast<int>(std::ceil(std::log10(smallest)));
         const auto last = static_cast<int>(std::floor(std::log10(largest)));
-        const bool sparse = last - first + 1 > 3;
+        const int stride = std::max(1, (last - first + 3) / 3);
         for (int exponent = first; exponent <= last; ++exponent) {
-            if (!sparse || exponent % 2 == 0) {
+            if (exponent % stride == 0) {
                 references.push_back(std::pow(10.0, exponent));
             }
         }
@@ -85,8 +87,11 @@ MarkerSizing fitMarkerSizing(Type::MarkerScale scale, const Core::Data::Trades& 
         return { .scale = scale };
     }
     const auto amounts = Core::Data::getAmountPercentiles(trades, MarkerFitLowShare, MarkerFitHighShare);
-    // At least a tenfold span, so the log scale has room even for a single amount.
-    return { .scale = scale, .lowAmount = std::min(amounts.low, amounts.high / 10.0), .highAmount = amounts.high };
+    // Within what the shader's 32-bit floats can hold, ratio included, and at
+    // least a tenfold span, so the log scale has room even for a single amount.
+    const double high = std::max(amounts.high, MarkerFitMinAmount);
+    const double lowest = std::max(high * MarkerFitMinAmount, MarkerFitMinAmount / 10.0);
+    return { .scale = scale, .lowAmount = std::clamp(amounts.low, lowest, high / 10.0), .highAmount = high };
 }
 
 Type::Legend getLegend(const MarkerSizing& sizing, const Type::Theme& theme)

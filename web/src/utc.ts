@@ -1,6 +1,11 @@
 /** 2019-12-01 12:00:00.000 UTC */
 export function utc(ms: number): string {
-  return `${new Date(ms).toISOString().replace('T', ' ').replace('Z', '')} UTC`;
+  const date = new Date(ms);
+  // Panning can go past the last date there is.
+  if (Number.isNaN(date.getTime())) {
+    return 'beyond any date';
+  }
+  return `${date.toISOString().replace('T', ' ').replace('Z', '')} UTC`;
 }
 
 /** 2019-12-01 12:00:00.000123 UTC: to the microsecond, as trade times are recorded. */

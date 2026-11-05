@@ -21,11 +21,15 @@ struct Instrument
     /** The most decimals amounts are summed in, so a day's total stays far inside 64 bits. */
     static constexpr int MaxDecimals = 10;
 
+    /** The most decimals prices are shown with: the parser refuses prices smaller than that. */
+    static constexpr int MaxPriceDecimals = 18;
+
     std::string base = "base";
     std::string quote = "quote";
-    // The most any amount or price in the file has, trailing zeros left out;
-    // amounts at most MaxDecimals. The most there can be for trades nobody
-    // described, such as those made by hand.
+    // The most any amount or price in the file has, trailing zeros left out,
+    // up to the limits above, and fewer if a file's total wouldn't fit in 64
+    // bits. The most there can be for trades nobody described, such as those
+    // made by hand.
     int amountDecimals = MaxDecimals;
     int priceDecimals = MaxDecimals;
 
