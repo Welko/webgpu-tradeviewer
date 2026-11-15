@@ -34,8 +34,12 @@ public:
     /** The engine in use. Null while a new one is on its way, or if none could be made. */
     [[nodiscard]] Gpu::Market::Engine* getEngine() const { return mEngine.get(); }
 
-    /** If the GPU was lost, creates a new engine. Call outside the engine's own calls, such as every update(). */
-    void restartIfLost();
+    /**
+     * If the GPU was lost, creates a new engine, unless that keeps happening:
+     * after 3 losses in a minute it stops, with a failure in getHealth().
+     * Call outside the engine's own calls, such as every update().
+     */
+    void restartIfLost(double nowMs);
 
     /** The GPU in use, or the last one. */
     [[nodiscard]] const Gpu::Type::Info& getInfo() const { return mInfo; }
@@ -90,6 +94,7 @@ private:
     Gpu::Type::Info mInfo;  // of the engine in use, or the last one
     std::variant<Working, Restarting, Failed> mGpu = Working{};
     std::size_t mRestarts = 0;  // times the GPU was lost and came back
+    std::vector<double> mRestartTimesMs;  // the last few
     bool mProfiling = false;
     Gpu::Market::Engine::StatsCallback mOnStats{};
     std::function<void()> mOnWake{};

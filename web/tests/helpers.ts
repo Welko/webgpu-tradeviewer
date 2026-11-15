@@ -17,7 +17,9 @@ export function collectErrors(page: Page): string[] {
 export async function waitUntilReady(page: Page) {
   const status = page.locator('[data-status]');
   await expect(status).not.toHaveAttribute('data-status', 'loading', { timeout: 30_000 });
-  await expect(status, await status.textContent() ?? '').toHaveAttribute('data-status', 'ready');
+  const notices = page.getByTestId('notices');
+  const why = (await notices.count()) > 0 ? await notices.textContent() : '';
+  await expect(status, why ?? '').toHaveAttribute('data-status', 'ready');
 }
 
 function crc32(bytes: Uint8Array): number {

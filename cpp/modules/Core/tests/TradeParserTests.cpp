@@ -35,7 +35,7 @@ std::expected<Trades, std::string> parse(std::string_view text, std::size_t chun
             return std::unexpected(appended.error());
         }
     }
-    return parser.finish();
+    return parser.finish().transform([](Core::Data::TradeParser::Finished&& parsed) { return std::move(parsed.trades); });
 }
 
 /** The two trades both samples hold. */

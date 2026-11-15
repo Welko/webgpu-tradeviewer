@@ -1,6 +1,7 @@
 #include "Viewer/App.hpp"
 #include "Viewer/Scene.hpp"
 
+#include "Core/Log.hpp"
 #include "Core/Memory.hpp"
 #include "Core/Plot/Axis.hpp"
 #include "Core/Data/TradeParser.hpp"
@@ -125,6 +126,12 @@ WebTradeStats toWeb(const Core::Data::TradeStats& stats)
     };
 }
 
+/** Calls `onError(message)` with every error the viewer logs, from now on, so the page can show it. */
+void setErrorListener(val onError)
+{
+    Core::Log::onError = [onError](const std::string& message) { onError(message); };
+}
+
 /** The image-test scenes, as an array of { name, description, widthPx, heightPx }. */
 val getScenes()
 {
@@ -224,6 +231,19 @@ val toWeb(const Gpu::Type::FrameStats& stats)
     object.set("textures", stats.textures);
     object.set("gpuBytes", static_cast<double>(stats.gpuBytes));
     return object;
+}
+
+/** How loading went, as { error, warnings }: a message or null, and an array of messages. */
+val toLoadResult(const std::optional<std::string>& error, const std::vector<std::string>& warnings = {})
+{
+    val array = val::array();
+    for (const auto& warning : warnings) {
+        array.call<void>("push", warning);
+    }
+    val result = val::object();
+    result.set("error", error ? val(*error) : val::null());
+    result.set("warnings", array);
+    return result;
 }
 
 /** A time range in milliseconds since the epoch, for Date. */
@@ -610,37 +630,41 @@ public:
         mParser.emplace(fileName);
     }
 
-    /** Parses a Uint8Array of the file. An error message, or "" if all is well. */
-    std::string appendChunk(const val& bytes)
+    /** Parses a Uint8Array of the file. { error, warnings }, as finishLoad() gives them: warnings come only at the end. */
+    val appendChunk(const val& bytes)
     {
         if (!mParser) {
-            return "beginLoad() wasn't called";
+            return toLoadResult("beginLoad() wasn't called");
         }
         mChunk.resize(bytes["length"].as<std::size_t>());
         val(emscripten::typed_memory_view(mChunk.size(), mChunk.data())).call<void>("set", bytes);
         auto appended = mParser->append(std::string_view(mChunk.data(), mChunk.size()));
         if (!appended) {
             mParser.reset();
-            return appended.error();
+            return toLoadResult(appended.error());
         }
-        return {};
+        return toLoadResult(std::nullopt);
     }
 
-    /** Shows the file's trades in place of the current ones. An error message, or "" if all is well. */
-    std::string finishLoad()
+    /**
+     * Shows the file's trades in place of the current ones. { error, warnings }:
+     * why it failed, or null, keeping the trades on show; and what about the
+     * trades makes what's shown differ from the file, or look wrong.
+     */
+    val finishLoad()
     {
         if (!mParser || !*mApp) {
-            return "beginLoad() wasn't called";
+            return toLoadResult("beginLoad() wasn't called");
         }
-        auto trades = mParser->finish();
+        auto parsed = mParser->finish();
         mParser.reset();
-        if (!trades) {
-            return trades.error();
+        if (!parsed) {
+            return toLoadResult(parsed.error());
         }
-        if (auto set = (*mApp)->setTrades(std::move(*trades)); !set) {
-            return set.error();
+        if (auto set = (*mApp)->setTrades(std::move(parsed->trades)); !set) {
+            return toLoadResult(set.error());
         }
-        return {};
+        return toLoadResult(std::nullopt, parsed->warnings);
     }
 
     /**
@@ -710,6 +734,18 @@ struct Testing
         std::abort();
     }
 
+    /** Crashes inside the wasm code without aborting, as a memory bug would. */
+    static void trap()
+    {
+        __builtin_trap();
+    }
+
+    /** Logs an error, as the engine would when something fails. */
+    static void logError(const std::string& message)
+    {
+        Core::Log::error("{}", message);
+    }
+
     /** Asks for as much memory as the heap can ever have, which fails at once without using any. */
     static void exhaustMemory()
     {
@@ -726,6 +762,8 @@ EMSCRIPTEN_BINDINGS(Testing)
     emscripten::class_<Testing>("Testing")
         .class_function("loseGpu", &Testing::loseGpu)
         .class_function("crash", &Testing::crash)
+        .class_function("trap", &Testing::trap)
+        .class_function("logError", &Testing::logError)
         .class_function("exhaustMemory", &Testing::exhaustMemory);
 }
 
@@ -791,4 +829,5 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("setStatsCallback", &WebViewer::setStatsCallback);
 
     emscripten::function("scenes", &getScenes);
+    emscripten::function("setErrorListener", &setErrorListener);
 }

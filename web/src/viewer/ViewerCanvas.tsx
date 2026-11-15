@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { reportError, setNotices } from '../notices';
 import type { GpuInfo } from './gpuInfo';
 import { AxisLabels, AxisMarginsCssPx } from './AxisLabels';
 import { readTheme } from './theme';
@@ -20,14 +21,10 @@ import {
 
 export type ViewerStatus =
   | { kind: 'loading' }
-  /**
-   * `refresh()` draws again; call it after changing the viewer, such as
-   * loading trades. `problem` says what went wrong, if anything: the GPU
-   * restarting or failing, WebGPU errors, or the viewer having had to start
-   * over.
-   */
-  | { kind: 'ready'; gpu: GpuInfo; viewer: Viewer; instrument: Instrument; refresh: () => void; problem: string | null }
-  | { kind: 'error'; message: string };
+  /** `refresh()` draws again; call it after changing the viewer, such as loading trades. */
+  | { kind: 'ready'; gpu: GpuInfo; viewer: Viewer; instrument: Instrument; refresh: () => void }
+  /** Says why through the page's notices. */
+  | { kind: 'error' };
 
 declare global {
   interface Window {
@@ -45,23 +42,6 @@ function describeAbort(reason: string): string {
   }
   // A bug: the details are for developers.
   return 'Something went wrong, and the viewer started over with the demo data. The details are in the browser’s console.';
-}
-
-/** What the page should say about `health`, if anything. */
-function describeHealth(health: GpuHealth | null): string | null {
-  if (!health) {
-    return null;
-  }
-  if (health.failure) {
-    return `The GPU stopped working: ${health.failure}`;
-  }
-  if (health.restarting) {
-    return 'The GPU was lost; restarting it…';
-  }
-  if (health.errorCount > 0) {
-    return `WebGPU reported ${health.errorCount} error${health.errorCount === 1 ? '' : 's'}: ${health.errors[0]}`;
-  }
-  return null;
 }
 
 // Zooming per CSS pixel of wheel scrolling: a usual 100-pixel step zooms by about 1.22.
@@ -99,7 +79,6 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
   onStatusRef.current = onStatus;
   // Bumped when the wasm module aborts, to start over with a new one.
   const [generation, setGeneration] = useState(0);
-  const abortedRef = useRef<string | null>(null);
   const [shown, setShown] = useState<{
     viewer: Viewer;
     view: TimeRange;
@@ -131,13 +110,14 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
       cancelAnimationFrame(frame);
       removeInput.abort();
       console.error(`The viewer stopped: ${reason}`);
-      abortedRef.current = describeAbort(reason);
+      setNotices('module', [{ severity: 'error', message: describeAbort(reason) }]);
       setGeneration((current) => current + 1);
     });
 
     onStatusRef.current?.({ kind: 'loading' });
+    setNotices('viewer', []);
 
-    createViewer(`#${canvasId}`, powerPreference)
+    createViewer(`#${canvasId}`, powerPreference, reportError)
       .then((created) => {
         if (disposed) {
           created.delete();
@@ -173,21 +153,20 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
           }
         };
         let sizeCssPx = { width: canvas.clientWidth, height: canvas.clientHeight };
-        let problem: string | null = null;
         let instrument = created.instrument() as Instrument;
         const refresh = () => {
           if (dead) {
             return;
           }
           requestFrame();
-          const now = describeHealth(created.gpuHealth() as GpuHealth | null) ?? abortedRef.current;
+          // If it fails instead, the viewer logs why, which reportError() hears.
+          const health = created.gpuHealth() as GpuHealth | null;
+          setNotices('gpu', health?.restarting ? [{ severity: 'warning', message: 'The GPU was lost; restarting it…' }] : []);
           // Other trades may be in another instrument.
           const current = created.instrument() as Instrument;
-          const sameInstrument = JSON.stringify(current) === JSON.stringify(instrument);
-          if (now !== problem || !sameInstrument) {
-            problem = now;
+          if (JSON.stringify(current) !== JSON.stringify(instrument)) {
             instrument = current;
-            onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created, instrument, refresh, problem });
+            onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created, instrument, refresh });
           }
           setShown({
             viewer: created,
@@ -281,11 +260,12 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
         created.setWakeCallback(refresh);
         refresh();
 
-        onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created, instrument, refresh, problem });
+        onStatusRef.current?.({ kind: 'ready', gpu: created.info() as GpuInfo, viewer: created, instrument, refresh });
       })
       .catch((error: unknown) => {
         if (!disposed) {
-          onStatusRef.current?.({ kind: 'error', message: error instanceof Error ? error.message : String(error) });
+          setNotices('viewer', [{ severity: 'error', message: error instanceof Error ? error.message : String(error), needsReload: true }]);
+          onStatusRef.current?.({ kind: 'error' });
         }
       });
 

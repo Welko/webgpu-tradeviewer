@@ -11,7 +11,7 @@
 
 namespace Core::Data {
 
-std::expected<Trades, std::string> readTradeFile(const std::string& path)
+std::expected<TradeParser::Finished, std::string> readTradeFile(const std::string& path)
 {
     // gzopen() also reads files that aren't compressed.
     const std::unique_ptr<gzFile_s, decltype(&gzclose)> file(gzopen(path.c_str(), "rb"), &gzclose);
@@ -33,11 +33,11 @@ std::expected<Trades, std::string> readTradeFile(const std::string& path)
             return std::unexpected(std::format("Can't read {}: {}", path, problem));
         }
         if (read == 0) {
-            auto trades = parser.finish();
-            if (!trades) {
-                return std::unexpected(std::format("{}: {}", path, trades.error()));
+            auto parsed = parser.finish();
+            if (!parsed) {
+                return std::unexpected(std::format("{}: {}", path, parsed.error()));
             }
-            return trades;
+            return parsed;
         }
         if (auto appended = parser.append({ buffer.data(), static_cast<std::size_t>(read) }); !appended) {
             return std::unexpected(std::format("{}: {}", path, appended.error()));

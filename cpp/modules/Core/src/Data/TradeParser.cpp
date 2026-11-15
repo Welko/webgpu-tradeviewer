@@ -71,6 +71,12 @@ std::optional<T> number(std::string_view text)
     return value;
 }
 
+/** "1 amount has", "2 amounts have". */
+std::string amountsHave(std::size_t count)
+{
+    return std::format("{} {}", count, count == 1 ? "amount has" : "amounts have");
+}
+
 /** `text`, safe to put in a message: short, and with bytes that aren't printable replaced. */
 std::string quote(std::string_view text)
 {
@@ -165,7 +171,7 @@ std::expected<void, std::string> TradeParser::checkPartialLine() const
     return {};
 }
 
-std::expected<Trades, std::string> TradeParser::finish()
+std::expected<TradeParser::Finished, std::string> TradeParser::finish()
 {
     if (!mPartialLine.empty()) {
         if (auto parsed = parseLine(mPartialLine); !parsed) {
@@ -188,10 +194,25 @@ std::expected<Trades, std::string> TradeParser::finish()
     if (total * instrument.getUnitsPerWhole() >= MaxTotalUnits) {
         return std::unexpected("The amounts add up to too much to count exactly");
     }
+    std::vector<std::string> warnings;
+    if (mInfo.numFineAmounts > 0) {
+        warnings.push_back(std::format("{} more decimals than totals can count, so totals are rounded", amountsHave(mInfo.numFineAmounts)));
+    }
+    if (instrument.amountDecimals < mInfo.mostAmountDecimals) {
+        warnings.push_back(std::format("Totals are rounded to {} decimals, because they're so large", instrument.amountDecimals));
+    }
+    const auto tooSmall = static_cast<std::size_t>(std::ranges::count_if(mTrades.amount, [&](double amount) { return instrument.toAmountUnits(amount) == 0; }));
+    if (tooSmall > 0) {
+        warnings.push_back(std::format("{} an amount too small to count, adding nothing to totals", tooSmall == 1 ? "1 trade has" : std::format("{} trades have", tooSmall)));
+    }
+    const auto [earliest, latest] = std::ranges::minmax(mTrades.timeUs);
+    if (earliest > -FirstMicrosecondTime && latest < FirstMicrosecondTime) {
+        warnings.emplace_back("These trades are dated around 1970. If that's wrong, their times may be in another unit");
+    }
     if (!mSorted) {
         sortByTime(mTrades);
     }
-    return std::move(mTrades);
+    return Finished{ .trades = std::move(mTrades), .warnings = std::move(warnings) };
 }
 
 std::expected<void, std::string> TradeParser::parseLine(std::string_view line)
@@ -314,7 +335,10 @@ std::expected<void, std::string> TradeParser::parseTrade(std::string_view line)
         mSorted = false;
     }
     auto& instrument = mTrades.instrument;
-    instrument.amountDecimals = std::clamp(countDecimals(amountText), instrument.amountDecimals, Instrument::MaxDecimals);
+    const int amountDecimals = countDecimals(amountText);
+    mInfo.numFineAmounts += amountDecimals > Instrument::MaxDecimals ? 1 : 0;
+    instrument.amountDecimals = std::clamp(amountDecimals, instrument.amountDecimals, Instrument::MaxDecimals);
+    mInfo.mostAmountDecimals = instrument.amountDecimals;
     instrument.priceDecimals = std::clamp(countDecimals(priceText), instrument.priceDecimals, Instrument::MaxPriceDecimals);
     mTrades.timeUs.push_back(*timeUs);
     mTrades.price.push_back(*price);

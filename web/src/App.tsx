@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DataPanel } from './data/DataPanel';
+import { Notices } from './Notices';
 import { describeGpu } from './viewer/gpuInfo';
 import { ViewerCanvas, type ViewerStatus } from './viewer/ViewerCanvas';
 import type { PowerPreference } from './viewer/viewerModule';
@@ -9,9 +10,9 @@ function describe(status: ViewerStatus): string {
     case 'loading':
       return 'Starting WebGPU…';
     case 'ready':
-      return status.problem ?? describeGpu(status.gpu);
+      return describeGpu(status.gpu);
     case 'error':
-      return status.message;
+      return 'Not running';
   }
 }
 
@@ -24,7 +25,7 @@ export function App() {
       <header className="app-header">
         <h1>{status.kind === 'ready' ? `${status.instrument.base}/${status.instrument.quote} trades` : 'Trades'}</h1>
         <span
-          className={status.kind === 'error' || (status.kind === 'ready' && status.problem) ? 'status error' : 'status'}
+          className={status.kind === 'error' ? 'status error' : 'status'}
           data-status={status.kind}
         >
           {describe(status)}
@@ -39,6 +40,7 @@ export function App() {
           </select>
         </label>
       </header>
+      <Notices />
       <main className="app-main">
         <ViewerCanvas powerPreference={powerPreference} onStatus={setStatus} />
         {status.kind === 'ready' && <DataPanel viewer={status.viewer} onTradesChanged={status.refresh} />}

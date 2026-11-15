@@ -193,7 +193,10 @@ int main(int argc, char** argv)
     };
 
     std::expected<Core::Data::Trades, std::string> trades;
-    const double loadMs = timed([&] { trades = paths.size() > 1 ? Core::Data::readTradeFile(paths[1]) : Viewer::generateSyntheticDay(); });
+    const double loadMs = timed([&] {
+        trades = paths.size() > 1 ? Core::Data::readTradeFile(paths[1]).transform([](Core::Data::TradeParser::Finished&& parsed) { return std::move(parsed.trades); })
+                                  : Viewer::generateSyntheticDay();
+    });
     if (!trades) {
         std::fputs(std::format("{}\n", trades.error()).c_str(), stderr);
         return 1;

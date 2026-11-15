@@ -383,7 +383,7 @@ void App::resize(std::uint32_t widthPx, std::uint32_t heightPx)
 
 void App::update(double nowMs)
 {
-    mGpu.restartIfLost();
+    mGpu.restartIfLost(nowMs);
     if (auto* engine = mGpu.getEngine()) {
         engine->update(nowMs);
     }

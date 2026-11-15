@@ -184,12 +184,12 @@ TEST_CASE("Odd but valid trades draw, and can be zoomed, panned and pointed at")
         Core::Data::TradeParser parser;
         const auto appended = parser.append(oddCase.file);
         CHECK_MESSAGE(appended, (appended ? "" : appended.error()));
-        auto trades = parser.finish();
-        CHECK_MESSAGE(trades, (trades ? "" : trades.error()));
-        if (!trades) {
+        auto parsed = parser.finish();
+        CHECK_MESSAGE(parsed, (parsed ? "" : parsed.error()));
+        if (!parsed) {
             continue;
         }
-        const auto set = app->setTrades(std::move(*trades));
+        const auto set = app->setTrades(std::move(parsed->trades));
         CHECK_MESSAGE(set, (set ? "" : set.error()));
 
         for (const auto scale : { Gpu::Market::Type::MarkerScale::Area, Gpu::Market::Type::MarkerScale::Log }) {

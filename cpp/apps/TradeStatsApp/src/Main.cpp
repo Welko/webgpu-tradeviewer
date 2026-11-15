@@ -41,13 +41,13 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    auto trades = Core::Data::readTradeFile(argv[1]);
-    if (!trades) {
-        std::fputs(std::format("{}\n", trades.error()).c_str(), stderr);
+    auto parsed = Core::Data::readTradeFile(argv[1]);
+    if (!parsed) {
+        std::fputs(std::format("{}\n", parsed.error()).c_str(), stderr);
         return 1;
     }
 
-    const Core::Data::PreprocessedTrades preprocessed(std::move(*trades));
+    const Core::Data::PreprocessedTrades preprocessed(std::move(parsed->trades));
     const auto indices = Core::Data::getTradesIn(preprocessed.getTrades(), { .startUs = *startUs, .endUs = *endUs });
     // From the whole units, so no rounding to a double gets in the way.
     const std::int64_t units = preprocessed.getAmountUnits(indices);

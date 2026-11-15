@@ -1,4 +1,5 @@
 import { useEffect, useState, type DragEvent } from 'react';
+import { setNotices } from '../notices';
 import { formatAmount } from '../viewer/format';
 import type { Instrument, MemoryStats, TradeStats, Viewer } from '../viewer/viewerModule';
 import { utc } from '../utc';
@@ -8,10 +9,7 @@ import { BinanceSampleUrl, loadBinanceSample, loadFile, type OnProgress } from '
 const TardisUrl = 'https://datasets.tardis.dev/v1/binance/trades/2019/12/01/BTCUSDT.csv.gz';
 const Synthetic = 'Synthetic demo data: made-up trades, not real ones';
 
-type LoadState =
-  | { kind: 'idle' }
-  | { kind: 'loading'; what: string; loaded: number; total: number | null }
-  | { kind: 'error'; message: string };
+type LoadState = { kind: 'idle' } | { kind: 'loading'; what: string; loaded: number; total: number | null };
 
 function megabytes(bytes: number): string {
   return `${(bytes / 1e6).toFixed(1)} MB`;
@@ -32,21 +30,25 @@ export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTrade
     setInstrument(viewer.instrument() as Instrument);
     setMemory(viewer.memoryStats() as MemoryStats | null);
     setLoad({ kind: 'idle' });
+    setNotices('file', []);
+    setNotices('file-warnings', []);
   }, [viewer]);
 
-  const run = async (what: string, loading: (onProgress: OnProgress) => Promise<void>) => {
+  const run = async (what: string, loading: (onProgress: OnProgress) => Promise<string[]>) => {
     setLoad({ kind: 'loading', what, loaded: 0, total: null });
+    setNotices('file', []);
     try {
-      await loading((loaded, total) => setLoad({ kind: 'loading', what, loaded, total }));
+      const warnings = await loading((loaded, total) => setLoad({ kind: 'loading', what, loaded, total }));
       setSource(what);
       setStats(viewer.tradeStats());
       setInstrument(viewer.instrument() as Instrument);
       setMemory(viewer.memoryStats() as MemoryStats | null);
       onTradesChanged();
-      setLoad({ kind: 'idle' });
+      setNotices('file-warnings', warnings.map((warning) => ({ severity: 'warning', message: `${what}: ${warning}` })));
     } catch (error) {
-      setLoad({ kind: 'error', message: `${what}: ${error instanceof Error ? error.message : String(error)}` });
+      setNotices('file', [{ severity: 'error', message: `${what}: ${error instanceof Error ? error.message : String(error)}` }]);
     }
+    setLoad({ kind: 'idle' });
   };
   const open = (file: File | undefined) => {
     if (file) {
@@ -89,11 +91,6 @@ export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTrade
             {load.total !== null && ` of ${megabytes(load.total)}`}
           </span>
         </div>
-      )}
-      {load.kind === 'error' && (
-        <p className="error" role="alert">
-          {load.message}
-        </p>
       )}
 
       <div className="drop-zone" onDragOver={(event) => event.preventDefault()} onDrop={drop}>

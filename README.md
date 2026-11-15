@@ -38,6 +38,7 @@ web/                 Vite + React + TypeScript
   src/viewer/        createViewer(), <ViewerCanvas>, its <ViewControls> toolbar and <Legend>, and
                      the tooltip of the trade or bar under the pointer
   src/data/          <DataPanel>, and loading files and the Binance sample
+  src/notices.ts, src/Notices.tsx  the one list of what went wrong (see When things go wrong)
   scene.html, src/scene.ts  the image tests' scenes, one per page (scene.html?scene=hour)
   benchmark.html, src/benchmark.ts  the benchmark in the browser (see Frame times)
   scripts/           benchmark.mjs runs it in headless Chromium; chromium.mjs, Chromium's WebGPU flags
@@ -179,15 +180,20 @@ The web can't list GPUs. It can only send a `powerPreference` hint when it reque
 | What | What happens | Tested by |
 |---|---|---|
 | On the web, the GPU device is lost (driver reset, the browser's GPU process crashing) | The app creates a new engine on a new device and gives it everything again: trades, view, size, colors. Meanwhile the page says the GPU is restarting. | A browser test loses the device on purpose, then compares the pixels drawn before and after: they're identical. `ViewerAppTests` does the same offscreen, natively, to test the app's part in C++. |
+| The GPU is lost again and again | After 3 restarts in a minute, it stops trying, and says so: a bad driver shouldn't flicker forever. | `GpuSessionTests` loses it repeatedly. |
 | In a native window, the GPU device is lost | The app crashes: wgpu-native panics (see below). | Not tested: it's wgpu-native's behavior. |
-| WebGPU reports an error nothing caught (a validation error means a bug) | Logged, and the first 16 are kept. The page shows the first one in its header. | Every scene must draw with none. |
+| WebGPU reports an error nothing caught (a validation error means a bug) | Logged, and the first 16 are kept. The page shows each, counted when it repeats. Running out of GPU memory says so in those words. | Every scene must draw with none. |
 | A file has more trades than the GPU's largest buffer holds | The device is requested with the adapter's largest buffer size, often far above WebGPU's default 256 MiB, and 20 bytes per trade. Past that, loading fails with a message, and the trades on show stay. | `ViewerAppTests` caps an app at the synthetic day's trades (`Engine::Params::maxTrades`) and loads one more. `GpuDeviceTests` checks that a GPU buffer refuses to grow past the limit, and stops growing at it. |
 | A file isn't what's expected: not trades, cut off, damaged, or holding impossible numbers | It says what's wrong and on which line, briefly, even for binary files, and the trades on show stay. See [Files that aren't what's expected](#files-that-arent-whats-expected). | `Core`'s `UnexpectedDataTests` and `TradeFileTests`; `web/tests/unexpected.spec.ts` opens them in a browser. |
 | Trades are valid but odd: one trade, all the same price, amounts from tiny to enormous, times far from today | They draw, and can be zoomed, panned and pointed at, with no WebGPU errors. | `ViewerAppTests`' `UnexpectedDataTests` draws each and checks for markers; the browser test also checks the page survives. |
 | The Binance sample can't be fetched | It says so, and the trades on show stay. | A browser test fails the request. |
 | The wasm heap runs out of memory | It can grow to 4 GiB, the most a wasm32 module can address. Past that, the module stops, and the page starts a new one with the synthetic day. It says the data is too large, how much memory the viewer had, and its most. | A browser test asks for 4 GiB at once, which fails without using any. |
-| The wasm module stops for another reason (a bug) | The page starts a new module with the synthetic day, and says something went wrong. The reason goes to the console. | A browser test aborts the module. |
+| The wasm module stops or crashes for another reason (a bug) | The page starts a new module with the synthetic day, and says something went wrong. The reason goes to the console. | Browser tests abort the module, and crash it. |
+| The viewer logs an error, such as failing to upload column summaries | The page shows it. | A browser test logs some. |
+| JavaScript throws where nothing expects it | The page says so and offers Reload; the viewer keeps working if it can. If drawing the page itself fails, it shows the same instead of going blank. | Browser tests throw, reject a promise and break a render. |
 | Natively, memory runs out | It says "Out of memory" with the memory in use, without allocating, and aborts: exceptions are off. | Not tested: doctest can't test code that aborts. |
+
+**One place for problems.** On the web, everything above shows in one list under the page's header (`web/src/notices.ts`, `Notices.tsx`): errors in red, warnings in yellow. Each can be dismissed, repeats are counted, and at most 6 errors nothing expected show at once. Errors only a new page can fix offer Reload. Every `Core::Log::error` reaches the list by itself (`Core::Log::onError`), so new ones need no wiring. Natively there's only the log for now, so the ImGui panel in step 21 should show them too.
 
 ### Files that aren't what's expected
 
@@ -207,7 +213,14 @@ Reading stops at the first line it can't read, and says why. Nothing is shown fr
 
 What's in a file decides how it's read, not its name, so a gzipped file called `.csv` works. A byte order mark at the start, which some editors add, is ignored.
 
-Two things can't be told from the file. Times in other units read as a valid date near 1970: Tardis files are in microseconds, and Binance's in milliseconds or microseconds. The page shows the date, so the mistake is visible. And amounts with more than 10 decimals are rounded to 10 in totals, which matters only for assets split that finely.
+Some files load, but what's shown can't be exactly what's in them, or looks wrong. These are warnings, on the page beside the errors and in the native log, until other trades replace them (`TradeParser::getWarnings`):
+
+| The file | The warning |
+|---|---|
+| Amounts with more than 10 decimals | `2 amounts have more decimals than totals can count, so totals are rounded` |
+| Amounts too small for even that | `1 trade has an amount too small to count, adding nothing to totals` |
+| A total too large for that many decimals | `Totals are rounded to 7 decimals, because they're so large` |
+| Every trade within about 3 years of 1970 | `These trades are dated around 1970. If that's wrong, their times may be in another unit`: Tardis files are in microseconds, and Binance's in milliseconds or microseconds, and any number could be a real time. |
 
 **Losing the device natively.** wgpu-native (v29) notices a lost device only on the next call to it, and some calls then panic instead of failing: submitting work, getting a window's texture for a frame, and presenting it. A real loss, such as a driver reset, surfaces at exactly those calls, so in a native window it crashes the app whatever the app checks. Recovering is for the web: browsers turn every call on a lost device into nothing, and the engine needs no checks there. Offscreen, natively, a loss surfaces at an earlier call, so the app's restart can be tested in C++. That needs one guard, since the frame's submit comes after: everything submits through `Gpu::Context::submit()`, which drops the commands once the device is lost. `Context.hpp` declares `wgpuQueueSubmit` deprecated, so any other call fails to compile, with a message saying to use `submit()`. The engine itself never checks.
 

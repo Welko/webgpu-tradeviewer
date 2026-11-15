@@ -114,13 +114,13 @@ std::string_view describe(WGPUErrorType type)
 {
     switch (type) {
     case WGPUErrorType_Validation:
-        return "validation";
+        return "WebGPU validation error (a bug in the viewer)";
     case WGPUErrorType_OutOfMemory:
-        return "out of memory";
+        return "The GPU ran out of memory";
     case WGPUErrorType_Internal:
-        return "internal";
+        return "WebGPU internal error";
     default:
-        return "unknown";
+        return "Unknown WebGPU error";
     }
 }
 
@@ -131,7 +131,7 @@ void onUncapturedError(WGPUDevice const*, WGPUErrorType type, WGPUStringView mes
         // wgpu-native reports every call on a lost device; the loss says it all.
         return;
     }
-    auto error = std::format("WebGPU {} error: {}", describe(type), Convert::FromWgpu::stringView(message));
+    auto error = std::format("{}: {}", describe(type), Convert::FromWgpu::stringView(message));
     Core::Log::error("{}", error);
     if (health.errors.size() < Context::Health::KeptErrors) {
         health.errors.push_back(std::move(error));

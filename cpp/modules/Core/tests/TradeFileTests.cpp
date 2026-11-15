@@ -8,12 +8,13 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace {
 
 namespace fs = std::filesystem;
 
-constexpr std::string_view Sample = "timestamp,side,price,amount\n1,buy,1,1\n2,sell,2,2\n";
+constexpr std::string_view Sample = "timestamp,side,price,amount\n1575201600000000,buy,1,1\n1575201600000001,sell,2,2\n";
 
 /** A folder for one test's files, removed afterwards. */
 class TemporaryFolder
@@ -61,11 +62,23 @@ TEST_CASE("Trade files are read compressed or not, whatever they're called")
     writePlain(folder / "plain-but-named.csv.gz", Sample);
     for (const auto* name : { "plain.csv", "packed.csv.gz", "packed-but-named.csv", "plain-but-named.csv.gz" }) {
         CAPTURE(name);
-        const auto trades = Core::Data::readTradeFile(folder / name);
-        CHECK(trades);
-        if (trades) {
-            CHECK(trades->size() == 2);
+        const auto parsed = Core::Data::readTradeFile(folder / name);
+        CHECK(parsed);
+        if (parsed) {
+            CHECK(parsed->trades.size() == 2);
+            CHECK(parsed->warnings.empty());
         }
+    }
+}
+
+TEST_CASE("A trade file's warnings come with its trades")
+{
+    const TemporaryFolder folder;
+    writePlain(folder / "seconds.csv", "timestamp,side,price,amount\n1575201600,buy,1,1\n");
+    const auto parsed = Core::Data::readTradeFile(folder / "seconds.csv");
+    CHECK(parsed);
+    if (parsed) {
+        CHECK(parsed->warnings.size() == 1);
     }
 }
 
@@ -73,9 +86,9 @@ TEST_CASE("A trade file that can't be read says so, and which")
 {
     const TemporaryFolder folder;
     const auto errorOf = [](const fs::path& path) {
-        const auto trades = Core::Data::readTradeFile(path);
-        CHECK_FALSE(trades);
-        return trades ? std::string() : trades.error();
+        const auto parsed = Core::Data::readTradeFile(path);
+        CHECK_FALSE(parsed);
+        return parsed ? std::string() : parsed.error();
     };
 
     CHECK(errorOf(folder / "missing.csv").find("missing.csv") != std::string::npos);

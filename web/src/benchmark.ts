@@ -11,7 +11,7 @@
  * checks can tell apart and GPU times that say nothing about real GPUs.
  * Commit 3f8e4be measured them, should CI ever get GPUs.
  */
-import { createViewer, type Viewer } from './viewer/viewerModule';
+import { createViewer, type LoadResult, type Viewer } from './viewer/viewerModule';
 
 // Task 3's viewport, at a pixel ratio of 1, as natively.
 const WidthPx = 1600;
@@ -110,7 +110,7 @@ async function loadTrades(viewer: Viewer, url: string): Promise<{ loadMs: number
     if (done) {
       break;
     }
-    const error = viewer.appendChunk(value);
+    const { error } = viewer.appendChunk(value) as LoadResult;
     if (error) {
       throw new Error(error);
     }
@@ -119,7 +119,7 @@ async function loadTrades(viewer: Viewer, url: string): Promise<{ loadMs: number
 
   // Finishing the parse, then the derived data and the upload.
   const setStart = performance.now();
-  const error = viewer.finishLoad();
+  const { error } = viewer.finishLoad() as LoadResult;
   if (error) {
     throw new Error(error);
   }

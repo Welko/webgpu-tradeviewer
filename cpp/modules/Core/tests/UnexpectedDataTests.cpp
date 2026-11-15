@@ -12,6 +12,7 @@
 #include <format>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace {
 
@@ -29,7 +30,7 @@ std::expected<Trades, std::string> parse(std::string_view text, std::size_t chun
             return std::unexpected(appended.error());
         }
     }
-    return parser.finish();
+    return parser.finish().transform([](Core::Data::TradeParser::Finished&& parsed) { return std::move(parsed.trades); });
 }
 
 std::string errorOf(std::string_view text)
@@ -121,6 +122,38 @@ TEST_CASE("More decimals than can be used are capped, for totals and for showing
         CHECK(trades->instrument.amountDecimals == Core::Data::Instrument::MaxDecimals);
         CHECK(trades->instrument.priceDecimals <= 20);
     }
+}
+
+TEST_CASE("What makes totals or dates look wrong is warned about, and nothing else")
+{
+    const auto warningsOf = [](std::string_view text) {
+        TradeParser parser;
+        CHECK(parser.append(text));
+        auto parsed = parser.finish();
+        CHECK(parsed);
+        return parsed ? std::move(parsed->warnings) : std::vector<std::string>{};
+    };
+    using Warnings = std::vector<std::string>;
+    const auto noon = std::string("1575201600000000");
+
+    CHECK(warningsOf(row(noon, "buy", "7500.5", "1.25")).empty());
+    CHECK(warningsOf(row(noon, "buy", "7500.5", "0.1234567891")).empty());
+    CHECK(warningsOf(row(noon, "buy", "7500.5", "0.12345678912"))
+          == Warnings{ "1 amount has more decimals than totals can count, so totals are rounded" });
+    CHECK(warningsOf(row(noon, "buy", "7500.5", "1e-300"))
+          == Warnings{ "1 amount has more decimals than totals can count, so totals are rounded",
+                       "1 trade has an amount too small to count, adding nothing to totals" });
+    CHECK(warningsOf(row("1", "buy", "1", "1"))
+          == Warnings{ "These trades are dated around 1970. If that's wrong, their times may be in another unit" });
+    // A time in seconds, as in another file's format.
+    CHECK(warningsOf(row("1575201600", "buy", "1", "1")).size() == 1);
+    CHECK(warningsOf(std::format("{}{},buy,1,1\n1,buy,1,1\n", Header, noon)).empty());
+
+    std::string large(Header);
+    for (int i = 0; i < 10; ++i) {
+        large += std::format("{},buy,1,5000000000.1234567891\n", noon);
+    }
+    CHECK(warningsOf(large) == Warnings{ "Totals are rounded to 7 decimals, because they're so large" });
 }
 
 TEST_CASE("A byte order mark, as some editors add, is ignored")

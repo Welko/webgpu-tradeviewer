@@ -45,6 +45,14 @@ export interface Instrument {
   priceDecimals: number;
 }
 
+/** What Viewer.appendChunk() and Viewer.finishLoad() return: how loading went. */
+export interface LoadResult {
+  /** Why it failed, or null. On failure the trades on show stay. */
+  error: string | null;
+  /** What about the trades makes what's shown differ from the file, or look wrong. Only from finishLoad(). */
+  warnings: string[];
+}
+
 /** What Viewer.pickedColumn() returns: the column summary under the pointer. */
 export interface PickedColumn {
   /** The column's time range in microseconds since 1970, UTC, start inclusive and end exclusive. */
@@ -176,20 +184,49 @@ export interface FrameStats {
 // One wasm instance for the page; each component creates its own Viewer in it.
 let modulePromise: Promise<MainModule> | null = null;
 const abortListeners = new Set<(reason: string) => void>();
+let watchingForCrashes = false;
+
+/** The module can't be trusted any more: tells everyone, and the next loadModule() loads a new one. */
+function stopModule(reason: string) {
+  modulePromise = null;
+  for (const listener of abortListeners) {
+    listener(reason);
+  }
+}
+
+/**
+ * A crash inside the wasm code, such as a memory bug, doesn't abort the
+ * module: it throws into whichever JavaScript called it, and nothing else
+ * happens. Aborts throw too, but they've said so already.
+ */
+function watchForCrashes() {
+  if (watchingForCrashes) {
+    return;
+  }
+  watchingForCrashes = true;
+  const check = (error: unknown) => {
+    if (error instanceof WebAssembly.RuntimeError && !error.message.startsWith('Aborted')) {
+      stopModule(error.message);
+    }
+  };
+  window.addEventListener('error', (event) => check(event.error));
+  window.addEventListener('unhandledrejection', (event) => check(event.reason));
+}
 
 /**
  * The wasm module, loaded on first use. After it aborts (out of memory, or a
- * bug), every Viewer in it is dead, and the next call loads a new one.
+ * bug) or crashes, every Viewer in it is dead, and the next call loads a new one.
  */
 export function loadModule(): Promise<MainModule> {
+  watchForCrashes();
   modulePromise ??= createViewerModule({
     onAbort: (what: unknown) => {
-      modulePromise = null;
-      const reason = String(what ?? 'unknown reason').replace(/^Aborted\((.*)\)$/s, '$1') || 'unknown reason';
-      for (const listener of abortListeners) {
-        listener(reason);
-      }
+      stopModule(String(what ?? 'unknown reason').replace(/^Aborted\((.*)\)$/s, '$1') || 'unknown reason');
     },
+  }).catch((error: unknown) => {
+    // So that trying again downloads it again.
+    modulePromise = null;
+    throw new Error(`The viewer couldn't load: ${error instanceof Error ? error.message : String(error)}`);
   });
   return modulePromise;
 }
@@ -203,14 +240,18 @@ export function onModuleAbort(listener: (reason: string) => void): () => void {
 /**
  * Creates a Viewer drawing into the canvas matched by `selector`.
  * Rejects with a readable message if WebGPU is unavailable.
- * The caller owns the result and must call `delete()` on it.
+ * The caller owns the result and must call `delete()` on it. `onError`, if
+ * given, hears every error the viewer logs from then on.
  */
-export async function createViewer(selector: string, powerPreference: PowerPreference): Promise<Viewer> {
+export async function createViewer(selector: string, powerPreference: PowerPreference, onError?: (message: string) => void): Promise<Viewer> {
   if (!('gpu' in navigator)) {
     throw new Error('WebGPU is not available in this browser. Try a recent Chrome, Edge or Firefox.');
   }
 
   const module = await loadModule();
+  if (onError) {
+    module.setErrorListener(onError);
+  }
   const viewer = new module.Viewer();
 
   try {

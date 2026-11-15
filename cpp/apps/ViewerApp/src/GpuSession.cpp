@@ -2,9 +2,19 @@
 
 #include "Core/Log.hpp"
 
+#include <format>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace Viewer {
+
+namespace {
+
+constexpr std::size_t MaxRestartsPerWindow = 3;
+constexpr double RestartWindowMs = 60'000.0;
+
+} // namespace
 
 GpuSession::GpuSession(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market::Engine::Params params, SetUpCallback onSetUp) noexcept
     : mEngine(std::move(engine)),
@@ -15,14 +25,23 @@ GpuSession::GpuSession(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market:
     setUp();
 }
 
-void GpuSession::restartIfLost()
+void GpuSession::restartIfLost(double nowMs)
 {
     if (!mEngine || !mEngine->getHealth().lost) {
         return;
     }
-    Core::Log::warn("Restarting the GPU");
     // The old engine goes first: a window or canvas takes one surface at a time.
     mEngine.reset();
+    std::erase_if(mRestartTimesMs, [&](double timeMs) { return nowMs - timeMs >= RestartWindowMs; });
+    if (mRestartTimesMs.size() >= MaxRestartsPerWindow) {
+        const std::string reason = std::format("The GPU was lost {} times in a minute, so the viewer stopped restarting it",
+                                               mRestartTimesMs.size() + 1);
+        Core::Log::error("{}", reason);
+        mGpu = Failed{ .reason = reason };
+        return;
+    }
+    mRestartTimesMs.push_back(nowMs);
+    Core::Log::warn("Restarting the GPU");
     mGpu = Restarting{};
     // Natively, this calls back before returning; on the web, later.
     Gpu::Market::Engine::create(mParams, [this, alive = std::weak_ptr(mAlive)](Gpu::Market::Engine::CreatedResult result) {

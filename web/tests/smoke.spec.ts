@@ -135,6 +135,45 @@ test('the wheel zooms, dragging pans, and the buttons jump back', async ({ page 
   expect(errors).toEqual([]);
 });
 
+test('axis labels never pile up, however far it zooms, even when a label repeats across days', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/');
+  await waitUntilReady(page);
+  // Few trades: drawing the whole synthetic day takes SwiftShader many seconds.
+  await page.locator('input[type=file]').setInputFiles({ name: 'trades.csv.gz', mimeType: 'application/gzip', buffer: TwoTrades });
+  await expect(page.getByTestId('trade-count')).toHaveText('2');
+  const box = (await page.locator('canvas').boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+  const checkLabels = async () => {
+    for (const testId of ['time-label', 'price-label']) {
+      const labels = await page.getByTestId(testId).evaluateAll((elements) =>
+        elements.map((element) => {
+          const { left, right, top, bottom } = element.getBoundingClientRect();
+          return { text: element.textContent, left, right, top, bottom };
+        }),
+      );
+      // Ticks are at least 120 CSS pixels apart across, and 50 up.
+      expect(labels.length).toBeLessThanOrEqual(Math.ceil(Math.max(box.width, box.height) / 50) + 1);
+      for (const [i, a] of labels.entries()) {
+        for (const b of labels.slice(i + 1)) {
+          const apart = a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top;
+          expect(apart, `${testId} "${a.text}" overlaps "${b.text}"`).toBe(true);
+        }
+      }
+    }
+  };
+  // In, then out to days on end, where "12:00" comes up again and again.
+  for (const [delta, steps] of [[-120, 45], [120, 90], [-40, 60]]) {
+    for (let step = 0; step < steps; step++) {
+      await page.mouse.wheel(0, delta);
+      await page.evaluate(() => new Promise(requestAnimationFrame));
+      await checkLabels();
+    }
+  }
+  expect(errors).toEqual([]);
+});
+
 test('the stylesheet sets the plot\'s colors, and the legend follows', async ({ page }) => {
   const errors = collectErrors(page);
   await instrument(page);
@@ -361,7 +400,7 @@ test('after losing the GPU, the viewer restarts it and draws the same picture', 
   await expect
     .poll(() => page.evaluate(() => window.viewer!.gpuHealth()), { timeout: 15_000 })
     .toMatchObject({ restarting: false, restarts: 1, failure: null, errorCount: 0 });
-  await expect(page.locator('[data-status]')).not.toHaveClass(/error/);
+  await expect(page.getByTestId('notices')).toHaveCount(0);
   expect(await canvas.screenshot()).toEqual(before);
   // Warnings, ours and the browser's, say it was lost; errors would be news.
   expect(errors.filter((error) => !/^WARNING|lost|destroyed/i.test(error))).toEqual([]);
@@ -379,10 +418,9 @@ test('after the wasm module stops, the viewer starts over and says why', async (
       // The abort, thrown into the caller.
     }
   });
-  const status = page.locator('[data-status]');
   // A bug's details are for the console, not the page.
-  await expect(status).toHaveText(/^Something went wrong, and the viewer started over with the demo data/, { timeout: 30_000 });
-  await expect(status).toHaveAttribute('data-status', 'ready');
+  await expect(page.getByRole('alert')).toHaveText(/^Something went wrong, and the viewer started over with the demo data/, { timeout: 30_000 });
+  await expect(page.locator('[data-status]')).toHaveAttribute('data-status', 'ready');
   // A new module, with the synthetic day again.
   await expect.poll(() => page.evaluate(() => window.viewer?.tradeStats().count)).toBe(first);
 });
@@ -400,7 +438,7 @@ test('running out of memory says so, with sizes, and the viewer starts over', as
     }
   });
   const status = page.locator('[data-status]');
-  await expect(status).toHaveText(
+  await expect(page.getByRole('alert')).toHaveText(
     /^This data is too large for the page\. Out of memory: the viewer had \d+ MiB, and needed more than the 40\d\d MiB a page can have\. The viewer started over/,
     { timeout: 30_000 },
   );

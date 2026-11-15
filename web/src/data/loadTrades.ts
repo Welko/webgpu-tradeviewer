@@ -1,4 +1,4 @@
-import type { Viewer } from '../viewer/viewerModule';
+import type { LoadResult, Viewer } from '../viewer/viewerModule';
 
 /** Binance's public copy of the brief's day, downloaded by the browser straight from Binance. */
 export const BinanceSampleUrl = 'https://data.binance.vision/data/spot/daily/trades/BTCUSDT/BTCUSDT-trades-2019-12-01.zip';
@@ -11,8 +11,9 @@ export type OnProgress = (loaded: number, total: number | null) => void;
 /**
  * Loads a trades file the user picked or dropped: CSV, gzipped CSV or a zip
  * holding one. What the file holds decides how it's read, not what it's called.
+ * Its warnings, if it loads; why not, as an Error, if it doesn't.
  */
-export async function loadFile(viewer: Viewer, file: File, onProgress: OnProgress): Promise<void> {
+export async function loadFile(viewer: Viewer, file: File, onProgress: OnProgress): Promise<string[]> {
   const start = new Uint8Array(await file.slice(0, 4).arrayBuffer());
   if (startsWith(start, [0x50, 0x4b])) {
     const zip = await readAll(file.stream().pipeThrough(counting(file.size, onProgress)));
@@ -29,8 +30,8 @@ function startsWith(bytes: Uint8Array, start: number[]): boolean {
   return start.every((byte, i) => bytes[i] === byte);
 }
 
-/** Downloads and loads the Binance sample. */
-export async function loadBinanceSample(viewer: Viewer, onProgress: OnProgress): Promise<void> {
+/** Downloads and loads the Binance sample. Its warnings, as loadFile() gives them. */
+export async function loadBinanceSample(viewer: Viewer, onProgress: OnProgress): Promise<string[]> {
   const response = await fetch(BinanceSampleUrl).catch(() => {
     throw new Error("Can't reach Binance's server. Check your connection, or open a file instead.");
   });
@@ -45,8 +46,9 @@ export async function loadBinanceSample(viewer: Viewer, onProgress: OnProgress):
 /**
  * Feeds the CSV text in `stream` to the viewer's parser, chunk by chunk.
  * `fileName` names the assets when the file doesn't, as Binance's don't.
+ * The file's warnings; why it failed, as an Error.
  */
-async function parse(viewer: Viewer, stream: ReadableStream<Bytes>, fileName: string): Promise<void> {
+async function parse(viewer: Viewer, stream: ReadableStream<Bytes>, fileName: string): Promise<string[]> {
   viewer.beginLoad(fileName);
   const reader = stream.getReader();
   for (;;) {
@@ -57,16 +59,17 @@ async function parse(viewer: Viewer, stream: ReadableStream<Bytes>, fileName: st
     if (done) {
       break;
     }
-    const error = viewer.appendChunk(value);
+    const { error } = viewer.appendChunk(value) as LoadResult;
     if (error) {
       await reader.cancel();
       throw new Error(error);
     }
   }
-  const error = viewer.finishLoad();
+  const { error, warnings } = viewer.finishLoad() as LoadResult;
   if (error) {
     throw new Error(error);
   }
+  return warnings;
 }
 
 /** Passes bytes through unchanged, reporting how many went by. */

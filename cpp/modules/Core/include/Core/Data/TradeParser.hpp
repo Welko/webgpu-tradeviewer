@@ -8,6 +8,7 @@
 #include <expected>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace Core::Data {
 
@@ -31,14 +32,22 @@ namespace Core::Data {
 class TradeParser
 {
 public:
+    /** A file's trades, and what about them makes what's shown differ from the file, or look wrong. */
+    struct Finished
+    {
+        Trades trades;
+        /** For the user, without being a reason to refuse the file. */
+        std::vector<std::string> warnings;
+    };
+
     /** `fileName` names the assets when the file doesn't, as Binance's don't: BTCUSDT-trades-2019-12-01.csv. */
     explicit TradeParser(std::string_view fileName = {});
 
     /** Parses each complete line of `chunk`; a line cut off at its end waits for the next chunk. */
     std::expected<void, std::string> append(std::string_view chunk);
 
-    /** Parses the last line, if it had no newline, and hands over the trades in time order. */
-    std::expected<Trades, std::string> finish();
+    /** Parses the last line, if it had no newline, and hands over the trades in time order, with their warnings. */
+    std::expected<Finished, std::string> finish();
 
     /** The memory held so far: the trades read, with room to grow, and the line waiting for its end. */
     [[nodiscard]] std::size_t getBytes() const { return mTrades.getBytes() + mPartialLine.capacity(); }
@@ -74,6 +83,12 @@ private:
     std::size_t mLine = 0;  // lines read so far, for errors
     bool mSorted = true;
     Trades mTrades;
+
+    struct
+    {
+        std::size_t numFineAmounts = 0;  // with more decimals than totals can count
+        int mostAmountDecimals = 0;  // before finish() lowers them, if the total needs it
+    } mInfo;
 };
 
 } // namespace Core::Data

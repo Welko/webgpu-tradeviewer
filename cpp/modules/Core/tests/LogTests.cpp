@@ -12,6 +12,19 @@ TEST_CASE("Log writes the level, then the formatted message")
     CHECK(out.str() == "INFO   : 42 trades in 1.5 ms\n");
 }
 
+TEST_CASE("Errors logged reach whoever listens, until they stop")
+{
+    std::string heard;
+    Core::Log::onError = [&](const std::string& message) { heard = message; };
+    Core::Log::error("{} trades lost", 3);
+    CHECK(heard == "3 trades lost");
+    Core::Log::warn("not an error");
+    CHECK(heard == "3 trades lost");
+    Core::Log::onError = nullptr;
+    Core::Log::error("no one listens");
+    CHECK(heard == "3 trades lost");
+}
+
 TEST_CASE("Log accepts lvalue arguments and escaped braces")
 {
     std::ostringstream out;

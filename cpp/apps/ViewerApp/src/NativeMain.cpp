@@ -381,12 +381,15 @@ int main(int argc, char** argv)
 
     std::optional<Core::Data::Trades> loaded;
     if (const char* path = getTradesPath(argc, argv)) {
-        auto trades = Core::Data::readTradeFile(path);
-        if (!trades) {
-            Core::Log::error("{}", trades.error());
+        auto parsed = Core::Data::readTradeFile(path);
+        if (!parsed) {
+            Core::Log::error("{}", parsed.error());
             return 1;
         }
-        loaded = std::move(*trades);
+        for (const auto& warning : parsed->warnings) {
+            Core::Log::warn("{}", warning);
+        }
+        loaded = std::move(parsed->trades);
     }
 
     if (!glfwInit()) {

@@ -31,9 +31,10 @@ export function AxisLabels({ axes, canvasWidthCssPx, canvasHeightCssPx }: AxisLa
   return (
     <div className="axis-labels" aria-hidden="true">
       <div className="plot-frame" style={{ width: plotWidthCssPx, height: plotHeightCssPx }} />
-      {axes.times.map((tick) => (
+      {/* By position: a label can come up twice, such as 12:00 on two days, and React needs keys to be unique. */}
+      {axes.times.map((tick, index) => (
         <span
-          key={`time ${tick.label}`}
+          key={index}
           className="time-label"
           data-testid="time-label"
           style={{
@@ -45,9 +46,9 @@ export function AxisLabels({ axes, canvasWidthCssPx, canvasHeightCssPx }: AxisLa
           {tick.label}
         </span>
       ))}
-      {axes.prices.map((tick) => (
+      {axes.prices.map((tick, index) => (
         <span
-          key={`price ${tick.label}`}
+          key={index}
           className="price-label"
           data-testid="price-label"
           style={{ left: plotWidthCssPx + 6, top: (1 - tick.fraction) * plotHeightCssPx }}
