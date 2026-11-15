@@ -86,6 +86,7 @@ struct FrameStats
         NotStarted,     ///< The profiler's beginFrame() wasn't called.
         ReadbackFailed, ///< The timestamps couldn't be read back.
         Overflow,       ///< Too many frames were waiting for their times.
+        NotSampled,     ///< Profiling times only some frames on the GPU, and not this one.
     };
 
     /** Which frame this is, counting from 1. */

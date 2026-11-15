@@ -83,12 +83,12 @@ npm run dev        # builds the wasm, then starts Vite on http://localhost:5173
 
 Work happens on `dev`; `main` gets what's ready to publish. `.github/workflows/ci.yml` runs on every push to either (and manually from the Actions tab):
 
-1. **Native:** builds with the `native` preset and runs the tests with `ctest`, then again with profiling compiled out. It draws the image tests' scenes through a window (on Xvfb) and opens a real day's file. It then builds and tests the `native-release` preset, a single binary with wgpu-native linked in statically, and packages it with the licenses of what's linked in. Along the way it checks the visible counts (see [Viewing trades](#viewing-trades)) and runs `BenchmarkApp` on Mesa's lavapipe; both tables appear on the run's page, signed in to GitHub, and the benchmark is also kept as the `benchmark-native` artifact. The benchmark's memory and times are checked against the baseline (see [Memory and speed between commits](#memory-and-speed-between-commits)): a change in memory, or a big change in speed either way, fails the job.
+1. **Native:** builds with the `native` preset and runs the tests with `ctest`, then again with profiling and telemetry compiled out. It draws the image tests' scenes through a window (on Xvfb) and opens a real day's file. It then builds and tests the `native-release` preset, a single binary with wgpu-native linked in statically, and packages it with the licenses of what's linked in. Along the way it checks the visible counts (see [Viewing trades](#viewing-trades)) and runs `BenchmarkApp` on Mesa's lavapipe; both tables appear on the run's page, signed in to GitHub, and the benchmark is also kept as the `benchmark-native` artifact. The benchmark's memory and times are checked against the baseline (see [Memory and speed between commits](#memory-and-speed-between-commits)): a change in memory, or a big change in speed either way, fails the job.
 2. **Web:** installs Emscripten, runs `npm ci` and `npm run build`, which builds the wasm module, type-checks and writes `docs/`. It then runs the same tests compiled to wasm in Node, the site's smoke tests in Chromium, and the image tests' scenes in Chromium and Firefox. Last, it runs the benchmark in Chromium (`benchmark.html`, see [Frame times](#frame-times)), kept as the `benchmark-web` artifact, and checks it against the baseline as the native job does.
 3. **Compare renderings:** compares the scenes as native, Chromium and Firefox drew them, with each other and with the reference renderings (see [Image tests](#image-tests)). The numbers appear on the run's page, with a link to the report with the pictures (the `rendering-comparison.html` artifact, which opens in the browser).
 4. **On `main` only, if everything passes:** publishes `docs/` to GitHub Pages, with the rendering comparison at `ci/renderings/`, and replaces the [`latest` release](../../releases/latest) with the new Linux binary. If anything fails, both keep their previous version.
 
-One-time setup: in the repository on GitHub, open **Settings → Pages** and set **Source** to **GitHub Actions**.
+One-time setup: in the repository on GitHub, open **Settings → Pages** and set **Source** to **GitHub Actions**. For telemetry on the published site (see [Telemetry](#telemetry)), add the PostHog project's key as the repository variable `POSTHOG_KEY` (**Settings → Secrets and variables → Actions → Variables**); without it the site never asks.
 
 ## Native
 
@@ -227,6 +227,19 @@ Some files load, but what's shown can't be exactly what's in them, or looks wron
 **Test hooks.** Tests that lose the GPU create the engine themselves and hand it to the app, keeping a pointer to it. The browser tests need theirs in the published build, which is what they run against, so they're grouped apart from the viewer: `window.viewerTesting` (`loseGpu`, `crash`, `exhaustMemory`, bound as `Testing` in `WebMain.cpp`). Each harms only the page that calls it.
 
 **Memory.** The app counts the memory its large parts hold, room to grow included. Each trade takes about 47 bytes: 25 for the trade, 20 for running totals and 2 for the price tree. On the GPU it takes 20. Natively the app logs a breakdown after loading, with the process's resident memory. The page shows the same breakdown in the data panel, under "Memory", with the wasm heap. The derived data (running totals, price tree, column summaries) adds about 89% to the trades. Tests check these numbers exactly, and that 10 rounds of zooming, panning and resizing leave them as they were. Trades are copied to vectors of exactly their size after loading, since reading leaves up to half of their room unused. `shrink_to_fit()` would do nothing here: libstdc++ skips it without exceptions.
+
+## Telemetry
+
+The published site can send anonymous usage statistics, only if the user turns them on (the checkbox under the data panel, off by default and remembered in the browser). They show which GPUs and browsers the viewer runs on, how fast frames are, how people zoom, and what goes wrong:
+
+- `session_started`: browser, system, screen size class, GPU vendor and name, WebGPU backend.
+- `data_loaded` and `data_load_failed`: where the trades came from (a file or Binance), their count, size, time span and load time, or the stage that failed.
+- `view_summary` and `perf_summary`, every minute and when the page closes: how many zooms, pans and picks, how much time the view spans, frame times (CPU every frame, GPU on a random 1 in 30), GPU memory.
+- `error`: the first 10 errors of a session, cut to 200 characters.
+
+Never the trades, prices, file names, IP addresses (PostHog's project is set to discard them) or anything that lasts beyond the page: each page load is a new random session, with no cookies or storage. Events go to PostHog's EU cloud; `posthog-js` isn't even downloaded until the user agrees.
+
+The viewer builds the events (`Viewer::Telemetry`, on `Core::Telemetry`), so the native build could send them too; the page adds its own errors (`web/src/telemetry.ts`). Builds without a key (`VITE_POSTHOG_KEY`), such as local ones, CI's tests and forks, show no checkbox and can't send anything. `-DTRADEVIEWER_TELEMETRY=OFF` compiles it out of the C++ altogether. The browser tests (`tests/telemetry.spec.ts`) keep the events in the page instead of sending them.
 
 ## Data
 

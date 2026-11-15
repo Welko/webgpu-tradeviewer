@@ -8,6 +8,7 @@ viewer_add_test(CoreTests
     RangeTests.cpp
     RingQueueTests.cpp
     SyntheticTests.cpp
+    TelemetryTests.cpp
     TradeParserTests.cpp
     TradesTests.cpp
     UnexpectedDataTests.cpp

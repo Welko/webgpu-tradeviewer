@@ -15,6 +15,7 @@
 #include "Viewer/Layout.hpp"
 #include "Viewer/Pointer.hpp"
 #include "Viewer/Summaries.hpp"
+#include "Viewer/Telemetry.hpp"
 #include "Viewer/View.hpp"
 
 #include <cstddef>
@@ -23,6 +24,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace Viewer {
 
@@ -114,6 +116,11 @@ public:
     /** Loses the GPU device, as a driver reset would, for tests of what follows. False while there's none to lose. */
     [[nodiscard]] bool loseGpu();
 
+    // Telemetry
+    [[nodiscard]] const Telemetry& getTelemetry() const { return mTelemetry; }
+    void setTelemetry(std::unique_ptr<Core::Telemetry::Sink> sink, std::vector<Core::Telemetry::Property> environment = {});
+    void flushTelemetry();
+
 private:
     App(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market::Engine::Params params) noexcept;
 
@@ -126,6 +133,7 @@ private:
     // Engine
     [[nodiscard]] Gpu::Market::Engine::Settings getEngineSettings() const;
     void syncSettings();
+    void syncProfiling();
     [[nodiscard]] std::expected<void, std::string> setUpEngine(Gpu::Market::Engine& engine);
 
     Core::Data::PreprocessedTrades mData;
@@ -136,6 +144,9 @@ private:
     Gpu::Market::Type::Theme mTheme{};
     Gpu::Market::Style::MarkerSizing mMarkerSizing{};
     Pointer mPointer;
+    Telemetry mTelemetry;
+    bool mProfiling = false;  // asked for every frame, not only telemetry's sample
+    Gpu::Market::Engine::StatsCallback mOnStats;
     GpuSession mGpu;
 };
 

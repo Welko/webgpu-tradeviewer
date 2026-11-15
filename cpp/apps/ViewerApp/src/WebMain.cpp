@@ -18,7 +18,9 @@
 #include <new>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 /*
@@ -188,6 +190,8 @@ const char* toWeb(Gpu::Type::FrameStats::UntimedReason reason)
         return "readbackFailed";
     case Reason::Overflow:
         return "overflow";
+    case Reason::NotSampled:
+        return "notSampled";
     }
     return "undefined";
 }
@@ -232,6 +236,59 @@ val toWeb(const Gpu::Type::FrameStats& stats)
     object.set("gpuBytes", static_cast<double>(stats.gpuBytes));
     return object;
 }
+
+/** Telemetry's properties as a JavaScript object. */
+val toWeb(const std::vector<Core::Telemetry::Property>& properties)
+{
+    val object = val::object();
+    for (const auto& property : properties) {
+        std::visit(
+            [&](const auto& value) {
+                using T = std::decay_t<decltype(value)>;
+                if constexpr (std::is_same_v<T, std::int64_t>) {
+                    object.set(property.name, static_cast<double>(value));
+                } else {
+                    object.set(property.name, value);
+                }
+            },
+            property.value);
+    }
+    return object;
+}
+
+/** A JavaScript object of numbers, strings and booleans as telemetry's properties. Anything else is left out. */
+std::vector<Core::Telemetry::Property> toProperties(const val& object)
+{
+    std::vector<Core::Telemetry::Property> properties;
+    const val keys = val::global("Object").call<val>("keys", object);
+    for (std::size_t i = 0; i < keys["length"].as<std::size_t>(); ++i) {
+        const auto name = keys[i].as<std::string>();
+        const val value = object[name];
+        const auto type = value.typeOf().as<std::string>();
+        if (type == "number") {
+            properties.push_back({ .name = name, .value = value.as<double>() });
+        } else if (type == "string") {
+            properties.push_back({ .name = name, .value = value.as<std::string>() });
+        } else if (type == "boolean") {
+            properties.push_back({ .name = name, .value = value.as<bool>() });
+        }
+    }
+    return properties;
+}
+
+/** Hands telemetry's events to JavaScript, which sends them on: `onEvent(name, properties)`. */
+class WebSink final : public Core::Telemetry::Sink
+{
+public:
+    explicit WebSink(val onEvent)
+        : mOnEvent(std::move(onEvent))
+    {}
+
+    void send(const Core::Telemetry::Event& event) override { mOnEvent(event.name, toWeb(event.properties)); }
+
+private:
+    val mOnEvent;
+};
 
 /** How loading went, as { error, warnings }: a message or null, and an array of messages. */
 val toLoadResult(const std::optional<std::string>& error, const std::vector<std::string>& warnings = {})
@@ -621,6 +678,37 @@ public:
     }
 
     /**
+     * Starts sending anonymous telemetry, once the user agreed: each event as
+     * `onEvent(name, properties)`, the first with `environment` (browser,
+     * screen...) added. Null stops at once.
+     */
+    void setTelemetry(val onEvent, const val& environment)
+    {
+        if (!*mApp) {
+            return;
+        }
+        if (onEvent.isNull() || onEvent.isUndefined()) {
+            (*mApp)->setTelemetry(nullptr);
+            return;
+        }
+        (*mApp)->setTelemetry(std::make_unique<WebSink>(std::move(onEvent)), toProperties(environment));
+    }
+
+    /** Sends telemetry's summary of what happened so far, such as when the page closes. */
+    void flushTelemetry()
+    {
+        if (*mApp) {
+            (*mApp)->flushTelemetry();
+        }
+    }
+
+    /** What every telemetry event carries, for events the page sends itself, such as errors. Null until init() succeeds. */
+    val getTelemetryProperties() const
+    {
+        return *mApp ? toWeb((*mApp)->getTelemetry().getCommonProperties()) : val::null();
+    }
+
+    /**
      * Starts reading a trades file, which appendChunk() then receives piece
      * by piece. Its name gives the assets when the file doesn't, as
      * Binance's don't: BTCUSDT-trades-2019-12-01.zip.
@@ -811,6 +899,9 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("setPixelRatio", &WebViewer::setPixelRatio)
         .function("tradeStats", &WebViewer::getTradeStats)
         .function("instrument", &WebViewer::getInstrument)
+        .function("setTelemetry", &WebViewer::setTelemetry)
+        .function("flushTelemetry", &WebViewer::flushTelemetry)
+        .function("telemetryProperties", &WebViewer::getTelemetryProperties)
         .function("beginLoad", &WebViewer::beginLoad)
         .function("appendChunk", &WebViewer::appendChunk)
         .function("finishLoad", &WebViewer::finishLoad)

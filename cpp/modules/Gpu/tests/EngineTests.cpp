@@ -575,7 +575,7 @@ TEST_CASE("Profiling reports CPU times and the GPU time of each pass")
     }
     std::vector<FrameStats> reported;
     recordStats(*engine, reported);
-    engine->setProfiling(true);
+    engine->setProfiling(Engine::ProfilingOn{});
     engine->render();
     if (!waitForStats(*engine, reported, 1)) {
         return;
@@ -605,9 +605,9 @@ TEST_CASE("Each frame is reported once, in order, with times only if it was prof
     recordStats(*engine, reported);
 
     engine->render();
-    engine->setProfiling(true);
+    engine->setProfiling(Engine::ProfilingOn{});
     engine->render();
-    engine->setProfiling(false);
+    engine->setProfiling(Engine::ProfilingOff{});
     // Untimed, but still reported after frame 2, whose GPU times are on their way.
     engine->render();
     if (!waitForStats(*engine, reported, 3)) {
@@ -622,6 +622,35 @@ TEST_CASE("Each frame is reported once, in order, with times only if it was prof
     CHECK(reported[1].gpu.has_value() == Core::Profiling::Compiled);
     CHECK_FALSE(reported[2].cpu);
     CHECK(reported[2].gpu.error_or({}) == UntimedReason::ProfilingOff);
+}
+
+TEST_CASE("Profiling a share of frames on the GPU times every frame on the CPU, and says which it left out")
+{
+    if (!Core::Profiling::Compiled) {
+        return;
+    }
+    const auto engine = createOffscreen(16, 16);
+    if (!engine) {
+        return;
+    }
+    std::vector<FrameStats> reported;
+    recordStats(*engine, reported);
+
+    // None, then all of them.
+    engine->setProfiling(Engine::ProfilingOn{ .gpuTimingProbability = 0.0 });
+    engine->render();
+    engine->render();
+    engine->setProfiling(Engine::ProfilingOn{ .gpuTimingProbability = 1.0 });
+    engine->render();
+    if (!waitForStats(*engine, reported, 3)) {
+        return;
+    }
+    for (const auto& stats : reported) {
+        CHECK(stats.cpu);
+    }
+    CHECK(reported[0].gpu.error_or({}) == UntimedReason::NotSampled);
+    CHECK(reported[1].gpu.error_or({}) == UntimedReason::NotSampled);
+    CHECK(reported[2].gpu.has_value());
 }
 
 TEST_CASE("An offscreen target needs a size")

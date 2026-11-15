@@ -1,4 +1,5 @@
-import type { LoadResult, Viewer } from '../viewer/viewerModule';
+import { reportDataLoaded, reportDataLoadFailed } from '../telemetry';
+import type { LoadResult, TradeStats, Viewer } from '../viewer/viewerModule';
 
 /** Binance's public copy of the brief's day, downloaded by the browser straight from Binance. */
 export const BinanceSampleUrl = 'https://data.binance.vision/data/spot/daily/trades/BTCUSDT/BTCUSDT-trades-2019-12-01.zip';
@@ -17,13 +18,13 @@ export async function loadFile(viewer: Viewer, file: File, onProgress: OnProgres
   const start = new Uint8Array(await file.slice(0, 4).arrayBuffer());
   if (startsWith(start, [0x50, 0x4b])) {
     const zip = await readAll(file.stream().pipeThrough(counting(file.size, onProgress)));
-    return parse(viewer, unzipFirstFile(zip), file.name);
+    return parse(viewer, unzip(zip, 'file'), file.name, 'file');
   }
   let stream = file.stream().pipeThrough(counting(file.size, onProgress));
   if (startsWith(start, [0x1f, 0x8b])) {
     stream = stream.pipeThrough(new DecompressionStream('gzip'));
   }
-  return parse(viewer, stream, file.name);
+  return parse(viewer, stream, file.name, 'file');
 }
 
 function startsWith(bytes: Uint8Array, start: number[]): boolean {
@@ -33,42 +34,54 @@ function startsWith(bytes: Uint8Array, start: number[]): boolean {
 /** Downloads and loads the Binance sample. Its warnings, as loadFile() gives them. */
 export async function loadBinanceSample(viewer: Viewer, onProgress: OnProgress): Promise<string[]> {
   const response = await fetch(BinanceSampleUrl).catch(() => {
+    reportDataLoadFailed('binance', 'fetch');
     throw new Error("Can't reach Binance's server. Check your connection, or open a file instead.");
   });
   if (!response.ok || !response.body) {
+    reportDataLoadFailed('binance', 'fetch');
     throw new Error(`Binance's server answered ${response.status} ${response.statusText}`);
   }
   const total = Number(response.headers.get('content-length')) || null;
   const zip = await readAll(response.body.pipeThrough(counting(total, onProgress)));
-  return parse(viewer, unzipFirstFile(zip), BinanceSampleUrl.slice(BinanceSampleUrl.lastIndexOf('/') + 1));
+  return parse(viewer, unzip(zip, 'binance'), BinanceSampleUrl.slice(BinanceSampleUrl.lastIndexOf('/') + 1), 'binance');
 }
 
 /**
  * Feeds the CSV text in `stream` to the viewer's parser, chunk by chunk.
  * `fileName` names the assets when the file doesn't, as Binance's don't.
- * The file's warnings; why it failed, as an Error.
+ * `source` says where it came from, for telemetry. The file's warnings; why
+ * it failed, as an Error.
  */
-async function parse(viewer: Viewer, stream: ReadableStream<Bytes>, fileName: string): Promise<string[]> {
+async function parse(viewer: Viewer, stream: ReadableStream<Bytes>, fileName: string, source: string): Promise<string[]> {
+  const start = performance.now();
+  let bytes = 0;
   viewer.beginLoad(fileName);
   const reader = stream.getReader();
   for (;;) {
     // Decompressing fails here, with the browser's own vague message.
     const { done, value } = await reader.read().catch(() => {
+      reportDataLoadFailed(source, 'decompress');
       throw new Error('The file is damaged or cut off');
     });
     if (done) {
       break;
     }
+    bytes += value.byteLength;
     const { error } = viewer.appendChunk(value) as LoadResult;
     if (error) {
+      reportDataLoadFailed(source, 'parse');
       await reader.cancel();
       throw new Error(error);
     }
   }
+  // Fails too if the GPU can't hold the trades, which looks the same from here.
   const { error, warnings } = viewer.finishLoad() as LoadResult;
   if (error) {
+    reportDataLoadFailed(source, 'parse');
     throw new Error(error);
   }
+  const stats = viewer.tradeStats() as TradeStats;
+  reportDataLoaded(source, bytes, performance.now() - start, stats.count, stats.lastMs - stats.firstMs);
   return warnings;
 }
 
@@ -82,6 +95,16 @@ function counting(total: number | null, onProgress: OnProgress): TransformStream
       controller.enqueue(chunk);
     },
   });
+}
+
+/** unzipFirstFile(), telling telemetry when it fails. */
+function unzip(zip: Bytes, source: string): ReadableStream<Bytes> {
+  try {
+    return unzipFirstFile(zip);
+  } catch (error) {
+    reportDataLoadFailed(source, 'decompress');
+    throw error;
+  }
 }
 
 async function readAll(stream: ReadableStream<Bytes>): Promise<Bytes> {

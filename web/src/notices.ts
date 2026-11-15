@@ -1,3 +1,5 @@
+import { reportErrorEvent } from './telemetry';
+
 /**
  * Everything the page has to tell the user about what went wrong, in one
  * list, which <Notices> shows: files that can't be read or look odd, the GPU,
@@ -95,11 +97,15 @@ export function installErrorReporting() {
     if (isModuleCrash(event.error) || event.message.startsWith('ResizeObserver loop')) {
       return;
     }
-    reportError(`Something unexpected went wrong: ${event.error instanceof Error ? event.error.message : event.message}`);
+    const message = event.error instanceof Error ? event.error.message : event.message;
+    reportError(`Something unexpected went wrong: ${message}`);
+    reportErrorEvent('page', message);
   });
   window.addEventListener('unhandledrejection', (event) => {
     if (!isModuleCrash(event.reason)) {
-      reportError(`Something unexpected went wrong: ${event.reason instanceof Error ? event.reason.message : String(event.reason)}`);
+      const message = event.reason instanceof Error ? event.reason.message : String(event.reason);
+      reportError(`Something unexpected went wrong: ${message}`);
+      reportErrorEvent('page', message);
     }
   });
 }

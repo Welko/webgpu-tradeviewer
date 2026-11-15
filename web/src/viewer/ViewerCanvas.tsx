@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { reportError, setNotices } from '../notices';
+import { attachViewer, reportErrorEvent } from '../telemetry';
 import type { GpuInfo } from './gpuInfo';
 import { AxisLabels, AxisMarginsCssPx } from './AxisLabels';
 import { readTheme } from './theme';
@@ -111,13 +112,20 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
       removeInput.abort();
       console.error(`The viewer stopped: ${reason}`);
       setNotices('module', [{ severity: 'error', message: describeAbort(reason) }]);
+      reportErrorEvent('crash', reason);
       setGeneration((current) => current + 1);
     });
 
     onStatusRef.current?.({ kind: 'loading' });
     setNotices('viewer', []);
 
-    createViewer(`#${canvasId}`, powerPreference, reportError)
+    const onViewerError = (message: string) => {
+      reportError(message);
+      reportErrorEvent('viewer', message);
+    };
+    let detachTelemetry: (() => void) | null = null;
+
+    createViewer(`#${canvasId}`, powerPreference, onViewerError)
       .then((created) => {
         if (disposed) {
           created.delete();
@@ -125,6 +133,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
         }
         viewer = created;
         window.viewer = created;
+        detachTelemetry = attachViewer(created);
         // The module the viewer is in, already loaded.
         void loadModule().then((module) => {
           window.viewerTesting = module.Testing;
@@ -272,6 +281,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
     return () => {
       disposed = true;
       stopListening();
+      detachTelemetry?.();
       cancelAnimationFrame(frame);
       observer?.disconnect();
       removeInput.abort();

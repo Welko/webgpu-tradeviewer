@@ -17,6 +17,8 @@ constexpr std::int64_t DayUs = 86'400'000'000;
 constexpr std::int64_t HourUs = 3'600'000'000;
 constexpr std::uint64_t SyntheticSeed = 1;
 
+constexpr double TelemetryGpuTimingProbability = 1.0 / 30.0;
+
 } // namespace
 
 Core::Data::Trades generateSyntheticDay()
@@ -37,7 +39,14 @@ void App::create(const Gpu::Market::Engine::Params& params, Callback onDone)
 
 App::App(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market::Engine::Params params) noexcept
     : mGpu(std::move(engine), params, [this](Gpu::Market::Engine& newEngine) { return setUpEngine(newEngine); })
-{}
+{
+    mGpu.setStatsCallback([this](const Gpu::Type::FrameStats& stats) {
+        mTelemetry.recordFrameTimes(stats);
+        if (mOnStats) {
+            mOnStats(stats);
+        }
+    });
+}
 
 std::expected<void, std::string> App::setTrades(Core::Data::Trades&& trades)
 {
@@ -52,7 +61,9 @@ std::expected<void, std::string> App::setTrades(Core::Data::Trades&& trades)
     // Without trades, the time range stays.
     const auto time = getInitialView().value_or(mView.getTimeRange());
     mView = {};
-    setView(time);
+    // Not setView(): new trades aren't the user changing the view.
+    mView.setTimeRange(mData, time);
+    applyView();
     return {};
 }
 
@@ -92,6 +103,7 @@ void App::setView(Core::TimeRange time)
 {
     mView.setTimeRange(mData, time);
     applyView();
+    mTelemetry.recordViewChange(time.getLengthUs(), time == getInitialView(), time == Core::getUtcDay(time.startUs));
 }
 
 std::optional<Core::TimeRange> App::getInitialView() const
@@ -107,12 +119,14 @@ void App::zoomAt(double xPx, double factor)
 {
     mView.zoomAt(mData, mLayout, xPx, factor);
     applyView();
+    mTelemetry.recordViewChange(mView.getTimeRange().getLengthUs(), false, false);
 }
 
 void App::panBy(double dxPx)
 {
     mView.panBy(mData, mLayout, dxPx);
     applyView();
+    mTelemetry.recordViewChange(mView.getTimeRange().getLengthUs(), false, false);
 }
 
 void App::applyView()
@@ -188,7 +202,14 @@ void App::updateSummaries()
 
 void App::updatePick()
 {
+    const auto trade = mPointer.getHighlightedTrade();
+    const auto column = mPointer.getHighlightedColumn();
     mPointer.update(mData, mView, mSummaries, mLayout, mMarkerSizing);
+    const auto newTrade = mPointer.getHighlightedTrade();
+    const auto newColumn = mPointer.getHighlightedColumn();
+    if ((newTrade && newTrade != trade) || (newColumn && newColumn != column)) {
+        mTelemetry.recordPick();
+    }
 }
 
 void App::syncSettings()
@@ -216,6 +237,7 @@ Gpu::Market::Engine::Settings App::getEngineSettings() const
 
 void App::update(double nowMs)
 {
+    mTelemetry.update(nowMs);
     mGpu.restartIfLost(nowMs);
     if (auto* engine = mGpu.getEngine()) {
         engine->update(nowMs);
@@ -232,6 +254,7 @@ void App::render()
 {
     if (auto* engine = mGpu.getEngine()) {
         engine->render();
+        mTelemetry.recordFrame(mSummaries.getNumColumns() > 0, mView.getTrades().size());
     }
 }
 
@@ -279,12 +302,13 @@ App::MemoryStats App::getMemoryStats() const
 
 void App::setProfiling(bool enabled)
 {
-    mGpu.setProfiling(enabled);
+    mProfiling = enabled;
+    syncProfiling();
 }
 
 void App::setStatsCallback(Gpu::Market::Engine::StatsCallback onStats)
 {
-    mGpu.setStatsCallback(std::move(onStats));
+    mOnStats = std::move(onStats);
 }
 
 bool App::loseGpu()
@@ -295,6 +319,28 @@ bool App::loseGpu()
     }
     engine->loseDevice();
     return true;
+}
+
+void App::setTelemetry(std::unique_ptr<Core::Telemetry::Sink> sink, std::vector<Core::Telemetry::Property> environment)
+{
+    mTelemetry.setSink(std::move(sink), std::move(environment), mGpu.getInfo());
+    syncProfiling();
+}
+
+void App::flushTelemetry()
+{
+    mTelemetry.flush();
+}
+
+void App::syncProfiling()
+{
+    if (mProfiling) {
+        mGpu.setProfiling(Gpu::Market::Engine::ProfilingOn{});
+    } else if (mTelemetry.isEnabled()) {
+        mGpu.setProfiling(Gpu::Market::Engine::ProfilingOn{ .gpuTimingProbability = TelemetryGpuTimingProbability });
+    } else {
+        mGpu.setProfiling(Gpu::Market::Engine::ProfilingOff{});
+    }
 }
 
 std::expected<void, std::string> App::setUpEngine(Gpu::Market::Engine& engine)

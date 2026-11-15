@@ -1,5 +1,6 @@
 import { useEffect, useState, type DragEvent } from 'react';
 import { setNotices } from '../notices';
+import { TelemetryConsent } from '../TelemetryConsent';
 import { formatAmount } from '../viewer/format';
 import type { Instrument, MemoryStats, TradeStats, Viewer } from '../viewer/viewerModule';
 import { utc } from '../utc';
@@ -142,6 +143,7 @@ export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTrade
           .
         </p>
       </details>
+      <TelemetryConsent />
     </aside>
   );
 }

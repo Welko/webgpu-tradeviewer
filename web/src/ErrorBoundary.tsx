@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { reportErrorEvent } from './telemetry';
 
 /**
  * Says what happened if drawing the page itself fails, which would otherwise
@@ -13,6 +14,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { message:
 
   override componentDidCatch(error: unknown, info: ErrorInfo) {
     console.error('The page stopped:', error, info.componentStack);
+    reportErrorEvent('render', error instanceof Error ? error.message : String(error));
   }
 
   override render() {

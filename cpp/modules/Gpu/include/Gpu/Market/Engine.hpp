@@ -14,6 +14,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace Gpu::Market {
@@ -121,8 +122,9 @@ public:
     /** Draws a frame, needed or not. */
     void render();
 
-    /** Turns frame timing on or off. Off by default. */
-    void setProfiling(bool enabled);
+    struct ProfilingOff {};
+    struct ProfilingOn { double gpuTimingProbability = 1.0; };
+    void setProfiling(std::variant<ProfilingOff, ProfilingOn> profiling);
 
     /**
      * Calls `onStats` once for each frame, in order, once its GPU times are

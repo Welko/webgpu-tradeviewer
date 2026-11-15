@@ -19,7 +19,10 @@ endif()
 
 target_include_directories(Core PUBLIC include)
 target_compile_features(Core PUBLIC cxx_std_23)
-# Everything that links Core sees the same switch (0 or 1).
-target_compile_definitions(Core PUBLIC TRADEVIEWER_PROFILING=$<BOOL:${TRADEVIEWER_PROFILING}>)
+# Everything that links Core sees the same switches (0 or 1).
+target_compile_definitions(Core PUBLIC
+    TRADEVIEWER_PROFILING=$<BOOL:${TRADEVIEWER_PROFILING}>
+    TRADEVIEWER_TELEMETRY=$<BOOL:${TRADEVIEWER_TELEMETRY}>
+)
 
 add_subdirectory(tests)

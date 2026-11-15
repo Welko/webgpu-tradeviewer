@@ -64,7 +64,7 @@ public:
     void setWakeCallback(std::function<void()> onWake);
 
     /** Turns frame timing on or off, for every engine. Off by default. */
-    void setProfiling(bool enabled);
+    void setProfiling(std::variant<Gpu::Market::Engine::ProfilingOff, Gpu::Market::Engine::ProfilingOn> profiling);
 
     /** Calls `onStats` once per frame every engine draws (see Engine::setStatsCallback). */
     void setStatsCallback(Gpu::Market::Engine::StatsCallback onStats);
@@ -95,7 +95,7 @@ private:
     std::variant<Working, Restarting, Failed> mGpu = Working{};
     std::size_t mRestarts = 0;  // times the GPU was lost and came back
     std::vector<double> mRestartTimesMs;  // the last few
-    bool mProfiling = false;
+    std::variant<Gpu::Market::Engine::ProfilingOff, Gpu::Market::Engine::ProfilingOn> mProfiling = Gpu::Market::Engine::ProfilingOff{};
     Gpu::Market::Engine::StatsCallback mOnStats{};
     std::function<void()> mOnWake{};
     // Expires with the session, for a new engine that arrives later.

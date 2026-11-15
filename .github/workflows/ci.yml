@@ -105,10 +105,10 @@ jobs:
           if-no-files-found: ignore
 
       # Keeps the compiled-out stubs building and passing.
-      - name: Build and test with profiling compiled out
+      - name: Build and test with profiling and telemetry compiled out
         working-directory: cpp
         run: |
-          cmake --preset native -B build/native-noprofiling -DTRADEVIEWER_PROFILING=OFF
+          cmake --preset native -B build/native-noprofiling -DTRADEVIEWER_PROFILING=OFF -DTRADEVIEWER_TELEMETRY=OFF
           cmake --build build/native-noprofiling -j "$(nproc)"
           ctest --test-dir build/native-noprofiling --output-on-failure --no-tests=error
 
@@ -249,8 +249,12 @@ jobs:
         run: npm ci
 
       # Builds the wasm module, type-checks, and writes the site to docs/.
+      # Only main's site, the one published, can send telemetry, and only
+      # after its users agree (see design/telemetry.md).
       - name: Build
         working-directory: web
+        env:
+          VITE_POSTHOG_KEY: ${{ github.ref == 'refs/heads/main' && vars.POSTHOG_KEY || '' }}
         run: |
           source ~/emsdk/emsdk_env.sh
           npm run build

@@ -19,6 +19,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <random>
 #include <string>
 #include <utility>
 
@@ -52,7 +53,8 @@ struct Engine::Impl
     {
         Profiler::StatsQueue statsQueue{ MaxWaitingFrames };
         std::shared_ptr<Profiler> profiler;  // set once the device exists
-        bool enabled = false;
+        std::variant<ProfilingOff, ProfilingOn> settings = ProfilingOff{};
+        std::minstd_rand random;  // picks them
         std::uint64_t lastFrame = 0;  // frames drawn so far
     };
 
@@ -185,10 +187,13 @@ void Engine::Impl::setSettings(const Settings& next, bool everything)
 
 void Engine::Impl::render()
 {
-    const bool timed = Core::Profiling::Compiled && profiling.enabled;
+    const auto* on = std::get_if<ProfilingOn>(&profiling.settings);
+    const bool timed = Core::Profiling::Compiled && on;
+    const bool timedOnGpu = timed && std::uniform_real_distribution(0.0, 1.0)(profiling.random) < on->gpuTimingProbability;
     Gpu::Type::FrameStats::Cpu cpu{};
     const bool drawn = renderTarget->draw([&](WGPUCommandEncoder encoder, WGPUTextureView view) {
-        profiling.profiler->beginFrame(timed ? std::nullopt : std::optional(Gpu::Type::FrameStats::UntimedReason::ProfilingOff));
+        using Untimed = Gpu::Type::FrameStats::UntimedReason;
+        profiling.profiler->beginFrame(timedOnGpu ? std::nullopt : std::optional(timed ? Untimed::NotSampled : Untimed::ProfilingOff));
         const Core::Profiling::Scope scope(cpu.encodeMs, timed);
         const auto plot = Plot::Area::within(renderTarget->getWidthPx(), renderTarget->getHeightPx(), settings.insets);
         passes->grid.encode(encoder, view, plot, *profiling.profiler);
@@ -298,9 +303,9 @@ void Engine::render()
     mImpl->render();
 }
 
-void Engine::setProfiling(bool enabled)
+void Engine::setProfiling(std::variant<ProfilingOff, ProfilingOn> profiling)
 {
-    mImpl->profiling.enabled = enabled;
+    mImpl->profiling.settings = profiling;
 }
 
 void Engine::setStatsCallback(const StatsCallback& onStats)
