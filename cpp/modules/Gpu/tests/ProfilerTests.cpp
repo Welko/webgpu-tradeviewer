@@ -59,7 +59,7 @@ std::shared_ptr<Profiler> createProfiler(const Gpu::Context& context, std::vecto
 bool draw(Profiler& profiler, const Gpu::Context& context, std::uint64_t frame, bool pass)
 {
     const Gpu::Handle encoder(wgpuDeviceCreateCommandEncoder(context.device.get(), nullptr));
-    profiler.beginFrame(true);
+    profiler.beginFrame(std::nullopt);
     const bool timed = pass && profiler.measurePass("pass") != nullptr;
     profiler.endPasses(encoder.get());
     profiler.endFrame(frame);
@@ -124,13 +124,13 @@ TEST_CASE("An unfinished frame is dropped, freeing its slot")
 
     // Otherwise the slots would run out. Every other frame ends its passes first.
     for (std::size_t frame = 0; frame < 2 * Slots; ++frame) {
-        profiler->beginFrame(true);
+        profiler->beginFrame(std::nullopt);
         CHECK(profiler->measurePass("pass"));
         if (frame % 2 == 1) {
             profiler->endPasses(encoder.get());
         }
     }
-    profiler->beginFrame(true);
+    profiler->beginFrame(std::nullopt);
     CHECK(profiler->measurePass("pass"));
     CHECK(reported.empty());
 }
@@ -190,7 +190,7 @@ TEST_CASE("An untimed frame is reported right away, with why")
     CHECK_FALSE(profiler->measurePass("pass"));
     profiler->endFrame(1);
 
-    profiler->beginFrame(false);
+    profiler->beginFrame(UntimedReason::ProfilingOff);
     CHECK_FALSE(profiler->measurePass("pass"));
     profiler->endPasses(nullptr);  // records nothing
     profiler->endFrame(2);
@@ -280,7 +280,7 @@ TEST_CASE("Each pass is timed with timestamps of its own, up to a limit")
     const Gpu::Handle view(wgpuTextureCreateView(texture.get(), nullptr));
     const Gpu::Handle encoder(wgpuDeviceCreateCommandEncoder(context->device.get(), nullptr));
 
-    profiler->beginFrame(true);
+    profiler->beginFrame(std::nullopt);
     for (std::uint32_t pass = 0; pass < MaxPasses; ++pass) {
         const auto* timestampWrites = profiler->measurePass("pass " + std::to_string(pass));
         CHECK(timestampWrites);

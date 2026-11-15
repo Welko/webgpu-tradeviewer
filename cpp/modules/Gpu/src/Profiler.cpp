@@ -82,7 +82,7 @@ Profiler::Profiler(const Context& context, TimesCallback onTimes)
     }
 }
 
-void Profiler::beginFrame(bool timed)
+void Profiler::beginFrame(std::optional<UntimedReason> untimed)
 {
     if (mCurrentFrame) {
         Core::Log::warn("GPU profiling: beginFrame() called before endFrame(); dropping the unfinished frame");
@@ -95,8 +95,8 @@ void Profiler::beginFrame(bool timed)
         return;
     }
 
-    if (!timed) {
-        mCurrentFrame = std::unexpected(UntimedReason::ProfilingOff);
+    if (untimed) {
+        mCurrentFrame = std::unexpected(*untimed);
         return;
     }
 

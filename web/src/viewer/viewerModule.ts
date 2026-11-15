@@ -134,7 +134,7 @@ export interface ScenePatch {
   tolerance: number;
 }
 
-/** What Viewer.gpuHealth() returns: how the GPU is doing (see Viewer::App::GpuHealth). */
+/** What Viewer.gpuHealth() returns: how the GPU is doing (see Viewer::GpuSession::Health). */
 export interface GpuHealth {
   /** Lost, and a new device is on its way. */
   restarting: boolean;

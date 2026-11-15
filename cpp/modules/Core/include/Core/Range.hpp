@@ -39,6 +39,15 @@ struct TimeRange
     bool operator==(const TimeRange&) const = default;
 };
 
+/** The UTC day, midnight to midnight, that `timeUs` (since 1970) falls in. */
+[[nodiscard]] inline TimeRange getUtcDay(std::int64_t timeUs)
+{
+    constexpr std::int64_t DayUs = 86'400'000'000;
+    // Rounded down, also before 1970.
+    const std::int64_t startUs = (timeUs >= 0 ? timeUs : timeUs - DayUs + 1) / DayUs * DayUs;
+    return { .startUs = startUs, .endUs = startUs + DayUs };
+}
+
 /** Positions [first, last) in a sequence. */
 struct IndexRange
 {

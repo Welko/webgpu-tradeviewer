@@ -138,10 +138,16 @@ void connectInput(GLFWwindow* window)
         auto& state = getState(pressed);
         switch (key) {
         case GLFW_KEY_R:
-            state.app->resetView();
+            if (const auto initialView = state.app->getInitialView())
+            {
+                state.app->setView(*initialView);
+            }
             break;
         case GLFW_KEY_D:
-            state.app->showDay();
+            if (!state.app->getTrades().empty())
+            {
+                state.app->setView(Core::getUtcDay(state.app->getTrades().timeUs.front()));
+            }
             break;
         case GLFW_KEY_M:
             state.markerScale = state.markerScale == Gpu::Market::Type::MarkerScale::Area ? Gpu::Market::Type::MarkerScale::Log
@@ -239,22 +245,23 @@ std::string getWindowTitle(const Viewer::App& app)
     // In the instrument's own decimals.
     const auto amount = [&](double value) { return std::format("{:.{}f} {}", value, instrument.amountDecimals, instrument.base); };
     const auto price = [&](double value) { return std::format("{:.{}f}", value, instrument.priceDecimals); };
-    if (const auto column = app.getPickedColumn()) {
+    const auto& picked = app.getPointer().getPicked();
+    if (const auto* column = std::get_if<Viewer::Pointer::Picked::Column>(&picked)) {
         const auto& summary = column->summary;
         return std::format("Trade Viewer · {} to {} UTC · {} trades ({} buys), {} to {} {}, {} bought, {} sold",
                            formatUtc(column->time.startUs), formatUtc(column->time.endUs), summary.trades.size(), summary.buyCount,
                            price(summary.price.low), price(summary.price.high), instrument.quote, amount(summary.buyAmount),
                            amount(summary.sellAmount));
     }
-    if (const auto picked = app.getPickedTrade()) {
-        const auto ms = picked->timeUs / 1000 - (picked->timeUs % 1000 < 0 ? 1 : 0);
-        return std::format("Trade Viewer · {} {} at {} {} · {}{:03} UTC", picked->side == Core::Data::Side::Buy ? "Buy" : "Sell",
-                           amount(picked->amount), price(picked->price), instrument.quote, formatUtc(ms * 1000), picked->timeUs - ms * 1000);
+    if (const auto* trade = std::get_if<Viewer::Pointer::Picked::Trade>(&picked)) {
+        const auto ms = trade->timeUs / 1000 - (trade->timeUs % 1000 < 0 ? 1 : 0);
+        return std::format("Trade Viewer · {} {} at {} {} · {}{:03} UTC", trade->side == Core::Data::Side::Buy ? "Buy" : "Sell",
+                           amount(trade->amount), price(trade->price), instrument.quote, formatUtc(ms * 1000), trade->timeUs - ms * 1000);
     }
-    const auto view = app.getView();
-    const auto stats = app.getViewStats();
+    const auto view = app.getView().getTimeRange();
+    const auto stats = app.getView().getStats();
     return std::format("Trade Viewer · {} to {} UTC · {} trades, {}{}", formatUtc(view.startUs), formatUtc(view.endUs), stats.count,
-                       amount(stats.totalAmount), app.getColumnsAcross() > 0 ? " · summarized: one bar per pixel column" : "");
+                       amount(stats.totalAmount), app.getSummaries().getNumColumns() > 0 ? " · summarized: one bar per pixel column" : "");
 }
 
 /**
@@ -509,7 +516,7 @@ int main(int argc, char** argv)
             int widthPx = 0;
             int heightPx = 0;
             glfwGetFramebufferSize(window, &widthPx, &heightPx);
-            app->resize(static_cast<std::uint32_t>(widthPx), static_cast<std::uint32_t>(heightPx));
+            app->setSize(static_cast<std::uint32_t>(widthPx), static_cast<std::uint32_t>(heightPx));
         }
         app->update(glfwGetTime() * 1000.0);
         if (app->needsRender() || state.repaint) {

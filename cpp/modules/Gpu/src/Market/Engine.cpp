@@ -188,7 +188,7 @@ void Engine::Impl::render()
     const bool timed = Core::Profiling::Compiled && profiling.enabled;
     Gpu::Type::FrameStats::Cpu cpu{};
     const bool drawn = renderTarget->draw([&](WGPUCommandEncoder encoder, WGPUTextureView view) {
-        profiling.profiler->beginFrame(timed);
+        profiling.profiler->beginFrame(timed ? std::nullopt : std::optional(Gpu::Type::FrameStats::UntimedReason::ProfilingOff));
         const Core::Profiling::Scope scope(cpu.encodeMs, timed);
         const auto plot = Plot::Area::within(renderTarget->getWidthPx(), renderTarget->getHeightPx(), settings.insets);
         passes->grid.encode(encoder, view, plot, *profiling.profiler);

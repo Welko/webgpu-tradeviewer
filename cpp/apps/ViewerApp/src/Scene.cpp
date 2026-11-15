@@ -77,7 +77,7 @@ constexpr std::uint32_t FreeTopRows = 6;
 /** The time axis's grid lines, in the plot's top rows. */
 void findGridLines(const App& app, std::vector<Scene::Patch>& patches)
 {
-    for (const auto& tick : app.getAxes().times) {
+    for (const auto& tick : app.getAxes().getTimes()) {
         // On the pixel column the shader floors it to, in 32-bit floats as it
         // gets them; a product of two floats rounds the same on every GPU.
         const float xPx = std::floor(static_cast<float>(tick.fraction) * static_cast<float>(AppPlotWidthPx));
@@ -100,7 +100,7 @@ void findGridLines(const App& app, std::vector<Scene::Patch>& patches)
  */
 void findRing(const App& app, std::vector<Scene::Patch>& patches)
 {
-    const auto picked = app.getPickedTrade();
+    const auto* picked = std::get_if<Pointer::Picked::Trade>(&app.getPointer().getPicked());
     if (!picked) {
         return;
     }
@@ -122,7 +122,7 @@ void findRing(const App& app, std::vector<Scene::Patch>& patches)
 /** The middle of the picked column's bar, drawn opaque in the cursor color. */
 void findHighlightedColumn(const App& app, std::vector<Scene::Patch>& patches)
 {
-    const auto picked = app.getPickedColumn();
+    const auto* picked = std::get_if<Pointer::Picked::Column>(&app.getPointer().getPicked());
     if (!picked) {
         return;
     }
@@ -139,7 +139,7 @@ void pointAtMiddle(App& app)
     const double xPx = (AppWidthPx - AppInsets.right) / 2.0;
     for (std::uint32_t yPx = 0; yPx < AppHeightPx - AppInsets.bottom; yPx += 4) {
         app.setPointer(xPx, yPx);
-        if (app.getPickedTrade() || app.getPickedColumn()) {
+        if (!std::holds_alternative<std::monostate>(app.getPointer().getPicked())) {
             return;
         }
     }
@@ -162,7 +162,7 @@ void setUpHour(App& app)
 void setUpDay(App& app)
 {
     showTrades(app, generateSyntheticDay());
-    app.showDay();
+    app.setView(Core::getUtcDay(app.getTrades().timeUs.front()));
     pointAtMiddle(app);
 }
 
@@ -295,7 +295,7 @@ const Scene* Scene::find(std::string_view name)
 
 std::vector<Scene::Patch> Scene::show(const Scene& scene, App& app)
 {
-    app.resize(scene.widthPx, scene.heightPx);
+    app.setSize(scene.widthPx, scene.heightPx);
     app.setPixelRatio(1.0f);
     app.setPlotInsets(scene.insets);
     app.setSummariesAllowed(true);

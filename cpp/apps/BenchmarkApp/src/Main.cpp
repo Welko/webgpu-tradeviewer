@@ -114,12 +114,14 @@ std::optional<std::vector<Metric>> measureMemory()
     if (!app) {
         return std::nullopt;
     }
-    app->resize(WidthPx, HeightPx);
+    app->setSize(WidthPx, HeightPx);
     app->setPixelRatio(1.0f);
     if (!app->setTrades(Viewer::generateSyntheticDay())) {
         return std::nullopt;
     }
-    app->showDay();
+    if (!app->getTrades().empty()) {
+        app->setView(Core::getUtcDay(app->getTrades().timeUs.front()));
+    }
     const auto memory = app->getMemoryStats();
     const auto bytes = [](std::size_t value) { return static_cast<double>(value); };
     return std::vector<Metric>{
@@ -214,7 +216,7 @@ int main(int argc, char** argv)
     if (!app) {
         return 1;
     }
-    app->resize(WidthPx, HeightPx);
+    app->setSize(WidthPx, HeightPx);
     app->setPixelRatio(1.0f);
     std::expected<void, std::string> set;
     const double setTradesMs = timed([&] { set = app->setTrades(std::move(*trades)); });
@@ -237,11 +239,11 @@ int main(int argc, char** argv)
         };
     };
     const std::vector<Case> cases{
-        { "Whole day, every trade", "day_every_trade", show(false, [](Viewer::App& viewer) { viewer.showDay(); }) },
-        { "Whole day", "day", show(true, [](Viewer::App& viewer) { viewer.showDay(); }) },
-        { "12:00–13:00", "hour", show(true, [](Viewer::App& viewer) { viewer.resetView(); }) },
-        { "1 minute", "minute", show(true, [](Viewer::App& viewer) { viewer.resetView(); viewer.zoomAt(WidthPx / 2.0, 1.0 / 60.0); }) },
-        { "1 second", "second", show(true, [](Viewer::App& viewer) { viewer.resetView(); viewer.zoomAt(WidthPx / 2.0, 1.0 / 3600.0); }) },
+        { "Whole day, every trade", "day_every_trade", show(false, [](Viewer::App& viewer) { viewer.setView(Core::getUtcDay(viewer.getTrades().timeUs.front())); }) },
+        { "Whole day", "day", show(true, [](Viewer::App& viewer) { viewer.setView(Core::getUtcDay(viewer.getTrades().timeUs.front())); }) },
+        { "12:00–13:00", "hour", show(true, [](Viewer::App& viewer) { viewer.setView(*viewer.getInitialView()); }) },
+        { "1 minute", "minute", show(true, [](Viewer::App& viewer) { viewer.setView(*viewer.getInitialView()); viewer.zoomAt(WidthPx / 2.0, 1.0 / 60.0); }) },
+        { "1 second", "second", show(true, [](Viewer::App& viewer) { viewer.setView(*viewer.getInitialView()); viewer.zoomAt(WidthPx / 2.0, 1.0 / 3600.0); }) },
     };
 
     std::vector<Samples> results;
@@ -262,7 +264,7 @@ int main(int argc, char** argv)
                 return 1;
             }
         }
-        samples.tradesDrawn = app->getViewStats().count;
+        samples.tradesDrawn = app->getView().getStats().count;
         for (std::size_t i = firstMeasured; i < firstMeasured + MeasuredFrames; ++i) {
             const auto& stats = reported[i];
             if (!stats.cpu || !stats.gpu) {

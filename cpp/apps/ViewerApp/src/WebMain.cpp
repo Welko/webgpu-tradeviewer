@@ -268,8 +268,7 @@ public:
             .target = Gpu::Type::Target::Canvas{ .selector = std::move(selector) },
             .powerPreference = parsePowerPreference(powerPreference),
         };
-        // The engine first, rather than App::create(), so Testing can reach it.
-        Gpu::Market::Engine::create(params, [this, slot, params, onDone](Gpu::Market::Engine::CreatedResult result) {
+        Viewer::App::create(params, [slot, onDone](Viewer::App::Result result) {
             auto app = slot.lock();
             if (!app) {
                 // delete() was called before initialization finished.
@@ -279,9 +278,7 @@ public:
                 onDone(result.error());
                 return;
             }
-            // The slot lives as long as this viewer.
-            mFirstEngine = result->get();
-            *app = std::make_unique<Viewer::App>(std::move(*result), params);
+            *app = std::move(*result);
             if (auto set = (*app)->setTrades(Viewer::generateSyntheticDay()); !set) {
                 onDone(set.error());
                 return;
@@ -299,7 +296,7 @@ public:
     void resize(std::uint32_t widthPx, std::uint32_t heightPx)
     {
         if (*mApp) {
-            (*mApp)->resize(widthPx, heightPx);
+            (*mApp)->setSize(widthPx, heightPx);
         }
     }
 
@@ -328,14 +325,14 @@ public:
         if (!*mApp) {
             return {};
         }
-        const auto view = (*mApp)->getView();
+        const auto view = (*mApp)->getView().getTimeRange();
         return { .startMs = static_cast<double>(view.startUs) / 1000.0, .endMs = static_cast<double>(view.endUs) / 1000.0 };
     }
 
     /** The trades in view. Empty until init() succeeds. */
     WebTradeStats getViewStats() const
     {
-        return *mApp ? toWeb((*mApp)->getViewStats()) : WebTradeStats{};
+        return *mApp ? toWeb((*mApp)->getView().getStats()) : WebTradeStats{};
     }
 
     /** The axes' ticks as { times, prices }, each an array of { fraction, label }. Null until init() succeeds. */
@@ -346,8 +343,8 @@ public:
         }
         const auto& axes = (*mApp)->getAxes();
         val result = val::object();
-        result.set("times", toWeb(axes.times));
-        result.set("prices", toWeb(axes.prices));
+        result.set("times", toWeb(axes.getTimes()));
+        result.set("prices", toWeb(axes.getPrices()));
         return result;
     }
 
@@ -387,7 +384,7 @@ public:
      */
     val getPickedTrade() const
     {
-        const auto picked = *mApp ? (*mApp)->getPickedTrade() : std::nullopt;
+        const auto* picked = *mApp ? std::get_if<Viewer::Pointer::Picked::Trade>(&(*mApp)->getPointer().getPicked()) : nullptr;
         if (!picked) {
             return val::null();
         }
@@ -410,7 +407,7 @@ public:
      */
     val getPickedColumn() const
     {
-        const auto picked = *mApp ? (*mApp)->getPickedColumn() : std::nullopt;
+        const auto* picked = *mApp ? std::get_if<Viewer::Pointer::Picked::Column>(&(*mApp)->getPointer().getPicked()) : nullptr;
         if (!picked) {
             return val::null();
         }
@@ -437,12 +434,12 @@ public:
      */
     val getSummaries() const
     {
-        if (!*mApp || (*mApp)->getColumnsAcross() == 0) {
+        if (!*mApp || (*mApp)->getSummaries().getNumColumns() == 0) {
             return val::null();
         }
         val result = val::object();
-        result.set("across", (*mApp)->getColumnsAcross());
-        result.set("withTrades", static_cast<double>((*mApp)->getColumns().size()));
+        result.set("across", (*mApp)->getSummaries().getNumColumns());
+        result.set("withTrades", static_cast<double>((*mApp)->getSummaries().getColumns().size()));
         return result;
     }
 
@@ -479,14 +476,17 @@ public:
     void resetView()
     {
         if (*mApp) {
-            (*mApp)->resetView();
+            if (const auto initialView = (*mApp)->getInitialView())
+            {
+                (*mApp)->setView(*initialView);
+            }
         }
     }
 
     void showDay()
     {
-        if (*mApp) {
-            (*mApp)->showDay();
+        if (*mApp && !(*mApp)->getTrades().empty()) {
+            (*mApp)->setView(Core::getUtcDay((*mApp)->getTrades().timeUs.front()));
         }
     }
 
@@ -546,7 +546,7 @@ public:
         return *mApp ? toWeb(Core::Data::getStats((*mApp)->getTrades())) : WebTradeStats{};
     }
 
-    /** How the GPU is doing, as { restarting, restarts, failure, errors, errorCount } (see Viewer::App::GpuHealth). Null until init() succeeds. */
+    /** How the GPU is doing, as { restarting, restarts, failure, errors, errorCount } (see Viewer::GpuSession::Health). Null until init() succeeds. */
     val getGpuHealth() const
     {
         if (!*mApp) {
@@ -705,8 +705,6 @@ private:
     friend struct Testing;
 
     std::shared_ptr<std::unique_ptr<Viewer::App>> mApp = std::make_shared<std::unique_ptr<Viewer::App>>();
-    // The app's first engine, for Testing; gone once the app replaces it.
-    Gpu::Market::Engine* mFirstEngine = nullptr;
     std::optional<Core::Data::TradeParser> mParser;  // while a file loads
     std::vector<char> mChunk;  // the last chunk, copied out of JavaScript
 };
@@ -718,14 +716,10 @@ private:
  */
 struct Testing
 {
-    /** Loses `viewer`'s GPU device, as a driver reset would. False once its first engine is gone. */
+    /** Loses `viewer`'s GPU device, as a driver reset would. False before init() succeeds, or while the GPU restarts. */
     static bool loseGpu(WebViewer& viewer)
     {
-        if (!*viewer.mApp || (*viewer.mApp)->getGpuHealth().restarts > 0) {
-            return false;
-        }
-        viewer.mFirstEngine->loseDevice();
-        return true;
+        return *viewer.mApp && (*viewer.mApp)->loseGpu();
     }
 
     /** Stops the module, as a bug would. */

@@ -1,13 +1,10 @@
 #include "Viewer/App.hpp"
 
-#include "Core/Plot/Pick.hpp"
 #include "Core/Data/Synthetic.hpp"
 #include "Gpu/Market/Style.hpp"
 
 #include "Core/Log.hpp"
 
-#include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <utility>
 
@@ -19,20 +16,6 @@ constexpr std::int64_t DayStartUs = 1'575'158'400'000'000;
 constexpr std::int64_t DayUs = 86'400'000'000;
 constexpr std::int64_t HourUs = 3'600'000'000;
 constexpr std::uint64_t SyntheticSeed = 1;
-
-// How far the time range can zoom.
-constexpr std::int64_t MinViewUs = 1'000;
-constexpr std::int64_t MaxViewUs = 7 * DayUs;
-
-// Space above and below the visible trades, as a share of their price range.
-constexpr double PricePadding = 0.05;
-
-// How far from the pointer a trade's center can be picked, in CSS or window pixels.
-constexpr double PickRadiusCssPx = 24.0;
-
-// The closest axis ticks get, in CSS or window pixels, so their labels fit.
-constexpr double TimeTickSpacingCssPx = 120.0;
-constexpr double PriceTickSpacingCssPx = 50.0;
 
 } // namespace
 
@@ -48,18 +31,13 @@ void App::create(const Gpu::Market::Engine::Params& params, Callback onDone)
             onDone(std::unexpected(std::move(result.error())));
             return;
         }
-        onDone(std::make_unique<App>(std::move(*result), params));
+        onDone(std::unique_ptr<App>(new App(std::move(*result), params)));
     });
 }
 
 App::App(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market::Engine::Params params) noexcept
-    : mGpu(std::move(engine), std::move(params), [this](Gpu::Market::Engine& newEngine) { return setUpEngine(newEngine); })
+    : mGpu(std::move(engine), params, [this](Gpu::Market::Engine& newEngine) { return setUpEngine(newEngine); })
 {}
-
-const Core::Data::Trades& App::getTrades() const
-{
-    return mData.getTrades();
-}
 
 std::expected<void, std::string> App::setTrades(Core::Data::Trades&& trades)
 {
@@ -69,89 +47,32 @@ std::expected<void, std::string> App::setTrades(Core::Data::Trades&& trades)
         }
     }
     mData = Core::Data::PreprocessedTrades(std::move(trades));
-    mSettings.markerSizing = Gpu::Market::Style::fitMarkerSizing(mSettings.markerSizing.scale, mData.getTrades());
-    mSettings.view.price = {};
-    resetView();
+    mMarkerSizing = Gpu::Market::Style::fitMarkerSizing(mMarkerSizing.scale, mData.getTrades());
+    // No price range from the old trades.
+    // Without trades, the time range stays.
+    const auto time = getInitialView().value_or(mView.getTimeRange());
+    mView = {};
+    setView(time);
     return {};
 }
 
-Core::Data::TradeStats App::getViewStats() const
+void App::setSize(std::uint32_t widthPx, std::uint32_t heightPx)
 {
-    const auto& indices = mSettings.view.trades;
-    if (indices.empty()) {
-        return {};
+    // The native loop calls this every iteration.
+    if (widthPx == mLayout.widthPx && heightPx == mLayout.heightPx) {
+        return;
     }
-    const auto& timeUs = mData.getTrades().timeUs;
-    return {
-        .count = indices.size(),
-        .firstUs = timeUs[indices.first],
-        .lastUs = timeUs[indices.last - 1],
-        .totalAmount = mData.getAmount(indices),
-    };
-}
-
-std::int64_t App::getDayStartUs() const
-{
-    const auto& timeUs = mData.getTrades().timeUs;
-    const std::int64_t firstUs = timeUs.empty() ? 0 : timeUs.front();
-    // Rounded down, also before 1970.
-    return (firstUs >= 0 ? firstUs : firstUs - DayUs + 1) / DayUs * DayUs;
-}
-
-void App::resetView()
-{
-    const std::int64_t dayStartUs = getDayStartUs();
-    mSettings.view.time = { .startUs = dayStartUs + 12 * HourUs, .endUs = dayStartUs + 13 * HourUs };
-    applyView();
-}
-
-void App::showDay()
-{
-    const std::int64_t dayStartUs = getDayStartUs();
-    mSettings.view.time = { .startUs = dayStartUs, .endUs = dayStartUs + DayUs };
-    applyView();
-}
-
-void App::zoomAt(double xPx, double factor)
-{
-    auto& time = mSettings.view.time;
-    const auto length = static_cast<double>(time.getLengthUs());
-    const double newLength = std::clamp(length * factor, static_cast<double>(MinViewUs), static_cast<double>(MaxViewUs));
-    const double plotWidthPx = getPlotWidthPx();
-    const double anchor = plotWidthPx > 0.0 ? (xPx - mSettings.insets.left) / plotWidthPx : 0.5;
-    time = time.zoomed(anchor, newLength / length);
-    applyView();
-}
-
-void App::panBy(double dxPx)
-{
-    if (const double plotWidthPx = getPlotWidthPx(); plotWidthPx > 0.0) {
-        mSettings.view.time = mSettings.view.time.panned(-dxPx / plotWidthPx);
-        applyView();
-    }
-}
-
-void App::setMarkerScale(Gpu::Market::Type::MarkerScale scale)
-{
-    mSettings.markerSizing.scale = scale;
+    mLayout.widthPx = widthPx;
+    mLayout.heightPx = heightPx;
+    updateAxes();
+    updateSummaries();
     updatePick();
     syncSettings();
 }
 
-void App::setTheme(const Gpu::Market::Type::Theme& theme)
-{
-    mSettings.theme = theme;
-    syncSettings();
-}
-
-Gpu::Market::Type::Legend App::getLegend() const
-{
-    return Gpu::Market::Style::getLegend(mSettings.markerSizing, mSettings.theme);
-}
-
 void App::setPixelRatio(float ratio)
 {
-    mSettings.pixelRatio = ratio;
+    mLayout.pixelRatio = ratio;
     updateAxes();
     updateSummaries();
     updatePick();
@@ -160,51 +81,42 @@ void App::setPixelRatio(float ratio)
 
 void App::setPlotInsets(Gpu::Plot::Type::Insets insets)
 {
-    mSettings.insets = insets;
+    mLayout.insets = insets;
     updateAxes();
     updateSummaries();
     updatePick();
     syncSettings();
 }
 
-double App::getPlotWidthPx() const
+void App::setView(Core::TimeRange time)
 {
-    return std::max(0.0, static_cast<double>(mSettings.widthPx) - mSettings.insets.left - mSettings.insets.right);
+    mView.setTimeRange(mData, time);
+    applyView();
 }
 
-double App::getPlotHeightPx() const
+std::optional<Core::TimeRange> App::getInitialView() const
 {
-    return std::max(0.0, static_cast<double>(mSettings.heightPx) - mSettings.insets.top - mSettings.insets.bottom);
+    if (mData.getTrades().empty()) {
+        return std::nullopt;
+    }
+    const std::int64_t dayStartUs = Core::getUtcDay(getTrades().timeUs.front()).startUs;
+    return Core::TimeRange{ .startUs = dayStartUs + 12 * HourUs, .endUs = dayStartUs + 13 * HourUs };
 }
 
-void App::updateAxes()
+void App::zoomAt(double xPx, double factor)
 {
-    // At least two ticks, so even a small plot shows a scale.
-    const auto countFitting = [&](double lengthPx, double spacingCssPx) {
-        return std::max<std::size_t>(2, static_cast<std::size_t>(lengthPx / (spacingCssPx * mSettings.pixelRatio)));
-    };
-    mAxes = {
-        .times = Core::Plot::Axis::getTimeTicks(mSettings.view.time, countFitting(getPlotWidthPx(), TimeTickSpacingCssPx)),
-        .prices = Core::Plot::Axis::getNumberTicks(mSettings.view.price, countFitting(getPlotHeightPx(), PriceTickSpacingCssPx)),
-    };
-    mSettings.grid = {};
-    for (const auto& tick : mAxes.times) {
-        mSettings.grid.verticalLines.push_back(static_cast<float>(tick.fraction));
-    }
-    for (const auto& tick : mAxes.prices) {
-        mSettings.grid.horizontalLines.push_back(static_cast<float>(tick.fraction));
-    }
+    mView.zoomAt(mData, mLayout, xPx, factor);
+    applyView();
+}
+
+void App::panBy(double dxPx)
+{
+    mView.panBy(mData, mLayout, dxPx);
+    applyView();
 }
 
 void App::applyView()
 {
-    auto& view = mSettings.view;
-    view.trades = Core::Data::getTradesIn(mData.getTrades(), view.time);
-    if (const auto price = mData.getPriceRange(view.trades)) {
-        // Some room even for a single price, so its trades sit mid-height.
-        const double padding = std::max((price->high - price->low) * PricePadding, price->high * 1e-5);
-        view.price = { .low = price->low - padding, .high = price->high + padding };
-    }
     updateAxes();
     updateSummaries();
     updatePick();
@@ -213,7 +125,7 @@ void App::applyView()
 
 void App::setSummariesAllowed(bool allowed)
 {
-    mSummaries.allowed = allowed;
+    mSummaries.setAllowed(allowed);
     updateSummaries();
     updatePick();
     syncSettings();
@@ -221,164 +133,85 @@ void App::setSummariesAllowed(bool allowed)
 
 void App::setSummaryThreshold(double tradesPerColumn)
 {
-    mSummaries.threshold = tradesPerColumn;
+    mSummaries.setThreshold(tradesPerColumn);
     updateSummaries();
     updatePick();
     syncSettings();
 }
 
-void App::updateSummaries()
+void App::setTheme(const Gpu::Market::Type::Theme& theme)
 {
-    // One column per CSS or window pixel.
-    const double across = std::round(getPlotWidthPx() / mSettings.pixelRatio);
-    const bool crowded = mSummaries.allowed && across >= 1.0
-                         && static_cast<double>(mSettings.view.trades.size()) > mSummaries.threshold * across;
-    if (!crowded) {
-        if (mSummaries.across > 0) {
-            mSummaries.across = 0;
-            mSummaries.columns.clear();
-            syncColumns();
-        }
-        return;
-    }
-    mSummaries.across = static_cast<std::uint32_t>(across);
-    mSummaries.columns = Core::Data::summarizeColumns(mData, mSettings.view.time, mSummaries.across);
-    syncColumns();
+    mTheme = theme;
+    syncSettings();
 }
 
-void App::syncSettings()
+void App::setMarkerScale(Gpu::Market::Type::MarkerScale scale)
 {
-    if (auto* engine = mGpu.getEngine()) {
-        engine->setSettings(mSettings);
-    }
+    mMarkerSizing.scale = scale;
+    updatePick();
+    syncSettings();
 }
 
-void App::syncColumns()
+Gpu::Market::Type::Legend App::getLegend() const
 {
-    if (auto* engine = mGpu.getEngine()) {
-        engine->setColumns(getEngineColumns());
-    }
-}
-
-std::optional<Gpu::Market::Type::Columns> App::getEngineColumns() const
-{
-    if (mSummaries.across == 0) {
-        return std::nullopt;
-    }
-    Gpu::Market::Type::Columns columns{ .across = mSummaries.across, .columns = {} };
-    columns.columns.reserve(mSummaries.columns.size());
-    for (const auto& column : mSummaries.columns) {
-        columns.columns.push_back({
-            .index = static_cast<std::uint32_t>(column.index),
-            .price = column.price,
-            .buyAmount = column.buyAmount,
-            .sellAmount = column.sellAmount,
-        });
-    }
-    return columns;
-}
-
-Core::Plot::Mapping App::getPlotMapping() const
-{
-    return { .time = mSettings.view.time, .price = mSettings.view.price, .width = getPlotWidthPx(), .height = getPlotHeightPx() };
+    return Gpu::Market::Style::getLegend(mMarkerSizing, mTheme);
 }
 
 void App::setPointer(double xPx, double yPx)
 {
-    mCursor.onSurface = true;
-    mCursor.xPx = xPx;
-    mCursor.yPx = yPx;
+    mPointer.setPosition(xPx, yPx);
     updatePick();
     syncSettings();
 }
 
 void App::clearPointer()
 {
-    mCursor.onSurface = false;
+    mPointer.clear();
     updatePick();
     syncSettings();
 }
 
-std::optional<App::PickedTrade> App::getPickedTrade() const
+void App::updateAxes()
 {
-    if (!mSettings.highlightedTrade) {
-        return std::nullopt;
-    }
-    const std::size_t i = *mSettings.highlightedTrade;
-    const auto plot = getPlotMapping();
-    const auto& trades = mData.getTrades();
-    return PickedTrade{
-        .index = i,
-        .timeUs = trades.timeUs[i],
-        .price = trades.price[i],
-        .amount = trades.amount[i],
-        .side = trades.side[i],
-        .centerXPx = mSettings.insets.left + plot.getX(trades.timeUs[i]),
-        .centerYPx = mSettings.insets.top + plot.getY(trades.price[i]),
-    };
+    mAxes.update(mView, mLayout);
 }
 
-std::optional<App::PickedColumn> App::getPickedColumn() const
+void App::updateSummaries()
 {
-    if (!mSettings.highlightedColumn) {
-        return std::nullopt;
+    if (!mSummaries.update(mData, mView, mLayout)) {
+        return;
     }
-    const auto& column = mSummaries.columns[*mSettings.highlightedColumn];
-    const auto bar = Core::Plot::getColumnBar(column, mSummaries.across, getPlotMapping(),
-                                              Gpu::Market::Style::ColumnMinHeightCssPx * mSettings.pixelRatio);
-    const auto& time = mSettings.view.time;
-    const std::int64_t length = time.getLengthUs();
-    const auto across = static_cast<std::int64_t>(mSummaries.across);
-    const auto index = static_cast<std::int64_t>(column.index);
-    return PickedColumn{
-        .summary = column,
-        .time = { .startUs = time.startUs + index * length / across, .endUs = time.startUs + (index + 1) * length / across },
-        .centerXPx = mSettings.insets.left + bar.centerX,
-        .topPx = mSettings.insets.top + bar.top,
-        .bottomPx = mSettings.insets.top + bar.bottom,
-    };
+    if (auto* engine = mGpu.getEngine()) {
+        engine->setColumns(mSummaries.getEngineColumns());
+    }
 }
 
 void App::updatePick()
 {
-    std::optional<std::size_t> trade;
-    std::optional<std::size_t> column;
-    if (mCursor.onSurface) {
-        const double ratio = mSettings.pixelRatio;
-        const auto plot = getPlotMapping();
-        const double pointerXPx = mCursor.xPx - mSettings.insets.left;
-        const double pointerYPx = mCursor.yPx - mSettings.insets.top;
-        if (mSummaries.across > 0) {
-            column = Core::Plot::pickColumn(mSummaries.columns, mSummaries.across, plot, pointerXPx, pointerYPx, PickRadiusCssPx * ratio,
-                                            Gpu::Market::Style::ColumnMinHeightCssPx * ratio);
-        } else {
-            const Core::Plot::PickRule rule{ .pickRadius = PickRadiusCssPx * ratio, .maxMarkerRadius = Gpu::Market::Style::MarkerMaxRadiusCssPx * ratio };
-            trade = Core::Plot::pickTrade(mData.getTrades(), mSettings.view.trades, plot, pointerXPx, pointerYPx, rule,
-                                          [&](double amount) { return mSettings.markerSizing.getRadiusCssPx(amount) * ratio; });
-        }
-    }
-    // A column's position stays right when the columns are replaced: it's into the new ones.
-    mSettings.highlightedTrade = trade;
-    mSettings.highlightedColumn = column;
+    mPointer.update(mData, mView, mSummaries, mLayout, mMarkerSizing);
 }
 
-const Gpu::Type::Info& App::getInfo() const
+void App::syncSettings()
 {
-    return mGpu.getInfo();
+    if (auto* engine = mGpu.getEngine()) {
+        engine->setSettings(getEngineSettings());
+    }
 }
 
-void App::resize(std::uint32_t widthPx, std::uint32_t heightPx)
+Gpu::Market::Engine::Settings App::getEngineSettings() const
 {
-    // The native loop calls this every iteration.
-    if (widthPx == mSettings.widthPx && heightPx == mSettings.heightPx) {
-        return;
-    }
-    mSettings.widthPx = widthPx;
-    mSettings.heightPx = heightPx;
-    updateAxes();
-    updateSummaries();
-    updatePick();
-    syncSettings();
+    return {
+        .widthPx = mLayout.widthPx,
+        .heightPx = mLayout.heightPx,
+        .pixelRatio = mLayout.pixelRatio,
+        .insets = mLayout.insets,
+        .grid = mAxes.getGrid(),
+        .view = { .time = mView.getTimeRange(), .price = mView.getPriceRange(), .trades = mView.getTrades() },
+        .markerSizing = mMarkerSizing,
+        .theme = mTheme,
+        .highlightedColumn = mPointer.getHighlightedColumn(),
+        .highlightedTrade = mPointer.getHighlightedTrade(),
+    };
 }
 
 void App::update(double nowMs)
@@ -402,14 +235,18 @@ void App::render()
     }
 }
 
-void App::setProfiling(bool enabled)
+#ifndef __EMSCRIPTEN__
+void App::processEvents()
 {
-    mGpu.setProfiling(enabled);
+    if (auto* engine = mGpu.getEngine()) {
+        engine->processEvents();
+    }
 }
+#endif
 
-void App::setStatsCallback(Gpu::Market::Engine::StatsCallback onStats)
+void App::setWakeCallback(std::function<void()> onWake)
 {
-    mGpu.setStatsCallback(std::move(onStats));
+    mGpu.setWakeCallback(std::move(onWake));
 }
 
 void App::readPixels(Gpu::Market::Engine::PixelsCallback onDone)
@@ -422,16 +259,7 @@ void App::readPixels(Gpu::Market::Engine::PixelsCallback onDone)
     engine->readPixels(std::move(onDone));
 }
 
-#ifndef __EMSCRIPTEN__
-void App::processEvents()
-{
-    if (auto* engine = mGpu.getEngine()) {
-        engine->processEvents();
-    }
-}
-#endif
-
-App::GpuHealth App::getGpuHealth() const
+GpuSession::Health App::getGpuHealth() const
 {
     return mGpu.getHealth();
 }
@@ -444,14 +272,29 @@ App::MemoryStats App::getMemoryStats() const
         .tradesBytes = bytes.trades,
         .totalsBytes = bytes.totals,
         .priceTreeBytes = bytes.priceTree,
-        .summariesBytes = mSummaries.columns.capacity() * sizeof(Core::Data::ColumnSummary),
+        .summariesBytes = mSummaries.getBytes(),
         .gpuBytes = engine ? engine->getGpuBytes() : 0,
     };
 }
 
-void App::setWakeCallback(std::function<void()> onWake)
+void App::setProfiling(bool enabled)
 {
-    mGpu.setWakeCallback(std::move(onWake));
+    mGpu.setProfiling(enabled);
+}
+
+void App::setStatsCallback(Gpu::Market::Engine::StatsCallback onStats)
+{
+    mGpu.setStatsCallback(std::move(onStats));
+}
+
+bool App::loseGpu()
+{
+    auto* engine = mGpu.getEngine();
+    if (!engine) {
+        return false;
+    }
+    engine->loseDevice();
+    return true;
 }
 
 std::expected<void, std::string> App::setUpEngine(Gpu::Market::Engine& engine)
@@ -460,8 +303,8 @@ std::expected<void, std::string> App::setUpEngine(Gpu::Market::Engine& engine)
     if (auto set = engine.setTrades(mData.getTrades()); !set) {
         return set;
     }
-    engine.setColumns(getEngineColumns());
-    engine.setSettings(mSettings);
+    engine.setColumns(mSummaries.getEngineColumns());
+    engine.setSettings(getEngineSettings());
     return {};
 }
 

@@ -21,23 +21,15 @@ struct Rendering
     std::vector<Viewer::Scene::Patch> patches;
 };
 
-/** An app drawing offscreen at `scene`'s size, and its first engine, or none, with a failed check. */
-struct Created
-{
-    std::unique_ptr<Viewer::App> app;
-    Gpu::Market::Engine* engine;  // until the app replaces it, if the GPU is lost
-};
-
-Created createApp(const Viewer::Scene& scene)
+/** An app drawing offscreen at `scene`'s size, or none, with a failed check. */
+std::unique_ptr<Viewer::App> createApp(const Viewer::Scene& scene)
 {
     const Gpu::Market::Engine::Params params{ .target = Gpu::Type::Target::Offscreen{ .width = scene.widthPx, .height = scene.heightPx } };
-    Created created{ .app = nullptr, .engine = nullptr };
-    // The engine first, so tests can reach it.
-    Gpu::Market::Engine::create(params, [&](Gpu::Market::Engine::CreatedResult result) {
+    std::unique_ptr<Viewer::App> created;
+    Viewer::App::create(params, [&](Viewer::App::Result result) {
         CHECK_MESSAGE(result, (result ? "" : result.error()));
         if (result) {
-            created.engine = result->get();
-            created.app = std::make_unique<Viewer::App>(std::move(*result), params);
+            created = std::move(*result);
         }
     });
     return created;
@@ -78,7 +70,7 @@ void checkNoGpuErrors(const Viewer::App& app)
 /** `scene` drawn offscreen, or nothing, with a failed check, if the app can't start or the pixels don't arrive in 5 s. */
 std::optional<Rendering> render(const Viewer::Scene& scene)
 {
-    auto app = createApp(scene).app;
+    auto app = createApp(scene);
     if (!app) {
         return std::nullopt;
     }
@@ -143,7 +135,7 @@ TEST_CASE("The app's scenes know where their grid lines, ring and highlighted co
 TEST_CASE("After the GPU is lost, the app restarts it and draws the same picture again")
 {
     const auto& scene = *Viewer::Scene::find("hour");
-    auto [app, engine] = createApp(scene);
+    auto app = createApp(scene);
     if (!app) {
         return;
     }
@@ -152,7 +144,7 @@ TEST_CASE("After the GPU is lost, the app restarts it and draws the same picture
 
     bool woken = false;
     app->setWakeCallback([&] { woken = true; });
-    engine->loseDevice();
+    CHECK(app->loseGpu());
     // wgpu-native notices on the next call to the device, browsers on their own.
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!woken && std::chrono::steady_clock::now() < deadline) {

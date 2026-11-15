@@ -30,7 +30,7 @@ std::unique_ptr<Viewer::App> createApp(std::optional<std::size_t> maxTrades = st
             }
         });
     if (app) {
-        app->resize(WidthPx, HeightPx);
+        app->setSize(WidthPx, HeightPx);
         CHECK(app->setTrades(Viewer::generateSyntheticDay()));
     }
     return app;
@@ -45,21 +45,21 @@ TEST_CASE("A view with more than 32 trades per pixel column on average shows col
         return;
     }
     // The hour holds about 17,900 synthetic trades: 45 per column.
-    CHECK(app->getViewStats().count > 32 * WidthPx);
-    CHECK(app->getColumnsAcross() == WidthPx);
+    CHECK(app->getView().getStats().count > 32 * WidthPx);
+    CHECK(app->getSummaries().getNumColumns() == WidthPx);
 
     // Every trade in view is in exactly one column.
     std::size_t count = 0;
-    for (const auto& column : app->getColumns()) {
+    for (const auto& column : app->getSummaries().getColumns()) {
         count += column.trades.size();
     }
-    CHECK(count == app->getViewStats().count);
+    CHECK(count == app->getView().getStats().count);
 
     // A minute holds about 300.
     app->zoomAt(WidthPx / 2.0, 1.0 / 60.0);
-    CHECK(app->getViewStats().count < 32 * WidthPx);
-    CHECK(app->getColumnsAcross() == 0);
-    CHECK(app->getColumns().empty());
+    CHECK(app->getView().getStats().count < 32 * WidthPx);
+    CHECK(app->getSummaries().getNumColumns() == 0);
+    CHECK(app->getSummaries().getColumns().empty());
 }
 
 TEST_CASE("The threshold can be set, and summaries turned off")
@@ -69,14 +69,14 @@ TEST_CASE("The threshold can be set, and summaries turned off")
         return;
     }
     app->setSummaryThreshold(1000.0);
-    CHECK(app->getColumnsAcross() == 0);
-    app->showDay();
-    CHECK(app->getColumnsAcross() == WidthPx);  // over 1000 per column
+    CHECK(app->getSummaries().getNumColumns() == 0);
+    app->setView(Core::getUtcDay(app->getTrades().timeUs.front()));
+    CHECK(app->getSummaries().getNumColumns() == WidthPx);  // over 1000 per column
 
     app->setSummariesAllowed(false);
-    CHECK(app->getColumnsAcross() == 0);
+    CHECK(app->getSummaries().getNumColumns() == 0);
     app->setSummariesAllowed(true);
-    CHECK(app->getColumnsAcross() == WidthPx);
+    CHECK(app->getSummaries().getNumColumns() == WidthPx);
 }
 
 TEST_CASE("While summaries show, the pointer picks columns, not trades")
@@ -85,8 +85,8 @@ TEST_CASE("While summaries show, the pointer picks columns, not trades")
     if (!app) {
         return;
     }
-    app->showDay();
-    const auto& columns = app->getColumns();
+    app->setView(Core::getUtcDay(app->getTrades().timeUs.front()));
+    const auto& columns = app->getSummaries().getColumns();
     CHECK(columns.size() > 100);
     if (columns.size() <= 100) {
         return;
@@ -94,12 +94,11 @@ TEST_CASE("While summaries show, the pointer picks columns, not trades")
     // Down the middle of column 100 until its bar, somewhere up the plot, is within reach.
     const double xPx = static_cast<double>(columns[100].index) + 0.5;
     double yPx = 0.0;
-    for (; yPx < HeightPx && !app->getPickedColumn(); yPx += 4.0) {
+    for (; yPx < HeightPx && !std::get_if<Viewer::Pointer::Picked::Column>(&app->getPointer().getPicked()); yPx += 4.0) {
         app->setPointer(xPx, yPx);
     }
-    const auto picked = app->getPickedColumn();
-    CHECK(!app->getPickedTrade());
-    CHECK(picked.has_value());
+    const auto* picked = std::get_if<Viewer::Pointer::Picked::Column>(&app->getPointer().getPicked());
+    CHECK(picked != nullptr);
     if (picked) {
         // The nearest bar, within 24 pixels.
         CHECK(std::abs(picked->centerXPx - xPx) <= 24.0);
@@ -109,7 +108,7 @@ TEST_CASE("While summaries show, the pointer picks columns, not trades")
     }
 
     app->clearPointer();
-    CHECK(!app->getPickedColumn());
+    CHECK(std::holds_alternative<std::monostate>(app->getPointer().getPicked()));
 }
 
 TEST_CASE("Each trade takes about 47 bytes of memory, and 20 on the GPU")
@@ -140,17 +139,19 @@ TEST_CASE("Zooming, panning and resizing leave memory as it was")
     }
     // From the day to an hour and back, dragged about, at two sizes.
     const auto cycle = [&] {
-        app->showDay();
+        app->setView(Core::getUtcDay(app->getTrades().timeUs.front()));
         app->render();
         for (int i = 0; i < 24; ++i) {
             app->zoomAt(WidthPx / 3.0, 0.8);
             app->panBy(7.0);
             app->render();
         }
-        app->resize(WidthPx / 2, HeightPx);
+        app->setSize(WidthPx / 2, HeightPx);
         app->render();
-        app->resize(WidthPx, HeightPx);
-        app->resetView();
+        app->setSize(WidthPx, HeightPx);
+        if (const auto initialView = app->getInitialView()) {
+            app->setView(*initialView);
+        }
         app->render();
     };
     cycle();
@@ -183,5 +184,5 @@ TEST_CASE("Trades too many for the GPU are refused, and those on show stay")
         CHECK(set.error().find("trades are too many: at most") != std::string::npos);
     }
     CHECK(app->getTrades().size() == shown);
-    CHECK(app->getViewStats().count > 0);
+    CHECK(app->getView().getStats().count > 0);
 }

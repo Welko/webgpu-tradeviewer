@@ -91,7 +91,7 @@ std::unique_ptr<Viewer::App> createApp()
             }
         });
     if (app) {
-        app->resize(WidthPx, HeightPx);
+        app->setSize(WidthPx, HeightPx);
     }
     return app;
 }
@@ -125,7 +125,7 @@ std::size_t countColored(Viewer::App& app)
 /** Everything the viewer shows about the view is a real number, and sensible. */
 void checkShown(const Viewer::App& app)
 {
-    for (const auto* ticks : { &app.getAxes().times, &app.getAxes().prices }) {
+    for (const auto* ticks : { &app.getAxes().getTimes(), &app.getAxes().getPrices() }) {
         CHECK(ticks->size() < 100);
         for (const auto& tick : *ticks) {
             CHECK(std::isfinite(tick.fraction));
@@ -144,14 +144,14 @@ void checkShown(const Viewer::App& app)
         CHECK(size.radiusCssPx <= Gpu::Market::Style::MarkerMaxRadiusCssPx);
         last = size.amount;
     }
-    const auto stats = app.getViewStats();
+    const auto stats = app.getView().getStats();
     CHECK(std::isfinite(stats.totalAmount));
     CHECK(stats.totalAmount >= 0.0);
-    if (const auto picked = app.getPickedTrade()) {
+    if (const auto* picked = std::get_if<Viewer::Pointer::Picked::Trade>(&app.getPointer().getPicked())) {
         CHECK(std::isfinite(picked->centerXPx));
         CHECK(std::isfinite(picked->centerYPx));
     }
-    if (const auto picked = app.getPickedColumn()) {
+    if (const auto* picked = std::get_if<Viewer::Pointer::Picked::Column>(&app.getPointer().getPicked())) {
         CHECK(std::isfinite(picked->topPx));
         CHECK(std::isfinite(picked->bottomPx));
     }
@@ -197,7 +197,9 @@ TEST_CASE("Odd but valid trades draw, and can be zoomed, panned and pointed at")
             app->setMarkerScale(scale);
             app->setSummariesAllowed(true);
             // The whole day of the first trade: it must show, as a marker or a bar.
-            app->showDay();
+            if (!app->getTrades().empty()) {
+                app->setView(Core::getUtcDay(app->getTrades().timeUs.front()));
+            }
             look(*app);
             CHECK(countColored(*app) > 0);
             app->setSummariesAllowed(false);
@@ -222,7 +224,9 @@ TEST_CASE("Odd but valid trades draw, and can be zoomed, panned and pointed at")
                 app->panBy(-static_cast<double>(WidthPx));
             }
             look(*app);
-            app->resetView();
+            if (const auto initialView = app->getInitialView()) {
+                app->setView(*initialView);
+            }
             look(*app);
         }
         const auto health = app->getGpuHealth();
@@ -241,10 +245,11 @@ TEST_CASE("A viewer with no trades yet stays usable")
     }
     // No trades yet.
     look(*app);
-    app->showDay();
+    // No trades, so any day.
+    app->setView(Core::getUtcDay(0));
     app->zoomAt(WidthPx / 2.0, 0.5);
     app->panBy(10.0);
     look(*app);
-    CHECK(app->getViewStats().count == 0);
+    CHECK(app->getView().getStats().count == 0);
     CHECK(app->getInstrument().base == "base");
 }

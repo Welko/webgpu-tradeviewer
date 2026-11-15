@@ -45,7 +45,8 @@ public:
     static Type::FrameStats::Gpu toGpuTimes(const std::vector<std::string>& passNames,
                                             std::span<const std::uint64_t> timestamps, double nanosecondsPerTick);
 
-    void beginFrame(bool timed);
+    /** Starts timing a frame on the GPU, or, if not `timed`, records `untimed` as why it has no times. */
+    void beginFrame(std::optional<Type::FrameStats::UntimedReason> untimed);
 
     [[nodiscard]] const TimestampWrites* measurePass(std::string_view name);
 
