@@ -2,13 +2,11 @@
 
 #include "Core/Data/Columns.hpp"
 #include "Core/Data/PreprocessedTrades.hpp"
-#include "Gpu/Market/Type.hpp"
 #include "Viewer/Layout.hpp"
 #include "Viewer/View.hpp"
 
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <vector>
 
 namespace Viewer {
@@ -19,7 +17,6 @@ class Summaries
 public:
     [[nodiscard]] std::uint32_t getNumColumns() const { return mAcross; }
     [[nodiscard]] const std::vector<Core::Data::ColumnSummary>& getColumns() const { return mColumns; }
-    [[nodiscard]] std::optional<Gpu::Market::Type::Columns> getEngineColumns() const;
     [[nodiscard]] std::size_t getBytes() const;
 
     void setAllowed(bool allowed) { mAllowed = allowed; }

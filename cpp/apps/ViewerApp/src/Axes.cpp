@@ -13,20 +13,6 @@ constexpr double PriceTickSpacingCssPx = 50.0;
 
 }  // namespace
 
-Gpu::Plot::Type::Grid Axes::getGrid() const
-{
-    Gpu::Plot::Type::Grid grid;
-    for (const auto& tick : mTimes)
-    {
-        grid.verticalLines.push_back(static_cast<float>(tick.fraction));
-    }
-    for (const auto& tick : mPrices)
-    {
-        grid.horizontalLines.push_back(static_cast<float>(tick.fraction));
-    }
-    return grid;
-}
-
 void Axes::update(const View& view, const Layout& layout)
 {
     // At least two ticks, so even a small plot shows a scale.

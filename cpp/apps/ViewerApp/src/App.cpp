@@ -6,6 +6,7 @@
 #include "Core/Log.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <utility>
 
 namespace Viewer {
@@ -18,6 +19,48 @@ constexpr std::int64_t HourUs = 3'600'000'000;
 constexpr std::uint64_t SyntheticSeed = 1;
 
 constexpr double TelemetryGpuTimingProbability = 1.0 / 30.0;
+
+/** What the engine takes, from App's parts. */
+namespace ToEngine {
+
+/** Grid lines at the axes' ticks. */
+Gpu::Plot::Type::Grid grid(const Axes& axes)
+{
+    Gpu::Plot::Type::Grid grid;
+    for (const auto& tick : axes.getTimes())
+    {
+        grid.verticalLines.push_back(static_cast<float>(tick.fraction));
+    }
+    for (const auto& tick : axes.getPrices())
+    {
+        grid.horizontalLines.push_back(static_cast<float>(tick.fraction));
+    }
+    return grid;
+}
+
+/** The summaries' columns as the engine takes them, or none while trades show. */
+std::optional<Gpu::Market::Type::Columns> columns(const Summaries& summaries)
+{
+    const auto across = summaries.getNumColumns();
+    if (across == 0)
+    {
+        return std::nullopt;
+    }
+    Gpu::Market::Type::Columns columns{ .across = across, .columns = {} };
+    columns.columns.reserve(summaries.getColumns().size());
+    for (const auto& column : summaries.getColumns())
+    {
+        columns.columns.push_back({
+            .index = static_cast<std::uint32_t>(column.index),
+            .price = column.price,
+            .buyAmount = column.buyAmount,
+            .sellAmount = column.sellAmount,
+        });
+    }
+    return columns;
+}
+
+}  // namespace ToEngine
 
 }  // namespace
 
@@ -204,7 +247,7 @@ void App::updateSummaries()
     }
     if (auto* engine = mGpu.getEngine())
     {
-        engine->setColumns(mSummaries.getEngineColumns());
+        engine->setColumns(ToEngine::columns(mSummaries));
     }
 }
 
@@ -236,7 +279,7 @@ Gpu::Market::Engine::Settings App::getEngineSettings() const
         .heightPx = mLayout.heightPx,
         .pixelRatio = mLayout.pixelRatio,
         .insets = mLayout.insets,
-        .grid = mAxes.getGrid(),
+        .grid = ToEngine::grid(mAxes),
         .view = { .time = mView.getTimeRange(), .price = mView.getPriceRange(), .trades = mView.getTrades() },
         .markerSizing = mMarkerSizing,
         .theme = mTheme,
@@ -370,7 +413,7 @@ std::expected<void, std::string> App::setUpEngine(Gpu::Market::Engine& engine)
     {
         return set;
     }
-    engine.setColumns(mSummaries.getEngineColumns());
+    engine.setColumns(ToEngine::columns(mSummaries));
     engine.setSettings(getEngineSettings());
     return {};
 }

@@ -4,26 +4,6 @@
 
 namespace Viewer {
 
-std::optional<Gpu::Market::Type::Columns> Summaries::getEngineColumns() const
-{
-    if (mAcross == 0)
-    {
-        return std::nullopt;
-    }
-    Gpu::Market::Type::Columns columns{ .across = mAcross, .columns = {} };
-    columns.columns.reserve(mColumns.size());
-    for (const auto& column : mColumns)
-    {
-        columns.columns.push_back({
-            .index = static_cast<std::uint32_t>(column.index),
-            .price = column.price,
-            .buyAmount = column.buyAmount,
-            .sellAmount = column.sellAmount,
-        });
-    }
-    return columns;
-}
-
 std::size_t Summaries::getBytes() const
 {
     return mColumns.capacity() * sizeof(Core::Data::ColumnSummary);
