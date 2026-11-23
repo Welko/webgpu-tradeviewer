@@ -18,7 +18,8 @@ if (EMSCRIPTEN)
     set(VIEWER_WEB_OUTPUT_DIR "${PROJECT_SOURCE_DIR}/../web/src/wasm" CACHE PATH
         "Where the Emscripten build writes ViewerApp.js and ViewerApp.wasm")
 
-    target_sources(ViewerApp PRIVATE src/Web/Main.cpp)
+    target_sources(ViewerApp PRIVATE src/Web/Bridge.cpp src/Web/Convert.cpp src/Web/Main.cpp src/Web/Testing.cpp)
+    target_include_directories(ViewerApp PRIVATE src)
     target_link_options(ViewerApp PRIVATE
         -lembind
         -sMODULARIZE=1

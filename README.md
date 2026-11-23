@@ -26,7 +26,9 @@ cpp/
                        Scene.cpp        the image tests' scenes, drawn alike on every platform
                        Native/          the native app: Main (the loop), Options (the command line),
                                         Window (GLFW, input), Report (the title and the log), Snapshot
-                       Web/Main.cpp     the web app: the embind `Viewer` class, its loop driven by JS
+                       Web/             the web app, its loop driven by JS: Main (what the module exports),
+                                        Bridge (the `Viewer` class), Convert (values to and from
+                                        JavaScript), Testing (the browser tests' fault hooks)
   apps/TradeStatsApp native command line: a time range's trade count and amount, as the viewer computes them
   apps/BenchmarkApp  native command line: frame times at four zoom levels (and the whole day
                      drawing every trade), from the profiler
@@ -131,7 +133,7 @@ cd web && npm run lint       # type-checks the app and its tests, then ESLint an
 cd web && npm run format     # reformats the web code
 ```
 
-Both clang tools are version 20, as on CI's Ubuntu 24.04: other versions format differently, and clang-tidy 18 can't read GCC 13's `std::expected`. clang-tidy reads the native build's `compile_commands.json`, so `Web/Main.cpp`, built only by Emscripten, isn't checked.
+Both clang tools are version 20, as on CI's Ubuntu 24.04: other versions format differently, and clang-tidy 18 can't read GCC 13's `std::expected`. clang-tidy reads the native build's `compile_commands.json`, so `Web/`, built only by Emscripten, isn't checked.
 
 The built site has smoke tests in a real browser ([Playwright](https://playwright.dev), Chromium with WebGPU on its software renderer, SwiftShader). They need Node 20 or newer:
 
@@ -239,7 +241,7 @@ Some files load, but what's shown can't be exactly what's in them, or looks wron
 
 **Losing the device natively.** wgpu-native (v29) notices a lost device only on the next call to it, and some calls then panic instead of failing: submitting work, getting a window's texture for a frame, and presenting it. A real loss, such as a driver reset, surfaces at exactly those calls, so in a native window it crashes the app whatever the app checks. Recovering is for the web: browsers turn every call on a lost device into nothing, and the engine needs no checks there. Offscreen, natively, a loss surfaces at an earlier call, so the app's restart can be tested in C++. That needs one guard, since the frame's submit comes after: everything submits through `Gpu::Context::submit()`, which drops the commands once the device is lost. `Context.hpp` declares `wgpuQueueSubmit` deprecated, so any other call fails to compile, with a message saying to use `submit()`. The engine itself never checks.
 
-**Test hooks.** Tests lose the GPU through `App::loseGpu()`. The browser tests need theirs in the published build, which is what they run against, so they're grouped apart from the viewer: `window.viewerTesting` (`loseGpu`, `crash`, `exhaustMemory`, bound as `Testing` in `Web/Main.cpp`). Each harms only the page that calls it.
+**Test hooks.** Tests lose the GPU through `App::loseGpu()`. The browser tests need theirs in the published build, which is what they run against, so they're grouped apart from the viewer: `window.viewerTesting` (`loseGpu`, `crash`, `exhaustMemory`, bound as `Testing` in `Web/Testing.cpp`). Each harms only the page that calls it.
 
 **Memory.** The app counts the memory its large parts hold, room to grow included. Each trade takes about 47 bytes: 25 for the trade, 20 for running totals and 2 for the price tree. On the GPU it takes 20. Natively the app logs a breakdown after loading, with the process's resident memory. The page shows the same breakdown in the data panel, under "Memory", with the wasm heap. The derived data (running totals, price tree, column summaries) adds about 89% to the trades. Tests check these numbers exactly, and that 10 rounds of zooming, panning and resizing leave them as they were. Trades are copied to vectors of exactly their size after loading, since reading leaves up to half of their room unused. `shrink_to_fit()` would do nothing here: libstdc++ skips it without exceptions.
 

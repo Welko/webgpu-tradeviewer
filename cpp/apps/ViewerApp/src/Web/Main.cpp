@@ -1,41 +1,35 @@
-#include "Viewer/App.hpp"
+// The wasm module's start and what it exports to JavaScript: the `Viewer`
+// class (Bridge.hpp) and a few functions. The test hooks are bound in
+// Testing.cpp.
+
+#include "Web/Bridge.hpp"
+#include "Web/Convert.hpp"
+
 #include "Viewer/Scene.hpp"
 
-#include "Core/Data/TradeParser.hpp"
 #include "Core/Log.hpp"
-#include "Core/Memory.hpp"
-#include "Core/Plot/Axis.hpp"
 
 #include <emscripten/bind.h>
 #include <emscripten/em_js.h>
 #include <emscripten/heap.h>
 #include <emscripten/val.h>
 
-#include <cstdint>
-#include <cstdlib>
-#include <expected>
-#include <memory>
 #include <new>
-#include <optional>
 #include <string>
-#include <type_traits>
-#include <utility>
-#include <variant>
-#include <vector>
 
 /*
  * Stops the module with a message saying why, which Module.onAbort receives.
  * A request fails when it would take the heap past its most, which it may
  * be well short of.
  */
+// clang-format off: JavaScript, which clang-format would break.
 EM_JS(void, viewerAbortOutOfMemory, (double heapBytes, double maxBytes), {
-    abort("Out of memory: the viewer had " + Math.round(heapBytes / 1048576) + " MiB, and needed more than the "
-          + Math.round(maxBytes / 1048576) + " MiB a page can have");
+    abort("Out of memory: the viewer had " + Math.round(heapBytes / 1048576) + " MiB, and needed more than the " +
+          Math.round(maxBytes / 1048576) + " MiB a page can have");
 });
+// clang-format on
 
 namespace {
-
-using emscripten::val;
 
 /** Lets JavaScript tell running out of memory from other aborts. Exceptions are off, so new can only abort. */
 const bool OutOfMemoryHandled = [] {
@@ -44,848 +38,24 @@ const bool OutOfMemoryHandled = [] {
     return true;
 }();
 
-/** Accepts the WebGPU spelling: "low-power", "high-performance", anything else is the default. */
-Gpu::Type::PowerPreference parsePowerPreference(const std::string& value)
-{
-    if (value == "low-power")
-    {
-        return Gpu::Type::PowerPreference::LowPower;
-    }
-    if (value == "high-performance")
-    {
-        return Gpu::Type::PowerPreference::HighPerformance;
-    }
-    return Gpu::Type::PowerPreference::Default;
-}
-
-/** Core::Data::TradeStats in numbers JavaScript reads exactly, with times in milliseconds for Date. */
-struct WebTradeStats
-{
-    double count;
-    double firstMs;
-    double lastMs;
-    double totalAmount;
-};
-
-/** Ticks as a JavaScript array of { fraction, label }. */
-val toWeb(const std::vector<Core::Plot::Axis::Tick>& ticks)
-{
-    val array = val::array();
-    for (const auto& tick : ticks)
-    {
-        val object = val::object();
-        object.set("fraction", tick.fraction);
-        object.set("label", tick.label);
-        array.call<void>("push", object);
-    }
-    return array;
-}
-
-/** A color as a JavaScript { red, green, blue }, each from 0 to 1. */
-val toWeb(Gpu::Type::Color color)
-{
-    val object = val::object();
-    object.set("red", color.red);
-    object.set("green", color.green);
-    object.set("blue", color.blue);
-    return object;
-}
-
-/**
- * A legend as { buy, sell, opacity, sizes: [{ amount, radiusCssPx, bound }] },
- * `bound` being "exact", "atMost" or "atLeast".
- */
-val toWeb(const Gpu::Market::Type::Legend& legend)
-{
-    using Bound = Gpu::Market::Type::LegendSize::Bound;
-    val sizes = val::array();
-    for (const auto& size : legend.sizes)
-    {
-        val object = val::object();
-        object.set("amount", size.amount);
-        object.set("radiusCssPx", size.radiusCssPx);
-        object.set("bound", size.bound == Bound::AtMost ? "atMost" : size.bound == Bound::AtLeast ? "atLeast" : "exact");
-        sizes.call<void>("push", object);
-    }
-    val result = val::object();
-    result.set("buy", toWeb(legend.buy));
-    result.set("sell", toWeb(legend.sell));
-    result.set("opacity", legend.opacity);
-    result.set("sizes", sizes);
-    return result;
-}
-
-/** A JavaScript { red, green, blue }, each from 0 to 1. */
-Gpu::Type::Color toColor(const val& color)
-{
-    return { .red = color["red"].as<float>(), .green = color["green"].as<float>(), .blue = color["blue"].as<float>() };
-}
-
-WebTradeStats toWeb(const Core::Data::TradeStats& stats)
-{
-    return {
-        .count = static_cast<double>(stats.count),
-        .firstMs = static_cast<double>(stats.firstUs) / 1000.0,
-        .lastMs = static_cast<double>(stats.lastUs) / 1000.0,
-        .totalAmount = stats.totalAmount,
-    };
-}
-
 /** Calls `onError(message)` with every error the viewer logs, from now on, so the page can show it. */
-void setErrorListener(val onError)
+void setErrorListener(emscripten::val onError)
 {
     Core::Log::onError = [onError](const std::string& message) { onError(message); };
 }
 
-/** The image-test scenes, as an array of { name, description, widthPx, heightPx }. */
-val getScenes()
+/** The image tests' scenes (see Viewer::Web::Convert::ToWeb::scenes()). */
+emscripten::val getScenes()
 {
-    val array = val::array();
-    for (const auto& scene : Viewer::Scene::getScenes())
-    {
-        val object = val::object();
-        object.set("name", std::string(scene.name));
-        object.set("description", std::string(scene.description));
-        object.set("widthPx", scene.widthPx);
-        object.set("heightPx", scene.heightPx);
-        array.call<void>("push", object);
-    }
-    return array;
+    return Viewer::Web::Convert::ToWeb::scenes(Viewer::Scene::getScenes());
 }
-
-/** Known pixels as an array of { what, xPx, yPx, widthPx, heightPx, rgba, tolerance }. */
-val toWeb(const std::vector<Viewer::Scene::Patch>& patches)
-{
-    val array = val::array();
-    for (const auto& patch : patches)
-    {
-        val rgba = val::array();
-        for (const std::uint8_t channel : patch.rgba)
-        {
-            rgba.call<void>("push", channel);
-        }
-        val object = val::object();
-        object.set("what", patch.what);
-        object.set("xPx", patch.xPx);
-        object.set("yPx", patch.yPx);
-        object.set("widthPx", patch.widthPx);
-        object.set("heightPx", patch.heightPx);
-        object.set("rgba", rgba);
-        object.set("tolerance", patch.tolerance);
-        array.call<void>("push", object);
-    }
-    return array;
-}
-
-/** Why a frame has no GPU times, as JavaScript reads it. */
-const char* toWeb(Gpu::Type::FrameStats::UntimedReason reason)
-{
-    using Reason = Gpu::Type::FrameStats::UntimedReason;
-    switch (reason)
-    {
-    case Reason::Undefined:
-        return "undefined";
-    case Reason::ProfilingOff:
-        return "profilingOff";
-    case Reason::Unsupported:
-        return "unsupported";
-    case Reason::NoFreeSlot:
-        return "noFreeSlot";
-    case Reason::NotStarted:
-        return "notStarted";
-    case Reason::ReadbackFailed:
-        return "readbackFailed";
-    case Reason::Overflow:
-        return "overflow";
-    case Reason::NotSampled:
-        return "notSampled";
-    }
-    return "undefined";
-}
-
-/**
- * A frame's stats as { frame, cpu, gpu, untimed, buffers, textures, gpuBytes }:
- * `cpu` is { acquireMs, encodeMs, submitMs } or null; `gpu` is { totalMs,
- * passes: [{ name, gpuMs }] }, or null with `untimed` saying why.
- */
-val toWeb(const Gpu::Type::FrameStats& stats)
-{
-    val object = val::object();
-    object.set("frame", static_cast<double>(stats.frame));
-    if (stats.cpu)
-    {
-        val cpu = val::object();
-        cpu.set("acquireMs", stats.cpu->acquireMs);
-        cpu.set("encodeMs", stats.cpu->encodeMs);
-        cpu.set("submitMs", stats.cpu->submitMs);
-        object.set("cpu", cpu);
-    }
-    else
-    {
-        object.set("cpu", val::null());
-    }
-    if (stats.gpu)
-    {
-        val passes = val::array();
-        for (const auto& pass : stats.gpu->passes)
-        {
-            val entry = val::object();
-            entry.set("name", pass.name);
-            entry.set("gpuMs", pass.gpuMs);
-            passes.call<void>("push", entry);
-        }
-        val gpu = val::object();
-        gpu.set("totalMs", stats.gpu->totalMs);
-        gpu.set("passes", passes);
-        object.set("gpu", gpu);
-        object.set("untimed", val::null());
-    }
-    else
-    {
-        object.set("gpu", val::null());
-        object.set("untimed", toWeb(stats.gpu.error()));
-    }
-    object.set("buffers", stats.buffers);
-    object.set("textures", stats.textures);
-    object.set("gpuBytes", static_cast<double>(stats.gpuBytes));
-    return object;
-}
-
-/** Telemetry's properties as a JavaScript object. */
-val toWeb(const std::vector<Core::Telemetry::Property>& properties)
-{
-    val object = val::object();
-    for (const auto& property : properties)
-    {
-        std::visit(
-            [&](const auto& value) {
-                using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_same_v<T, std::int64_t>)
-                {
-                    object.set(property.name, static_cast<double>(value));
-                }
-                else
-                {
-                    object.set(property.name, value);
-                }
-            },
-            property.value);
-    }
-    return object;
-}
-
-/** A JavaScript object of numbers, strings and booleans as telemetry's properties. Anything else is left out. */
-std::vector<Core::Telemetry::Property> toProperties(const val& object)
-{
-    std::vector<Core::Telemetry::Property> properties;
-    const val keys = val::global("Object").call<val>("keys", object);
-    for (std::size_t i = 0; i < keys["length"].as<std::size_t>(); ++i)
-    {
-        const auto name = keys[i].as<std::string>();
-        const val value = object[name];
-        const auto type = value.typeOf().as<std::string>();
-        if (type == "number")
-        {
-            properties.push_back({ .name = name, .value = value.as<double>() });
-        }
-        else if (type == "string")
-        {
-            properties.push_back({ .name = name, .value = value.as<std::string>() });
-        }
-        else if (type == "boolean")
-        {
-            properties.push_back({ .name = name, .value = value.as<bool>() });
-        }
-    }
-    return properties;
-}
-
-/** Hands telemetry's events to JavaScript, which sends them on: `onEvent(name, properties)`. */
-class WebSink final : public Core::Telemetry::Sink
-{
-public:
-    explicit WebSink(val onEvent)
-        : mOnEvent(std::move(onEvent))
-    {}
-
-    void send(const Core::Telemetry::Event& event) override { mOnEvent(event.name, toWeb(event.properties)); }
-
-private:
-    val mOnEvent;
-};
-
-/** How loading went, as { error, warnings }: a message or null, and an array of messages. */
-val toLoadResult(const std::optional<std::string>& error, const std::vector<std::string>& warnings = {})
-{
-    val array = val::array();
-    for (const auto& warning : warnings)
-    {
-        array.call<void>("push", warning);
-    }
-    val result = val::object();
-    result.set("error", error ? val(*error) : val::null());
-    result.set("warnings", array);
-    return result;
-}
-
-/** A time range in milliseconds since the epoch, for Date. */
-struct WebTimeRange
-{
-    double startMs;
-    double endMs;
-};
-
-/**
- * The object JavaScript holds. JavaScript owns the frame loop and must
- * call delete() when done.
- */
-class WebViewer
-{
-public:
-    /** Calls `onDone(error)` once: `null` on success, a string on failure. */
-    void init(std::string selector, std::string powerPreference, val onDone)
-    {
-        std::weak_ptr<std::unique_ptr<Viewer::App>> slot = mApp;
-        const Gpu::Market::Engine::Params params{
-            .target = Gpu::Type::Target::Canvas{ .selector = std::move(selector) },
-            .powerPreference = parsePowerPreference(powerPreference),
-        };
-        Viewer::App::create(params, [slot, onDone](Viewer::App::Result result) {
-            auto app = slot.lock();
-            if (!app)
-            {
-                // delete() was called before initialization finished.
-                return;
-            }
-            if (!result)
-            {
-                onDone(result.error());
-                return;
-            }
-            *app = std::move(*result);
-            if (auto set = (*app)->setTrades(Viewer::generateSyntheticDay()); !set)
-            {
-                onDone(set.error());
-                return;
-            }
-            onDone(val::null());
-        });
-    }
-
-    /** The GPU in use, as a plain JavaScript object. Empty until init() succeeds. */
-    Gpu::Type::Info getInfo() const { return *mApp ? (*mApp)->getInfo() : Gpu::Type::Info{}; }
-
-    void resize(std::uint32_t widthPx, std::uint32_t heightPx)
-    {
-        if (*mApp)
-        {
-            (*mApp)->setSize(widthPx, heightPx);
-        }
-    }
-
-    void update(double nowMs)
-    {
-        if (*mApp)
-        {
-            (*mApp)->update(nowMs);
-        }
-    }
-
-    bool needsRender() const { return *mApp && (*mApp)->needsRender(); }
-
-    void render()
-    {
-        if (*mApp)
-        {
-            (*mApp)->render();
-        }
-    }
-
-    /** The time range on screen. Empty until init() succeeds. */
-    WebTimeRange getView() const
-    {
-        if (!*mApp)
-        {
-            return {};
-        }
-        const auto view = (*mApp)->getView().getTimeRange();
-        return { .startMs = static_cast<double>(view.startUs) / 1000.0, .endMs = static_cast<double>(view.endUs) / 1000.0 };
-    }
-
-    /** The trades in view. Empty until init() succeeds. */
-    WebTradeStats getViewStats() const { return *mApp ? toWeb((*mApp)->getView().getStats()) : WebTradeStats{}; }
-
-    /** The axes' ticks as { times, prices }, each an array of { fraction, label }. Null until init() succeeds. */
-    val getAxes() const
-    {
-        if (!*mApp)
-        {
-            return val::null();
-        }
-        const auto& axes = (*mApp)->getAxes();
-        val result = val::object();
-        result.set("times", toWeb(axes.getTimes()));
-        result.set("prices", toWeb(axes.getPrices()));
-        return result;
-    }
-
-    /** Takes { background, grid, buy, sell, cursor, markerOpacity }, each color a { red, green, blue } from 0 to 1. */
-    void setTheme(const val& theme)
-    {
-        if (*mApp)
-        {
-            (*mApp)->setTheme({
-                .plot = { .background = toColor(theme["background"]), .grid = toColor(theme["grid"]) },
-                .buy = toColor(theme["buy"]),
-                .sell = toColor(theme["sell"]),
-                .markerOpacity = theme["markerOpacity"].as<float>(),
-                .cursor = toColor(theme["cursor"]),
-            });
-        }
-    }
-
-    /** From the canvas's top left corner. */
-    void setPointer(double xPx, double yPx)
-    {
-        if (*mApp)
-        {
-            (*mApp)->setPointer(xPx, yPx);
-        }
-    }
-
-    void clearPointer()
-    {
-        if (*mApp)
-        {
-            (*mApp)->clearPointer();
-        }
-    }
-
-    /**
-     * The trade the cursor picks, as { timeUs, price, amount, side, centerXPx,
-     * centerYPx }, or null. `side` is "buy" or "sell"; `centerXPx` and
-     * `centerYPx` place its marker's center from the canvas's top left corner.
-     */
-    val getPickedTrade() const
-    {
-        const auto* picked = *mApp ? std::get_if<Viewer::Pointer::Picked::Trade>(&(*mApp)->getPointer().getPicked()) : nullptr;
-        if (!picked)
-        {
-            return val::null();
-        }
-        val result = val::object();
-        // Exact: microseconds since 1970 stay below 2^53 for another 250 years.
-        result.set("timeUs", static_cast<double>(picked->timeUs));
-        result.set("price", picked->price);
-        result.set("amount", picked->amount);
-        result.set("side", picked->side == Core::Data::Side::Buy ? "buy" : "sell");
-        result.set("centerXPx", picked->centerXPx);
-        result.set("centerYPx", picked->centerYPx);
-        return result;
-    }
-
-    /**
-     * The column summary the cursor picks, while summaries are shown, as
-     * { startUs, endUs, count, buyCount, buyAmount, sellAmount, priceLow,
-     * priceHigh, centerXPx, topPx, bottomPx }, or null. `centerXPx`, `topPx`
-     * and `bottomPx` place its bar from the canvas's top left corner.
-     */
-    val getPickedColumn() const
-    {
-        const auto* picked = *mApp ? std::get_if<Viewer::Pointer::Picked::Column>(&(*mApp)->getPointer().getPicked()) : nullptr;
-        if (!picked)
-        {
-            return val::null();
-        }
-        const auto& summary = picked->summary;
-        val result = val::object();
-        result.set("startUs", static_cast<double>(picked->time.startUs));
-        result.set("endUs", static_cast<double>(picked->time.endUs));
-        result.set("count", static_cast<double>(summary.trades.size()));
-        result.set("buyCount", static_cast<double>(summary.buyCount));
-        result.set("buyAmount", summary.buyAmount);
-        result.set("sellAmount", summary.sellAmount);
-        result.set("priceLow", summary.price.low);
-        result.set("priceHigh", summary.price.high);
-        result.set("centerXPx", picked->centerXPx);
-        result.set("topPx", picked->topPx);
-        result.set("bottomPx", picked->bottomPx);
-        return result;
-    }
-
-    /**
-     * While the view shows column summaries, { across, withTrades }: how many
-     * columns split the plot, and how many of those have trades (the bars
-     * drawn). Otherwise null.
-     */
-    val getSummaries() const
-    {
-        if (!*mApp || (*mApp)->getSummaries().getNumColumns() == 0)
-        {
-            return val::null();
-        }
-        val result = val::object();
-        result.set("across", (*mApp)->getSummaries().getNumColumns());
-        result.set("withTrades", static_cast<double>((*mApp)->getSummaries().getColumns().size()));
-        return result;
-    }
-
-    /** Whether crowded views may show column summaries (the default), or always every trade. */
-    void setSummariesAllowed(bool allowed)
-    {
-        if (*mApp)
-        {
-            (*mApp)->setSummariesAllowed(allowed);
-        }
-    }
-
-    /** Trades per CSS pixel column, on average, above which summaries are shown. 32 by default. */
-    void setSummaryThreshold(double tradesPerColumn)
-    {
-        if (*mApp)
-        {
-            (*mApp)->setSummaryThreshold(tradesPerColumn);
-        }
-    }
-
-    /** What markers look like at the current marker scale, for a legend; null before init() succeeds. */
-    val getLegend() const { return *mApp ? toWeb((*mApp)->getLegend()) : val::null(); }
-
-    /** Space around the plot for axis labels. */
-    void setPlotInsets(std::uint32_t leftPx, std::uint32_t topPx, std::uint32_t rightPx, std::uint32_t bottomPx)
-    {
-        if (*mApp)
-        {
-            (*mApp)->setPlotInsets({ .left = leftPx, .top = topPx, .right = rightPx, .bottom = bottomPx });
-        }
-    }
-
-    void resetView()
-    {
-        if (*mApp)
-        {
-            if (const auto initialView = (*mApp)->getInitialView())
-            {
-                (*mApp)->setView(*initialView);
-            }
-        }
-    }
-
-    void showDay()
-    {
-        if (*mApp && !(*mApp)->getTrades().empty())
-        {
-            (*mApp)->setView(Core::getUtcDay((*mApp)->getTrades().timeUs.front()));
-        }
-    }
-
-    /** `xPx` from the canvas's left edge; a `factor` above 1 zooms out. */
-    void zoomAt(double xPx, double factor)
-    {
-        if (*mApp)
-        {
-            (*mApp)->zoomAt(xPx, factor);
-        }
-    }
-
-    void panBy(double dxPx)
-    {
-        if (*mApp)
-        {
-            (*mApp)->panBy(dxPx);
-        }
-    }
-
-    /** "area" or "log". */
-    void setMarkerScale(const std::string& scale)
-    {
-        if (*mApp)
-        {
-            (*mApp)->setMarkerScale(scale == "log" ? Gpu::Market::Type::MarkerScale::Log : Gpu::Market::Type::MarkerScale::Area);
-        }
-    }
-
-    void setPixelRatio(float ratio)
-    {
-        if (*mApp)
-        {
-            (*mApp)->setPixelRatio(ratio);
-        }
-    }
-
-    /**
-     * What the trades are in, as { base, quote, amountDecimals,
-     * priceDecimals }: the assets' names, such as "BTC" and "USDT", and the
-     * most decimals the file gives amounts and prices with. Null until
-     * init() succeeds.
-     */
-    val getInstrument() const
-    {
-        if (!*mApp)
-        {
-            return val::null();
-        }
-        const auto& instrument = (*mApp)->getInstrument();
-        val object = val::object();
-        object.set("base", instrument.base);
-        object.set("quote", instrument.quote);
-        object.set("amountDecimals", instrument.amountDecimals);
-        object.set("priceDecimals", instrument.priceDecimals);
-        return object;
-    }
-
-    /** The trades on show. Empty until init() succeeds. */
-    WebTradeStats getTradeStats() const { return *mApp ? toWeb(Core::Data::getStats((*mApp)->getTrades())) : WebTradeStats{}; }
-
-    /** How the GPU is doing, as { restarting, restarts, failure, errors, errorCount } (see Viewer::GpuSession::Health). Null until init()
-     * succeeds. */
-    val getGpuHealth() const
-    {
-        if (!*mApp)
-        {
-            return val::null();
-        }
-        const auto health = (*mApp)->getGpuHealth();
-        val errors = val::array();
-        for (const auto& error : health.errors)
-        {
-            errors.call<void>("push", error);
-        }
-        val object = val::object();
-        object.set("restarting", health.restarting);
-        object.set("restarts", static_cast<double>(health.restarts));
-        object.set("failure", health.failure ? val(*health.failure) : val::null());
-        object.set("errors", errors);
-        object.set("errorCount", static_cast<double>(health.errorCount));
-        return object;
-    }
-
-    /**
-     * What the app's large parts hold, as { tradesBytes, totalsBytes,
-     * priceTreeBytes, summariesBytes, loadingBytes, gpuBytes, heapBytes } (see
-     * Viewer::App::MemoryStats). Null until init() succeeds.
-     */
-    val getMemoryStats() const
-    {
-        if (!*mApp)
-        {
-            return val::null();
-        }
-        const auto memory = (*mApp)->getMemoryStats();
-        val object = val::object();
-        object.set("tradesBytes", static_cast<double>(memory.tradesBytes));
-        object.set("totalsBytes", static_cast<double>(memory.totalsBytes));
-        object.set("priceTreeBytes", static_cast<double>(memory.priceTreeBytes));
-        object.set("summariesBytes", static_cast<double>(memory.summariesBytes));
-        object.set("loadingBytes", static_cast<double>(mParser ? mParser->getBytes() : 0));
-        object.set("gpuBytes", static_cast<double>(memory.gpuBytes));
-        object.set("heapBytes", static_cast<double>(Core::Memory::getProcessBytes().value_or(0)));
-        return object;
-    }
-
-    /** Calls `onWake()` when the viewer needs a frame without any input: when the GPU is lost, and once it's back. */
-    void setWakeCallback(val onWake)
-    {
-        if (*mApp)
-        {
-            (*mApp)->setWakeCallback([onWake] { onWake(); });
-        }
-    }
-
-    /** Turns frame timing on or off. Off by default. */
-    void setProfiling(bool enabled)
-    {
-        if (*mApp)
-        {
-            (*mApp)->setProfiling(enabled);
-        }
-    }
-
-    /**
-     * Calls `onStats(stats)` once per drawn frame, in order, once its GPU
-     * times are in (see toWeb()), or stops with null. It mustn't call render().
-     */
-    void setStatsCallback(val onStats)
-    {
-        if (!*mApp)
-        {
-            return;
-        }
-        if (onStats.isNull())
-        {
-            (*mApp)->setStatsCallback(nullptr);
-            return;
-        }
-        (*mApp)->setStatsCallback([onStats](const Gpu::Type::FrameStats& stats) { onStats(toWeb(stats)); });
-    }
-
-    /**
-     * Starts sending anonymous telemetry, once the user agreed: each event as
-     * `onEvent(name, properties)`, the first with `environment` (browser,
-     * screen...) added. Null stops at once.
-     */
-    void setTelemetry(val onEvent, const val& environment)
-    {
-        if (!*mApp)
-        {
-            return;
-        }
-        if (onEvent.isNull() || onEvent.isUndefined())
-        {
-            (*mApp)->setTelemetry(nullptr);
-            return;
-        }
-        (*mApp)->setTelemetry(std::make_unique<WebSink>(std::move(onEvent)), toProperties(environment));
-    }
-
-    /** Sends telemetry's summary of what happened so far, such as when the page closes. */
-    void flushTelemetry()
-    {
-        if (*mApp)
-        {
-            (*mApp)->flushTelemetry();
-        }
-    }
-
-    /** What every telemetry event carries, for events the page sends itself, such as errors. Null until init() succeeds. */
-    val getTelemetryProperties() const { return *mApp ? toWeb((*mApp)->getTelemetry().getCommonProperties()) : val::null(); }
-
-    /**
-     * Starts reading a trades file, which appendChunk() then receives piece
-     * by piece. Its name gives the assets when the file doesn't, as
-     * Binance's don't: BTCUSDT-trades-2019-12-01.zip.
-     */
-    void beginLoad(const std::string& fileName) { mParser.emplace(fileName); }
-
-    /** Parses a Uint8Array of the file. { error, warnings }, as finishLoad() gives them: warnings come only at the end. */
-    val appendChunk(const val& bytes)
-    {
-        if (!mParser)
-        {
-            return toLoadResult("beginLoad() wasn't called");
-        }
-        mChunk.resize(bytes["length"].as<std::size_t>());
-        val(emscripten::typed_memory_view(mChunk.size(), mChunk.data())).call<void>("set", bytes);
-        auto appended = mParser->append(std::string_view(mChunk.data(), mChunk.size()));
-        if (!appended)
-        {
-            mParser.reset();
-            return toLoadResult(appended.error());
-        }
-        return toLoadResult(std::nullopt);
-    }
-
-    /**
-     * Shows the file's trades in place of the current ones. { error, warnings }:
-     * why it failed, or null, keeping the trades on show; and what about the
-     * trades makes what's shown differ from the file, or look wrong.
-     */
-    val finishLoad()
-    {
-        if (!mParser || !*mApp)
-        {
-            return toLoadResult("beginLoad() wasn't called");
-        }
-        auto parsed = mParser->finish();
-        mParser.reset();
-        if (!parsed)
-        {
-            return toLoadResult(parsed.error());
-        }
-        if (auto set = (*mApp)->setTrades(std::move(parsed->trades)); !set)
-        {
-            return toLoadResult(set.error());
-        }
-        return toLoadResult(std::nullopt, parsed->warnings);
-    }
-
-    /**
-     * Shows the image-test scene called `name` (see Viewer::Scene) in place
-     * of everything else. Its known pixels (see toWeb()), or null if there's
-     * no such scene.
-     */
-    val showScene(const std::string& name)
-    {
-        const auto* scene = Viewer::Scene::find(name);
-        if (!*mApp || !scene)
-        {
-            return val::null();
-        }
-        return toWeb(Viewer::Scene::show(*scene, **mApp));
-    }
-
-    /**
-     * Copies the next frame drawn back, then calls `onDone(pixels, error)`:
-     * a Uint8Array of RGBA rows, top row first, and null; or null and a message.
-     */
-    void readPixels(val onDone)
-    {
-        if (!*mApp)
-        {
-            onDone(val::null(), std::string("The viewer isn't ready"));
-            return;
-        }
-        (*mApp)->readPixels([onDone](const std::expected<std::vector<std::uint8_t>, std::string>& pixels) {
-            if (!pixels)
-            {
-                onDone(val::null(), pixels.error());
-                return;
-            }
-            // A copy that outlives the vector.
-            onDone(val(emscripten::typed_memory_view(pixels->size(), pixels->data())).call<val>("slice"), val::null());
-        });
-    }
-
-private:
-    friend struct Testing;
-
-    std::shared_ptr<std::unique_ptr<Viewer::App>> mApp = std::make_shared<std::unique_ptr<Viewer::App>>();
-    std::optional<Core::Data::TradeParser> mParser;  // while a file loads
-    std::vector<char> mChunk;  // the last chunk, copied out of JavaScript
-};
-
-/**
- * Faults to inject, for the browser tests: not part of the viewer. They
- * ship in the published build, so the tests run what's published; each
- * harms only the page that calls it.
- */
-struct Testing
-{
-    /** Loses `viewer`'s GPU device, as a driver reset would. False before init() succeeds, or while the GPU restarts. */
-    static bool loseGpu(WebViewer& viewer) { return *viewer.mApp && (*viewer.mApp)->loseGpu(); }
-
-    /** Stops the module, as a bug would. */
-    static void crash() { std::abort(); }
-
-    /** Crashes inside the wasm code without aborting, as a memory bug would. */
-    static void trap() { __builtin_trap(); }
-
-    /** Logs an error, as the engine would when something fails. */
-    static void logError(const std::string& message) { Core::Log::error("{}", message); }
-
-    /** Asks for as much memory as the heap can ever have, which fails at once without using any. */
-    static void exhaustMemory()
-    {
-        // Volatile, so the compiler can't leave out the request.
-        char* volatile taken = new char[emscripten_get_heap_max()];
-        delete[] taken;
-    }
-};
 
 }  // namespace
 
-EMSCRIPTEN_BINDINGS(Testing)
-{
-    emscripten::class_<Testing>("Testing")
-        .class_function("loseGpu", &Testing::loseGpu)
-        .class_function("crash", &Testing::crash)
-        .class_function("trap", &Testing::trap)
-        .class_function("logError", &Testing::logError)
-        .class_function("exhaustMemory", &Testing::exhaustMemory);
-}
-
 EMSCRIPTEN_BINDINGS(Viewer)
 {
+    using Viewer::Web::Bridge;
+
     emscripten::value_object<Gpu::Type::Info>("GpuInfo")
         .field("vendor", &Gpu::Type::Info::vendor)
         .field("device", &Gpu::Type::Info::device)
@@ -895,56 +65,58 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .field("adapter", &Gpu::Type::Info::adapter)
         .field("webglRenderer", &Gpu::Type::Info::webglRenderer);
 
-    emscripten::value_object<WebTradeStats>("TradeStats")
-        .field("count", &WebTradeStats::count)
-        .field("firstMs", &WebTradeStats::firstMs)
-        .field("lastMs", &WebTradeStats::lastMs)
-        .field("totalAmount", &WebTradeStats::totalAmount);
+    emscripten::value_object<Viewer::Web::TradeStats>("TradeStats")
+        .field("count", &Viewer::Web::TradeStats::count)
+        .field("firstMs", &Viewer::Web::TradeStats::firstMs)
+        .field("lastMs", &Viewer::Web::TradeStats::lastMs)
+        .field("totalAmount", &Viewer::Web::TradeStats::totalAmount);
 
-    emscripten::value_object<WebTimeRange>("TimeRange").field("startMs", &WebTimeRange::startMs).field("endMs", &WebTimeRange::endMs);
+    emscripten::value_object<Viewer::Web::TimeRange>("TimeRange")
+        .field("startMs", &Viewer::Web::TimeRange::startMs)
+        .field("endMs", &Viewer::Web::TimeRange::endMs);
 
-    emscripten::class_<WebViewer>("Viewer")
+    emscripten::class_<Bridge>("Viewer")
         .constructor<>()
-        .function("init", &WebViewer::init)
-        .function("info", &WebViewer::getInfo)
-        .function("resize", &WebViewer::resize)
-        .function("update", &WebViewer::update)
-        .function("needsRender", &WebViewer::needsRender)
-        .function("render", &WebViewer::render)
-        .function("view", &WebViewer::getView)
-        .function("viewStats", &WebViewer::getViewStats)
-        .function("axes", &WebViewer::getAxes)
-        .function("legend", &WebViewer::getLegend)
-        .function("setTheme", &WebViewer::setTheme)
-        .function("setPointer", &WebViewer::setPointer)
-        .function("clearPointer", &WebViewer::clearPointer)
-        .function("pickedTrade", &WebViewer::getPickedTrade)
-        .function("pickedColumn", &WebViewer::getPickedColumn)
-        .function("summaries", &WebViewer::getSummaries)
-        .function("setSummariesAllowed", &WebViewer::setSummariesAllowed)
-        .function("setSummaryThreshold", &WebViewer::setSummaryThreshold)
-        .function("setPlotInsets", &WebViewer::setPlotInsets)
-        .function("resetView", &WebViewer::resetView)
-        .function("showDay", &WebViewer::showDay)
-        .function("zoomAt", &WebViewer::zoomAt)
-        .function("panBy", &WebViewer::panBy)
-        .function("setMarkerScale", &WebViewer::setMarkerScale)
-        .function("setPixelRatio", &WebViewer::setPixelRatio)
-        .function("tradeStats", &WebViewer::getTradeStats)
-        .function("instrument", &WebViewer::getInstrument)
-        .function("setTelemetry", &WebViewer::setTelemetry)
-        .function("flushTelemetry", &WebViewer::flushTelemetry)
-        .function("telemetryProperties", &WebViewer::getTelemetryProperties)
-        .function("beginLoad", &WebViewer::beginLoad)
-        .function("appendChunk", &WebViewer::appendChunk)
-        .function("finishLoad", &WebViewer::finishLoad)
-        .function("showScene", &WebViewer::showScene)
-        .function("readPixels", &WebViewer::readPixels)
-        .function("gpuHealth", &WebViewer::getGpuHealth)
-        .function("memoryStats", &WebViewer::getMemoryStats)
-        .function("setWakeCallback", &WebViewer::setWakeCallback)
-        .function("setProfiling", &WebViewer::setProfiling)
-        .function("setStatsCallback", &WebViewer::setStatsCallback);
+        .function("init", &Bridge::init)
+        .function("info", &Bridge::getInfo)
+        .function("resize", &Bridge::resize)
+        .function("update", &Bridge::update)
+        .function("needsRender", &Bridge::needsRender)
+        .function("render", &Bridge::render)
+        .function("view", &Bridge::getView)
+        .function("viewStats", &Bridge::getViewStats)
+        .function("axes", &Bridge::getAxes)
+        .function("legend", &Bridge::getLegend)
+        .function("setTheme", &Bridge::setTheme)
+        .function("setPointer", &Bridge::setPointer)
+        .function("clearPointer", &Bridge::clearPointer)
+        .function("pickedTrade", &Bridge::getPickedTrade)
+        .function("pickedColumn", &Bridge::getPickedColumn)
+        .function("summaries", &Bridge::getSummaries)
+        .function("setSummariesAllowed", &Bridge::setSummariesAllowed)
+        .function("setSummaryThreshold", &Bridge::setSummaryThreshold)
+        .function("setPlotInsets", &Bridge::setPlotInsets)
+        .function("resetView", &Bridge::resetView)
+        .function("showDay", &Bridge::showDay)
+        .function("zoomAt", &Bridge::zoomAt)
+        .function("panBy", &Bridge::panBy)
+        .function("setMarkerScale", &Bridge::setMarkerScale)
+        .function("setPixelRatio", &Bridge::setPixelRatio)
+        .function("tradeStats", &Bridge::getTradeStats)
+        .function("instrument", &Bridge::getInstrument)
+        .function("setTelemetry", &Bridge::setTelemetry)
+        .function("flushTelemetry", &Bridge::flushTelemetry)
+        .function("telemetryProperties", &Bridge::getTelemetryProperties)
+        .function("beginLoad", &Bridge::beginLoad)
+        .function("appendChunk", &Bridge::appendChunk)
+        .function("finishLoad", &Bridge::finishLoad)
+        .function("showScene", &Bridge::showScene)
+        .function("readPixels", &Bridge::readPixels)
+        .function("gpuHealth", &Bridge::getGpuHealth)
+        .function("memoryStats", &Bridge::getMemoryStats)
+        .function("setWakeCallback", &Bridge::setWakeCallback)
+        .function("setProfiling", &Bridge::setProfiling)
+        .function("setStatsCallback", &Bridge::setStatsCallback);
 
     emscripten::function("scenes", &getScenes);
     emscripten::function("setErrorListener", &setErrorListener);

@@ -35,7 +35,7 @@ declare global {
   interface Window {
     /** The viewer on the page, for tests and the console. */
     viewer?: Viewer;
-    /** Faults to inject into it, for the browser tests (see Testing in cpp/apps/ViewerApp/src/Web/Main.cpp). */
+    /** Faults to inject into it, for the browser tests (see cpp/apps/ViewerApp/src/Web/Testing.cpp). */
     viewerTesting?: MainModule['Testing'];
   }
 }
