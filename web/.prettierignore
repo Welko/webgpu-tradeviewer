@@ -1,0 +1,6 @@
+# Generated, or written by tools.
+src/wasm/
+test-results/
+playwright-report/
+node_modules/
+package-lock.json

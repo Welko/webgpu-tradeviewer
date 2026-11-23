@@ -34,13 +34,14 @@ struct Reported
 std::optional<Gpu::Context> createContext()
 {
     std::optional<Gpu::Context> context;
-    Gpu::Context::create(Gpu::Handle(wgpuCreateInstance(nullptr)), nullptr, Gpu::Type::PowerPreference::Default,
-        [&](Gpu::Context::Result result) {
-            CHECK_MESSAGE(result, (result ? "" : result.error()));
-            if (result) {
-                context = std::move(*result);
-            }
-        });
+    Gpu::Handle instance(wgpuCreateInstance(nullptr));
+    Gpu::Context::create(std::move(instance), nullptr, Gpu::Type::PowerPreference::Default, [&](Gpu::Context::Result result) {
+        CHECK_MESSAGE(result, (result ? "" : result.error()));
+        if (result)
+        {
+            context = std::move(*result);
+        }
+    });
     return context;
 }
 
@@ -70,7 +71,8 @@ bool draw(Profiler& profiler, const Gpu::Context& context, std::uint64_t frame, 
 bool waitFor(const Gpu::Context& context, const std::vector<Reported>& reported, std::size_t count)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (reported.size() < count && std::chrono::steady_clock::now() < deadline) {
+    while (reported.size() < count && std::chrono::steady_clock::now() < deadline)
+    {
         wgpuInstanceProcessEvents(context.instance.get());
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
@@ -82,7 +84,9 @@ bool waitFor(const Gpu::Context& context, const std::vector<Reported>& reported,
 std::vector<std::uint64_t> numbers(const std::vector<Reported>& reported)
 {
     std::vector<std::uint64_t> frames;
-    for (const auto& frame : reported) {
+    frames.reserve(reported.size());
+    for (const auto& frame : reported)
+    {
         frames.push_back(frame.frame);
     }
     std::ranges::sort(frames);
@@ -107,15 +111,17 @@ void encodeClear(WGPUCommandEncoder encoder, WGPUTextureView view, const Profile
     wgpuRenderPassEncoderEnd(pass.get());
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("An unfinished frame is dropped, freeing its slot")
 {
-    if constexpr (!Core::Profiling::Compiled) {
+    if constexpr (!Core::Profiling::Compiled)
+    {
         return;
     }
     const auto context = createContext();
-    if (!context) {
+    if (!context)
+    {
         return;
     }
     std::vector<Reported> reported;
@@ -123,10 +129,12 @@ TEST_CASE("An unfinished frame is dropped, freeing its slot")
     const Gpu::Handle encoder(wgpuDeviceCreateCommandEncoder(context->device.get(), nullptr));
 
     // Otherwise the slots would run out. Every other frame ends its passes first.
-    for (std::size_t frame = 0; frame < 2 * Slots; ++frame) {
+    for (std::size_t frame = 0; frame < 2 * Slots; ++frame)
+    {
         profiler->beginFrame(std::nullopt);
         CHECK(profiler->measurePass("pass"));
-        if (frame % 2 == 1) {
+        if (frame % 2 == 1)
+        {
             profiler->endPasses(encoder.get());
         }
     }
@@ -137,11 +145,13 @@ TEST_CASE("An unfinished frame is dropped, freeing its slot")
 
 TEST_CASE("A timed frame is reported once its times are read back, freeing its slot")
 {
-    if constexpr (!Core::Profiling::Compiled) {
+    if constexpr (!Core::Profiling::Compiled)
+    {
         return;
     }
     const auto context = createContext();
-    if (!context) {
+    if (!context)
+    {
         return;
     }
     std::vector<Reported> reported;
@@ -153,26 +163,31 @@ TEST_CASE("A timed frame is reported once its times are read back, freeing its s
     CHECK(draw(*profiler, *context, 3, true));
     CHECK_FALSE(draw(*profiler, *context, 4, true));
     CHECK(numbers(reported) == std::vector<std::uint64_t>{ 4 });
-    if (reported.size() == 1) {
+    if (reported.size() == 1)
+    {
         CHECK(reported[0].times.error_or({}) == UntimedReason::NoFreeSlot);
     }
 
-    if (!waitFor(*context, reported, 4)) {
+    if (!waitFor(*context, reported, 4))
+    {
         return;
     }
     CHECK(numbers(reported) == std::vector<std::uint64_t>{ 1, 2, 3, 4 });
-    for (std::size_t i = 1; i < reported.size(); ++i) {
+    for (std::size_t i = 1; i < reported.size(); ++i)
+    {
         CHECK(reported[i].times);
     }
 
     // The slots are free again, with none of their passes left over.
     CHECK(draw(*profiler, *context, 5, true));
-    if (!waitFor(*context, reported, 5)) {
+    if (!waitFor(*context, reported, 5))
+    {
         return;
     }
     CHECK(reported[4].frame == 5);
     CHECK(reported[4].times);
-    if (reported[4].times) {
+    if (reported[4].times)
+    {
         CHECK(reported[4].times->passes.size() == 1);
     }
 }
@@ -180,7 +195,8 @@ TEST_CASE("A timed frame is reported once its times are read back, freeing its s
 TEST_CASE("An untimed frame is reported right away, with why")
 {
     const auto context = createContext();
-    if (!context) {
+    if (!context)
+    {
         return;
     }
     std::vector<Reported> reported;
@@ -199,7 +215,8 @@ TEST_CASE("An untimed frame is reported right away, with why")
     profiler->endFrame(3);
 
     CHECK(reported.size() == 3);
-    if (reported.size() == 3) {
+    if (reported.size() == 3)
+    {
         CHECK(reported[0].times.error_or({}) == UntimedReason::NotStarted);
         CHECK(reported[1].frame == 2);
         CHECK(reported[1].times.error_or({}) == UntimedReason::ProfilingOff);
@@ -209,11 +226,13 @@ TEST_CASE("An untimed frame is reported right away, with why")
 
 TEST_CASE("A timed frame without passes is reported right away, with zero time")
 {
-    if constexpr (!Core::Profiling::Compiled) {
+    if constexpr (!Core::Profiling::Compiled)
+    {
         return;
     }
     const auto context = createContext();
-    if (!context) {
+    if (!context)
+    {
         return;
     }
     std::vector<Reported> reported;
@@ -221,16 +240,19 @@ TEST_CASE("A timed frame without passes is reported right away, with zero time")
 
     draw(*profiler, *context, 1, false);
     CHECK(reported.size() == 1);
-    if (reported.size() == 1) {
+    if (reported.size() == 1)
+    {
         CHECK(reported[0].times);
-        if (reported[0].times) {
+        if (reported[0].times)
+        {
             CHECK(reported[0].times->totalMs == 0.0);
             CHECK(reported[0].times->passes.empty());
         }
     }
 
     // Its slot is free right away: otherwise the next frames would fill them all.
-    for (std::uint64_t frame = 2; frame <= Slots; ++frame) {
+    for (std::uint64_t frame = 2; frame <= Slots; ++frame)
+    {
         draw(*profiler, *context, frame, false);
     }
     CHECK(draw(*profiler, *context, Slots + 1, true));
@@ -238,11 +260,13 @@ TEST_CASE("A timed frame without passes is reported right away, with zero time")
 
 TEST_CASE("Times that arrive after the profiler is gone are dropped")
 {
-    if constexpr (!Core::Profiling::Compiled) {
+    if constexpr (!Core::Profiling::Compiled)
+    {
         return;
     }
     const auto context = createContext();
-    if (!context) {
+    if (!context)
+    {
         return;
     }
     std::vector<Reported> reported;
@@ -250,7 +274,8 @@ TEST_CASE("Times that arrive after the profiler is gone are dropped")
         const auto profiler = createProfiler(*context, reported);
         draw(*profiler, *context, 1, true);
     }
-    for (int attempt = 0; attempt < 100; ++attempt) {
+    for (int attempt = 0; attempt < 100; ++attempt)
+    {
         wgpuInstanceProcessEvents(context->instance.get());
     }
     CHECK(reported.empty());
@@ -258,11 +283,13 @@ TEST_CASE("Times that arrive after the profiler is gone are dropped")
 
 TEST_CASE("Each pass is timed with timestamps of its own, up to a limit")
 {
-    if constexpr (!Core::Profiling::Compiled) {
+    if constexpr (!Core::Profiling::Compiled)
+    {
         return;
     }
     const auto context = createContext();
-    if (!context) {
+    if (!context)
+    {
         return;
     }
     std::vector<Reported> reported;
@@ -272,7 +299,7 @@ TEST_CASE("Each pass is timed with timestamps of its own, up to a limit")
     WGPUTextureDescriptor descriptor{};
     descriptor.usage = WGPUTextureUsage_RenderAttachment;
     descriptor.dimension = WGPUTextureDimension_2D;
-    descriptor.size = { 256, 256, 1 };
+    descriptor.size = { .width = 256, .height = 256, .depthOrArrayLayers = 1 };
     descriptor.format = WGPUTextureFormat_RGBA8Unorm;
     descriptor.mipLevelCount = 1;
     descriptor.sampleCount = 1;
@@ -281,10 +308,12 @@ TEST_CASE("Each pass is timed with timestamps of its own, up to a limit")
     const Gpu::Handle encoder(wgpuDeviceCreateCommandEncoder(context->device.get(), nullptr));
 
     profiler->beginFrame(std::nullopt);
-    for (std::uint32_t pass = 0; pass < MaxPasses; ++pass) {
+    for (std::uint32_t pass = 0; pass < MaxPasses; ++pass)
+    {
         const auto* timestampWrites = profiler->measurePass("pass " + std::to_string(pass));
         CHECK(timestampWrites);
-        if (timestampWrites) {
+        if (timestampWrites)
+        {
             CHECK(timestampWrites->beginningOfPassWriteIndex == 2 * pass);
             CHECK(timestampWrites->endOfPassWriteIndex == 2 * pass + 1);
         }
@@ -300,17 +329,20 @@ TEST_CASE("Each pass is timed with timestamps of its own, up to a limit")
     context->submit(commands.get());
     profiler->endFrame(1);
 
-    if (!waitFor(*context, reported, 1)) {
+    if (!waitFor(*context, reported, 1))
+    {
         return;
     }
     const auto& times = reported[0].times;
     CHECK(times);
-    if (!times) {
+    if (!times)
+    {
         return;
     }
     CHECK(times->passes.size() == MaxPasses);
     double totalMs = 0.0;
-    for (std::size_t pass = 0; pass < times->passes.size(); ++pass) {
+    for (std::size_t pass = 0; pass < times->passes.size(); ++pass)
+    {
         CHECK(times->passes[pass].name == "pass " + std::to_string(pass));
         CHECK(times->passes[pass].gpuMs > 0.0);
         totalMs += times->passes[pass].gpuMs;
@@ -321,7 +353,8 @@ TEST_CASE("Each pass is timed with timestamps of its own, up to a limit")
 TEST_CASE("Frames on a device without timestamp queries are untimed")
 {
     auto context = createContext();
-    if (!context) {
+    if (!context)
+    {
         return;
     }
     context->features.timestampQuery = false;
@@ -330,7 +363,8 @@ TEST_CASE("Frames on a device without timestamp queries are untimed")
 
     CHECK_FALSE(draw(*profiler, *context, 1, true));
     CHECK(reported.size() == 1);
-    if (reported.size() == 1) {
+    if (reported.size() == 1)
+    {
         const auto reason = Core::Profiling::Compiled ? UntimedReason::Unsupported : UntimedReason::ProfilingOff;
         CHECK(reported[0].times.error_or({}) == reason);
     }

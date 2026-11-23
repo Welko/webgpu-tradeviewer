@@ -24,10 +24,7 @@ export function App() {
     <div className="app">
       <header className="app-header">
         <h1>{status.kind === 'ready' ? `${status.instrument.base}/${status.instrument.quote} trades` : 'Trades'}</h1>
-        <span
-          className={status.kind === 'error' ? 'status error' : 'status'}
-          data-status={status.kind}
-        >
+        <span className={status.kind === 'error' ? 'status error' : 'status'} data-status={status.kind}>
           {describe(status)}
           {status.kind === 'ready' && powerPreference !== 'default' && ` · ${powerPreference} requested`}
         </span>

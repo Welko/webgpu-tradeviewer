@@ -14,7 +14,7 @@ constexpr std::int64_t MaxViewUs = 7 * 86'400'000'000;
 // Space above and below the visible trades, as a share of their price range.
 constexpr double PricePadding = 0.05;
 
-} // namespace
+}  // namespace
 
 Core::Plot::Mapping View::getMapping(const Layout& layout) const
 {
@@ -25,12 +25,14 @@ void View::setTimeRange(const Core::Data::PreprocessedTrades& data, Core::TimeRa
 {
     mTime = time;
     mTrades = Core::Data::getTradesIn(data.getTrades(), time);
-    if (const auto price = data.getPriceRange(mTrades)) {
+    if (const auto price = data.getPriceRange(mTrades))
+    {
         // Some room even for a single price, so its trades sit mid-height.
         const double padding = std::max((price->high - price->low) * PricePadding, price->high * 1e-5);
         mPrice = { .low = price->low - padding, .high = price->high + padding };
     }
-    if (mTrades.empty()) {
+    if (mTrades.empty())
+    {
         mStats = {};
         return;
     }
@@ -54,9 +56,10 @@ void View::zoomAt(const Core::Data::PreprocessedTrades& data, const Layout& layo
 
 void View::panBy(const Core::Data::PreprocessedTrades& data, const Layout& layout, double dxPx)
 {
-    if (const double plotWidthPx = layout.getPlotWidthPx(); plotWidthPx > 0.0) {
+    if (const double plotWidthPx = layout.getPlotWidthPx(); plotWidthPx > 0.0)
+    {
         setTimeRange(data, mTime.panned(-dxPx / plotWidthPx));
     }
 }
 
-} // namespace Viewer
+}  // namespace Viewer

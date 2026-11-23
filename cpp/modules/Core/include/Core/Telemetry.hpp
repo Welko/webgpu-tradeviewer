@@ -43,8 +43,10 @@ struct Event
     /** The property called `name`, or null. */
     [[nodiscard]] const Value* find(std::string_view name) const
     {
-        for (const auto& property : properties) {
-            if (property.name == name) {
+        for (const auto& property : properties)
+        {
+            if (property.name == name)
+            {
                 return &property.value;
             }
         }
@@ -90,7 +92,8 @@ public:
     /** Starts a new session sending to `sink`, or stops sending with null. Does nothing when compiled out. */
     void setSink(std::unique_ptr<Sink> sink)
     {
-        if (!Compiled) {
+        if (!Compiled)
+        {
             return;
         }
         mSink = std::move(sink);
@@ -104,10 +107,12 @@ public:
     /** Sends `name` with `properties` and the common ones, if enabled and under the cap. */
     void send(std::string name, std::vector<Property> properties)
     {
-        if (!mSink) {
+        if (!mSink)
+        {
             return;
         }
-        if (mSent >= MaxEvents) {
+        if (mSent >= MaxEvents)
+        {
             ++mDropped;
             return;
         }
@@ -121,11 +126,8 @@ public:
     [[nodiscard]] std::vector<Property> getCommonProperties() const
     {
         return {
-            { .name = "schema", .value = Schema },
-            { .name = "session", .value = mSession },
-            { .name = "platform", .value = mPlatform },
-            { .name = "build", .value = mBuild },
-            { .name = "appVersion", .value = mVersion },
+            { .name = "schema", .value = Schema }, { .name = "session", .value = mSession },    { .name = "platform", .value = mPlatform },
+            { .name = "build", .value = mBuild },  { .name = "appVersion", .value = mVersion },
         };
     }
 
@@ -139,7 +141,8 @@ private:
         std::random_device device;
         const std::uint64_t value = (std::uint64_t{ device() } << 32) | device();
         std::string id(16, '0');
-        for (std::size_t i = 0; i < id.size(); ++i) {
+        for (std::size_t i = 0; i < id.size(); ++i)
+        {
             id[i] = "0123456789abcdef"[(value >> (4 * i)) & 0xF];
         }
         return id;
@@ -154,4 +157,4 @@ private:
     std::size_t mDropped = 0;
 };
 
-} // namespace Core::Telemetry
+}  // namespace Core::Telemetry

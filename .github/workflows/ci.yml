@@ -41,13 +41,15 @@ jobs:
       # GLFW's build dependencies, zlib, and the Vulkan loader with Mesa's
       # software Vulkan driver (lavapipe): the runner has no GPU, and the GPU
       # tests need one. Xvfb for a window to draw the scenes through.
+      # clang-format and clang-tidy for tools/lint-cpp.sh.
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libwayland-dev libxkbcommon-dev \
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
-            zlib1g-dev libvulkan1 mesa-vulkan-drivers xvfb xauth
+            zlib1g-dev libvulkan1 mesa-vulkan-drivers xvfb xauth \
+            clang-format-20 clang-tidy-20
 
       # Cargo comes with the runner; the cache skips building naga again.
       - name: Cache naga
@@ -68,6 +70,10 @@ jobs:
       - name: Build
         working-directory: cpp
         run: cmake --build --preset native -j "$(nproc)"
+
+      # The format and clang-tidy's checks, from the build's compile_commands.json.
+      - name: Lint
+        run: tools/lint-cpp.sh
 
       - name: Test
         working-directory: cpp
@@ -258,6 +264,11 @@ jobs:
         run: |
           source ~/emsdk/emsdk_env.sh
           npm run build
+
+      # Type-checks the tests too, then ESLint and Prettier (see web/package.json).
+      - name: Lint
+        working-directory: web
+        run: npm run lint
 
       # The same tests as the native job, compiled to wasm and run in Node.
       # Catches wasm32 differences: 32-bit size_t/long, libc++, no exceptions.

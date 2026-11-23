@@ -42,8 +42,8 @@ public:
      * GPU times from two timestamps per pass, begin and end, counted in ticks
      * of `nanosecondsPerTick`. A pass that ends before it begins counts as 0.
      */
-    static Type::FrameStats::Gpu toGpuTimes(const std::vector<std::string>& passNames,
-                                            std::span<const std::uint64_t> timestamps, double nanosecondsPerTick);
+    static Type::FrameStats::Gpu toGpuTimes(const std::vector<std::string>& passNames, std::span<const std::uint64_t> timestamps,
+                                            double nanosecondsPerTick);
 
     /** Starts timing a frame on the GPU, or, if not `timed`, records `untimed` as why it has no times. */
     void beginFrame(std::optional<Type::FrameStats::UntimedReason> untimed);
@@ -126,4 +126,4 @@ private:
     Profiler(const Context& context, TimesCallback onTimes);
 };
 
-} // namespace Gpu
+}  // namespace Gpu

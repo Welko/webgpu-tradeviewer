@@ -14,4 +14,4 @@ double Layout::getPlotHeightPx() const
     return std::max(0.0, static_cast<double>(heightPx) - insets.top - insets.bottom);
 }
 
-} // namespace Viewer
+}  // namespace Viewer

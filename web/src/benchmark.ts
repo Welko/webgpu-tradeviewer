@@ -11,7 +11,9 @@
  * checks can tell apart and GPU times that say nothing about real GPUs.
  * Commit 3f8e4be measured them, should CI ever get GPUs.
  */
-import { createViewer, type LoadResult, type Viewer } from './viewer/viewerModule';
+import { getElement } from './dom';
+import { describeGpu, type GpuInfo } from './viewer/gpuInfo';
+import { createViewer, type LoadResult, type MemoryStats, type Viewer } from './viewer/viewerModule';
 
 // Task 3's viewport, at a pixel ratio of 1, as natively.
 const WidthPx = 1600;
@@ -73,7 +75,7 @@ function getPercentile(values: number[], share: number): number {
 function measureMemory(viewer: Viewer): Metric[] {
   viewer.setSummariesAllowed(true);
   viewer.showDay();
-  const memory = viewer.memoryStats();
+  const memory = viewer.memoryStats() as MemoryStats;
   const metric = (key: string, label: string, value: number): Metric => ({ key, label, unit: 'bytes', value, flaky: false });
   return [
     metric('memory_trades_bytes', 'Memory: trades (synthetic day)', memory.tradesBytes),
@@ -149,10 +151,7 @@ async function run(): Promise<BenchmarkResult> {
   const viewer = await createViewer('#benchmark', 'default');
   viewer.resize(WidthPx, HeightPx);
   viewer.setPixelRatio(1);
-  const info = viewer.info();
-  // Browsers often hide the device's name; the vendor and architecture are left, such as "google swiftshader".
-  const device = info.description || info.device || [info.vendor, info.architecture].filter(Boolean).join(' ');
-  const gpu = [device, info.backend, info.adapter].filter(Boolean).join(' · ');
+  const gpu = describeGpu(viewer.info() as GpuInfo);
 
   // The synthetic day is on show from the start.
   const metrics = measureMemory(viewer);
@@ -165,12 +164,10 @@ async function run(): Promise<BenchmarkResult> {
   }
 
   // Each view says whether crowded views may be summarized, so none depends on the one before.
-  const show =
-    (summaries: boolean, view: (viewer: Viewer) => void) =>
-    (viewer: Viewer) => {
-      viewer.setSummariesAllowed(summaries);
-      view(viewer);
-    };
+  const show = (summaries: boolean, view: (viewer: Viewer) => void) => (viewer: Viewer) => {
+    viewer.setSummariesAllowed(summaries);
+    view(viewer);
+  };
   const cases: Case[] = [
     { name: 'Whole day, every trade', key: 'day_every_trade', show: show(false, (v) => v.showDay()) },
     { name: 'Whole day', key: 'day', show: show(true, (v) => v.showDay()) },
@@ -188,7 +185,13 @@ async function run(): Promise<BenchmarkResult> {
   for (const benchmark of cases) {
     const times = measureUpdates(viewer, benchmark);
     const median = getPercentile(times, 0.5);
-    metrics.push({ key: `${benchmark.key}_update_ms`, label: `${benchmark.name}: view update (CPU)`, unit: 'ms', value: median, flaky: false });
+    metrics.push({
+      key: `${benchmark.key}_update_ms`,
+      label: `${benchmark.name}: view update (CPU)`,
+      unit: 'ms',
+      value: median,
+      flaky: false,
+    });
     const update = `${median.toFixed(3)} (${getPercentile(times, 0.95).toFixed(3)})`;
     rows.push(`| ${benchmark.name} | ${viewer.viewStats().count} | ${update} | ${NotMeasured} | ${NotMeasured} |`);
   }
@@ -208,11 +211,11 @@ run()
     const memory = result.metrics
       .filter((metric) => metric.unit === 'bytes')
       .map((metric) => `${metric.label}: ${metric.value.toLocaleString('en-US')} B`);
-    document.getElementById('result')!.textContent = [result.table, ...memory].join('\n');
+    getElement('result').textContent = [result.table, ...memory].join('\n');
     document.body.dataset.status = 'done';
   })
   .catch((error: unknown) => {
     window.benchmarkError = error instanceof Error ? error.message : String(error);
-    document.getElementById('result')!.textContent = window.benchmarkError;
+    getElement('result').textContent = window.benchmarkError;
     document.body.dataset.status = 'error';
   });

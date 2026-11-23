@@ -12,14 +12,14 @@ export async function waitForAdapter(page: Page) {
     .poll(
       () =>
         page.evaluate(async () => {
-          if (!navigator.gpu) {
+          if (!('gpu' in navigator)) {
             return 'navigator.gpu is missing: WebGPU is off or blocklisted';
           }
           try {
             const adapter = await navigator.gpu.requestAdapter();
             return adapter ? 'adapter' : 'requestAdapter() returned null: no usable GPU or driver';
           } catch (error) {
-            return `requestAdapter() threw: ${error}`;
+            return `requestAdapter() threw: ${error instanceof Error ? error.message : String(error)}`;
           }
         }),
       { message: 'No WebGPU adapter within 15 s', timeout: 15_000 },

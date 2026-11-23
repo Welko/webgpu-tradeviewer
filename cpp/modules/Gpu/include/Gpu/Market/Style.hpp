@@ -57,4 +57,4 @@ struct MarkerSizing
  */
 [[nodiscard]] Type::Legend getLegend(const MarkerSizing& sizing, const Type::Theme& theme);
 
-} // namespace Gpu::Market::Style
+}  // namespace Gpu::Market::Style

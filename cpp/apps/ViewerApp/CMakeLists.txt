@@ -18,7 +18,7 @@ if (EMSCRIPTEN)
     set(VIEWER_WEB_OUTPUT_DIR "${PROJECT_SOURCE_DIR}/../web/src/wasm" CACHE PATH
         "Where the Emscripten build writes ViewerApp.js and ViewerApp.wasm")
 
-    target_sources(ViewerApp PRIVATE src/WebMain.cpp)
+    target_sources(ViewerApp PRIVATE src/Web/Main.cpp)
     target_link_options(ViewerApp PRIVATE
         -lembind
         -sMODULARIZE=1
@@ -68,7 +68,9 @@ else()
     )
     FetchContent_MakeAvailable(json)
 
-    target_sources(ViewerApp PRIVATE src/NativeMain.cpp src/Png.cpp)
+    target_sources(ViewerApp PRIVATE src/Native/Main.cpp src/Native/Options.cpp src/Native/Png.cpp src/Native/Report.cpp
+                                     src/Native/Snapshot.cpp src/Native/Window.cpp)
+    target_include_directories(ViewerApp PRIVATE src)
     target_link_libraries(ViewerApp PRIVATE glfw nlohmann_json::nlohmann_json)
     target_include_directories(ViewerApp SYSTEM PRIVATE "${stb_SOURCE_DIR}")
     # For about.json, which says which wgpu-native drew the renderings.

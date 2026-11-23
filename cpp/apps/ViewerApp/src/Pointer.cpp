@@ -9,7 +9,7 @@ namespace {
 // How far from the pointer a trade's center can be picked, in CSS or window pixels.
 constexpr double PickRadiusCssPx = 24.0;
 
-} // namespace
+}  // namespace
 
 std::optional<std::size_t> Pointer::getHighlightedTrade() const
 {
@@ -34,7 +34,8 @@ void Pointer::update(const Core::Data::PreprocessedTrades& data, const View& vie
 {
     mPicked = std::monostate{};
     mColumnPosition.reset();
-    if (!mOnSurface) {
+    if (!mOnSurface)
+    {
         return;
     }
 
@@ -43,11 +44,13 @@ void Pointer::update(const Core::Data::PreprocessedTrades& data, const View& vie
     const double pointerXPx = mXPx - layout.insets.left;
     const double pointerYPx = mYPx - layout.insets.top;
     const auto across = summaries.getNumColumns();
-    if (across > 0) {
+    if (across > 0)
+    {
         const auto& columns = summaries.getColumns();
         const double minHeightPx = Gpu::Market::Style::ColumnMinHeightCssPx * ratio;
         mColumnPosition = Core::Plot::pickColumn(columns, across, plot, pointerXPx, pointerYPx, PickRadiusCssPx * ratio, minHeightPx);
-        if (!mColumnPosition) {
+        if (!mColumnPosition)
+        {
             return;
         }
         const auto& column = columns[*mColumnPosition];
@@ -66,11 +69,13 @@ void Pointer::update(const Core::Data::PreprocessedTrades& data, const View& vie
         return;
     }
 
-    const Core::Plot::PickRule rule{ .pickRadius = PickRadiusCssPx * ratio, .maxMarkerRadius = Gpu::Market::Style::MarkerMaxRadiusCssPx * ratio };
+    const Core::Plot::PickRule rule{ .pickRadius = PickRadiusCssPx * ratio,
+                                     .maxMarkerRadius = Gpu::Market::Style::MarkerMaxRadiusCssPx * ratio };
     const auto& trades = data.getTrades();
     const auto i = Core::Plot::pickTrade(trades, view.getTrades(), plot, pointerXPx, pointerYPx, rule,
                                          [&](double amount) { return markerSizing.getRadiusCssPx(amount) * ratio; });
-    if (!i) {
+    if (!i)
+    {
         return;
     }
     mPicked = Picked::Trade{
@@ -84,4 +89,4 @@ void Pointer::update(const Core::Data::PreprocessedTrades& data, const View& vie
     };
 }
 
-} // namespace Viewer
+}  // namespace Viewer

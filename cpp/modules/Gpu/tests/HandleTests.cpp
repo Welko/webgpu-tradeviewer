@@ -21,16 +21,16 @@ struct FakeRootObject
 };
 using FakeRootHandle = FakeRootObject*;
 
-} // namespace
+}  // namespace
 
-template <>
+template<>
 struct Gpu::Handle<FakeHandle>::Traits
 {
     static constexpr Gpu::Resource::Kind Kind = Gpu::Resource::Kind::Buffer;
     static void release(FakeHandle raw) { ++raw->releases; }
 };
 
-template <>
+template<>
 struct Gpu::Handle<FakeRootHandle>::Traits
 {
     static void release(FakeRootHandle raw) { ++raw->releases; }
@@ -71,6 +71,7 @@ TEST_CASE("Moving a Handle transfers ownership")
         Gpu::Handle<FakeHandle> source(&object);
         const Gpu::Handle<FakeHandle> target(std::move(source));
         CHECK(target.get() == &object);
+        // NOLINTNEXTLINE(bugprone-use-after-move): what a move leaves behind is what's tested.
         CHECK_FALSE(static_cast<bool>(source));
     }
     CHECK(object.releases == 1);

@@ -56,4 +56,4 @@ private:
     std::optional<std::size_t> mHighlight;
 };
 
-} // namespace Gpu::Market
+}  // namespace Gpu::Market

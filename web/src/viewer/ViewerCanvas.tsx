@@ -18,7 +18,11 @@ import {
   type PickedColumn,
   type PickedTrade,
   type PowerPreference,
-  type Summaries, type TimeRange, type TradeStats, type Viewer } from './viewerModule';
+  type Summaries,
+  type TimeRange,
+  type TradeStats,
+  type Viewer,
+} from './viewerModule';
 
 export type ViewerStatus =
   | { kind: 'loading' }
@@ -31,7 +35,7 @@ declare global {
   interface Window {
     /** The viewer on the page, for tests and the console. */
     viewer?: Viewer;
-    /** Faults to inject into it, for the browser tests (see Testing in WebMain.cpp). */
+    /** Faults to inject into it, for the browser tests (see Testing in cpp/apps/ViewerApp/src/Web/Main.cpp). */
     viewerTesting?: MainModule['Testing'];
   }
 }
@@ -97,7 +101,10 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
   } | null>(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current!;
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
     let disposed = false;
     let viewer: Viewer | null = null;
     let frame = 0;
@@ -138,7 +145,7 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
         void loadModule().then((module) => {
           window.viewerTesting = module.Testing;
         });
-        created.setTheme(readTheme(canvas.parentElement!));
+        created.setTheme(readTheme(canvas.parentElement ?? canvas));
 
         const tick = (now: number) => {
           scheduled = false;
@@ -243,7 +250,8 @@ export function ViewerCanvas({ powerPreference, onStatus }: ViewerCanvasProps) {
         canvas.addEventListener('pointercancel', endDrag, listen);
 
         observer = new ResizeObserver(([entry]) => {
-          const box = entry.devicePixelContentBoxSize?.[0];
+          // Safari doesn't report device pixels.
+          const box = (entry.devicePixelContentBoxSize as readonly ResizeObserverSize[] | undefined)?.[0];
           const widthPx = box ? box.inlineSize : Math.round(entry.contentRect.width * devicePixelRatio);
           const heightPx = box ? box.blockSize : Math.round(entry.contentRect.height * devicePixelRatio);
           // Assigning the size clears the canvas, so only do it on a real change.

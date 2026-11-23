@@ -75,10 +75,7 @@ private:
             return mRunningBuys[indices.last] - mRunningBuys[indices.first];
         }
 
-        [[nodiscard]] std::size_t getBuyCount(IndexRange indices) const
-        {
-            return mBuyCounts[indices.last] - mBuyCounts[indices.first];
-        }
+        [[nodiscard]] std::size_t getBuyCount(IndexRange indices) const { return mBuyCounts[indices.last] - mBuyCounts[indices.first]; }
 
         /** 20 per trade. */
         [[nodiscard]] std::size_t getBytes() const;
@@ -124,4 +121,4 @@ private:
     PriceTree mPrices;
 };
 
-} // namespace Core::Data
+}  // namespace Core::Data

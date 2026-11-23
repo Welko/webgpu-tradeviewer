@@ -46,7 +46,8 @@ struct Trades
     void shrinkToFit()
     {
         const auto shrink = [](auto& column) {
-            if (column.capacity() > column.size()) {
+            if (column.capacity() > column.size())
+            {
                 column = std::remove_reference_t<decltype(column)>(column.begin(), column.end());
             }
         };
@@ -68,12 +69,14 @@ struct TradeStats
 
 inline TradeStats getStats(const Trades& trades)
 {
-    if (trades.empty()) {
+    if (trades.empty())
+    {
         return {};
     }
     // In whole units of the finest step, so the total is exact.
     std::int64_t totalUnits = 0;
-    for (const double amount : trades.amount) {
+    for (const double amount : trades.amount)
+    {
         totalUnits += trades.instrument.toAmountUnits(amount);
     }
     return {
@@ -92,7 +95,8 @@ inline TradeStats getStats(const Trades& trades)
  */
 inline ValueRange getAmountPercentiles(const Trades& trades, double lowShare, double highShare)
 {
-    if (trades.empty()) {
+    if (trades.empty())
+    {
         return {};
     }
     std::vector<double> amounts = trades.amount;
@@ -114,4 +118,4 @@ inline IndexRange getTradesIn(const Trades& trades, TimeRange range)
     return { .first = static_cast<std::size_t>(first - begin), .last = static_cast<std::size_t>(last - begin) };
 }
 
-} // namespace Core::Data
+}  // namespace Core::Data

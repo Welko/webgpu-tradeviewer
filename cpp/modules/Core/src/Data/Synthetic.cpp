@@ -45,7 +45,7 @@ private:
     std::uint64_t mState;
 };
 
-} // namespace
+}  // namespace
 
 Trades generateSyntheticTrades(std::int64_t startUs, std::int64_t endUs, std::uint64_t seed)
 {
@@ -55,10 +55,12 @@ Trades generateSyntheticTrades(std::int64_t startUs, std::int64_t endUs, std::ui
     trades.instrument = { .base = "BTC", .quote = "USDT", .amountDecimals = 6, .priceDecimals = 2 };
     double price = StartPrice;
     std::int64_t timeUs = startUs;
-    while (true) {
+    while (true)
+    {
         // Exponential gaps: trades arrive independently of each other.
         timeUs += static_cast<std::int64_t>(random.exponential(1e6 / TradesPerSecond));
-        if (timeUs >= endUs) {
+        if (timeUs >= endUs)
+        {
             return trades;
         }
         price *= 1.0 + (2.0 * random.uniform() - 1.0) * MaxPriceStep;
@@ -71,4 +73,4 @@ Trades generateSyntheticTrades(std::int64_t startUs, std::int64_t endUs, std::ui
     }
 }
 
-} // namespace Core::Data
+}  // namespace Core::Data

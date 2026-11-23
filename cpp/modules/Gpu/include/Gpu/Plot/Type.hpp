@@ -37,4 +37,4 @@ struct Theme
     bool operator==(const Theme&) const = default;
 };
 
-} // namespace Gpu::Plot::Type
+}  // namespace Gpu::Plot::Type

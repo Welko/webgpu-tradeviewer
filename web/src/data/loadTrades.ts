@@ -1,5 +1,5 @@
 import { reportDataLoaded, reportDataLoadFailed } from '../telemetry';
-import type { LoadResult, TradeStats, Viewer } from '../viewer/viewerModule';
+import type { LoadResult, Viewer } from '../viewer/viewerModule';
 
 /** Binance's public copy of the brief's day, downloaded by the browser straight from Binance. */
 export const BinanceSampleUrl = 'https://data.binance.vision/data/spot/daily/trades/BTCUSDT/BTCUSDT-trades-2019-12-01.zip';
@@ -80,7 +80,7 @@ async function parse(viewer: Viewer, stream: ReadableStream<Bytes>, fileName: st
     reportDataLoadFailed(source, 'parse');
     throw new Error(error);
   }
-  const stats = viewer.tradeStats() as TradeStats;
+  const stats = viewer.tradeStats();
   reportDataLoaded(source, bytes, performance.now() - start, stats.count, stats.lastMs - stats.firstMs);
   return warnings;
 }

@@ -75,4 +75,4 @@ private:
     std::optional<double> mPeriodStartMs;
 };
 
-} // namespace Viewer
+}  // namespace Viewer

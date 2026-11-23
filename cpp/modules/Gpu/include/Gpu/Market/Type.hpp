@@ -14,7 +14,7 @@ namespace Gpu::Market::Type {
 enum class MarkerScale : std::uint8_t
 {
     Area,  ///< Area proportional to the amount.
-    Log,   ///< Radius growing with the amount's logarithm, which separates small trades better.
+    Log,  ///< Radius growing with the amount's logarithm, which separates small trades better.
 };
 
 /** Colors of the plot and the trades. */
@@ -37,8 +37,8 @@ struct LegendSize
     /** Where the scale stops growing, a size stands for every amount past it too. */
     enum class Bound : std::uint8_t
     {
-        Exact,    ///< Just this amount.
-        AtMost,   ///< This amount and all smaller ones.
+        Exact,  ///< Just this amount.
+        AtMost,  ///< This amount and all smaller ones.
         AtLeast,  ///< This amount and all larger ones.
     };
 
@@ -94,4 +94,4 @@ struct View
     bool operator==(const View&) const = default;
 };
 
-} // namespace Gpu::Market::Type
+}  // namespace Gpu::Market::Type

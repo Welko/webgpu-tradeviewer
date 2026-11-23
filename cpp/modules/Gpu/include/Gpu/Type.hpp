@@ -79,14 +79,14 @@ struct FrameStats
     /** Why a frame has no GPU times. */
     enum class UntimedReason : std::uint8_t
     {
-        Undefined,      ///< Not set yet.
-        ProfilingOff,   ///< Switched off at runtime, or not compiled in.
-        Unsupported,    ///< The device has no timestamp-query.
-        NoFreeSlot,     ///< Every readback slot was busy.
-        NotStarted,     ///< The profiler's beginFrame() wasn't called.
-        ReadbackFailed, ///< The timestamps couldn't be read back.
-        Overflow,       ///< Too many frames were waiting for their times.
-        NotSampled,     ///< Profiling times only some frames on the GPU, and not this one.
+        Undefined,  ///< Not set yet.
+        ProfilingOff,  ///< Switched off at runtime, or not compiled in.
+        Unsupported,  ///< The device has no timestamp-query.
+        NoFreeSlot,  ///< Every readback slot was busy.
+        NotStarted,  ///< The profiler's beginFrame() wasn't called.
+        ReadbackFailed,  ///< The timestamps couldn't be read back.
+        Overflow,  ///< Too many frames were waiting for their times.
+        NotSampled,  ///< Profiling times only some frames on the GPU, and not this one.
     };
 
     /** Which frame this is, counting from 1. */
@@ -113,8 +113,7 @@ enum class PowerPreference
 };
 
 /** Each platform compiles only its own targets. */
-namespace Target
-{
+namespace Target {
 
 #ifdef __EMSCRIPTEN__
 
@@ -157,6 +156,6 @@ using Any = std::variant<Wayland, Xlib, Offscreen>;
 #error "Gpu::Type::Target has Linux's and Web's targets only"
 #endif
 
-} // namespace Target
+}  // namespace Target
 
-} // namespace Gpu::Type
+}  // namespace Gpu::Type

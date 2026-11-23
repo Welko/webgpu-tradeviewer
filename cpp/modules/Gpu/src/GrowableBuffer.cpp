@@ -19,16 +19,18 @@ std::unexpected<std::string> tooLarge(std::uint64_t bytes, std::uint64_t maxByte
     return std::unexpected(std::format("{} bytes are more than the largest buffer this GPU takes, {} bytes", bytes, maxBytes));
 }
 
-} // namespace
+}  // namespace
 
 std::expected<void, std::string> GrowableBuffer::reserve(std::uint64_t bytes)
 {
     // Copies need sizes in multiples of 4.
     const std::uint64_t rounded = (bytes + 3) / 4 * 4;
-    if (rounded > mContext->maxBufferBytes) {
+    if (rounded > mContext->maxBufferBytes)
+    {
         return tooLarge(rounded, mContext->maxBufferBytes);
     }
-    if (rounded > mCapacity) {
+    if (rounded > mCapacity)
+    {
         grow(rounded);
     }
     return {};
@@ -37,14 +39,17 @@ std::expected<void, std::string> GrowableBuffer::reserve(std::uint64_t bytes)
 std::expected<void, std::string> GrowableBuffer::append(std::span<const std::byte> data)
 {
     assert(data.size() % 4 == 0);
-    if (data.empty()) {
+    if (data.empty())
+    {
         return {};
     }
     const std::uint64_t needed = mSize + data.size();
-    if (needed > mContext->maxBufferBytes) {
+    if (needed > mContext->maxBufferBytes)
+    {
         return tooLarge(needed, mContext->maxBufferBytes);
     }
-    if (needed > mCapacity) {
+    if (needed > mCapacity)
+    {
         // Half again as much, so appending many times copies little overall,
         // short of the largest buffer the device takes.
         grow(std::max(needed, std::min(mCapacity + mCapacity / 2 / 4 * 4, mContext->maxBufferBytes / 4 * 4)));
@@ -61,7 +66,8 @@ void GrowableBuffer::grow(std::uint64_t capacity)
     descriptor.size = capacity;
     Handle<WGPUBuffer> buffer(wgpuDeviceCreateBuffer(mContext->device.get(), &descriptor), *mStats, capacity);
 
-    if (mSize > 0) {
+    if (mSize > 0)
+    {
         // Queued before any later write, so the data lands in order.
         const Handle encoder(wgpuDeviceCreateCommandEncoder(mContext->device.get(), nullptr));
         wgpuCommandEncoderCopyBufferToBuffer(encoder.get(), mBuffer.get(), 0, buffer.get(), 0, mSize);
@@ -73,4 +79,4 @@ void GrowableBuffer::grow(std::uint64_t capacity)
     mCapacity = capacity;
 }
 
-} // namespace Gpu
+}  // namespace Gpu

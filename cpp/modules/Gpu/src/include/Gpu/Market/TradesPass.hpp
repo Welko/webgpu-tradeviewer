@@ -3,9 +3,9 @@
 #include "Gpu/Context.hpp"
 #include "Gpu/GrowableBuffer.hpp"
 #include "Gpu/Handle.hpp"
-#include "Gpu/Plot/Area.hpp"
 #include "Gpu/Market/Style.hpp"
 #include "Gpu/Market/Type.hpp"
+#include "Gpu/Plot/Area.hpp"
 #include "Gpu/Profiler.hpp"
 #include "Gpu/Resource.hpp"
 
@@ -80,4 +80,4 @@ private:
     float mPixelRatio = 1.0f;
 };
 
-} // namespace Gpu::Market
+}  // namespace Gpu::Market

@@ -69,4 +69,4 @@ struct ValueRange
     bool operator==(const ValueRange&) const = default;
 };
 
-} // namespace Core
+}  // namespace Core

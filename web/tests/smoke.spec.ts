@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { gzipSync } from 'node:zlib';
 import { waitForAdapter } from './adapter';
+import type { GpuHealth } from '../src/viewer/viewerModule';
 import { collectErrors, waitUntilReady, zip } from './helpers';
 
 /** Two trades, hand-written in Tardis's format and gzipped as Tardis serves it. */
@@ -59,8 +60,7 @@ async function instrument(page: Page) {
   });
 }
 
-const frameRequests = (page: Page) =>
-  page.evaluate(() => (window as unknown as { frameRequests: number }).frameRequests);
+const frameRequests = (page: Page) => page.evaluate(() => (window as unknown as { frameRequests: number }).frameRequests);
 
 const lastFrame = (page: Page) => page.evaluate(() => (window as unknown as { lastFrame: Frame | null }).lastFrame);
 
@@ -72,7 +72,7 @@ test.beforeAll(async ({ browser }) => {
   await page.close();
 });
 
-test('starts WebGPU and draws the background and both sides\' trades', async ({ page }) => {
+test("starts WebGPU and draws the background and both sides' trades", async ({ page }) => {
   const errors = collectErrors(page);
   await instrument(page);
   await page.goto('/');
@@ -164,7 +164,11 @@ test('axis labels never pile up, however far it zooms, even when a label repeats
     }
   };
   // In, then out to days on end, where "12:00" comes up again and again.
-  for (const [delta, steps] of [[-120, 45], [120, 90], [-40, 60]]) {
+  for (const [delta, steps] of [
+    [-120, 45],
+    [120, 90],
+    [-40, 60],
+  ]) {
     for (let step = 0; step < steps; step++) {
       await page.mouse.wheel(0, delta);
       await page.evaluate(() => new Promise(requestAnimationFrame));
@@ -174,7 +178,7 @@ test('axis labels never pile up, however far it zooms, even when a label repeats
   expect(errors).toEqual([]);
 });
 
-test('the stylesheet sets the plot\'s colors, and the legend follows', async ({ page }) => {
+test("the stylesheet sets the plot's colors, and the legend follows", async ({ page }) => {
   const errors = collectErrors(page);
   await instrument(page);
   await page.addInitScript(() => {
@@ -235,7 +239,7 @@ test('pointing at a trade shows its time, price, amount and side', async ({ page
   // them with 5% of a price's 0.001% on either side: the buy (7540.79) is 53%
   // of the way up the plot, the sell (7540.78) 47%.
   const box = (await page.locator('canvas').boundingBox())!;
-  const plotHeightCssPx = box.height - 22;  // AxisMarginsCssPx.bottom
+  const plotHeightCssPx = box.height - 22; // AxisMarginsCssPx.bottom
   const heightOf = (fraction: number) => box.y + plotHeightCssPx * (1 - fraction);
   const tooltip = page.getByTestId('trade-tooltip');
 
@@ -369,12 +373,14 @@ test('labels and decimals come from the file: its symbol, or else its name', asy
   expect(errors).toEqual([]);
 });
 
-test('opens Binance\'s zipped files too, with times in milliseconds', async ({ page }) => {
+test("opens Binance's zipped files too, with times in milliseconds", async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/');
   await waitUntilReady(page);
   const name = 'BTCUSDT-trades-2019-12-01.zip';
-  await page.locator('input[type=file]').setInputFiles({ name, mimeType: 'application/zip', buffer: zip('BTCUSDT-trades-2019-12-01.csv', TwoBinanceTrades) });
+  await page
+    .locator('input[type=file]')
+    .setInputFiles({ name, mimeType: 'application/zip', buffer: zip('BTCUSDT-trades-2019-12-01.csv', TwoBinanceTrades) });
   await expect(page.getByTestId('source')).toHaveText(name);
   await expect(page.getByTestId('trade-count')).toHaveText('2');
   await page.getByRole('button', { name: 'Whole day' }).click();
@@ -398,7 +404,7 @@ test('after losing the GPU, the viewer restarts it and draws the same picture', 
 
   expect(await page.evaluate(() => window.viewerTesting!.loseGpu(window.viewer!))).toBe(true);
   await expect
-    .poll(() => page.evaluate(() => window.viewer!.gpuHealth()), { timeout: 15_000 })
+    .poll(() => page.evaluate(() => window.viewer!.gpuHealth() as GpuHealth | null), { timeout: 15_000 })
     .toMatchObject({ restarting: false, restarts: 1, failure: null, errorCount: 0 });
   await expect(page.getByTestId('notices')).toHaveCount(0);
   expect(await canvas.screenshot()).toEqual(before);
@@ -419,7 +425,9 @@ test('after the wasm module stops, the viewer starts over and says why', async (
     }
   });
   // A bug's details are for the console, not the page.
-  await expect(page.getByRole('alert')).toHaveText(/^Something went wrong, and the viewer started over with the demo data/, { timeout: 30_000 });
+  await expect(page.getByRole('alert')).toHaveText(/^Something went wrong, and the viewer started over with the demo data/, {
+    timeout: 30_000,
+  });
   await expect(page.locator('[data-status]')).toHaveAttribute('data-status', 'ready');
   // A new module, with the synthetic day again.
   await expect.poll(() => page.evaluate(() => window.viewer?.tradeStats().count)).toBe(first);

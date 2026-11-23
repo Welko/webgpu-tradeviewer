@@ -13,4 +13,4 @@ namespace Core::Data {
  */
 Trades generateSyntheticTrades(std::int64_t startUs, std::int64_t endUs, std::uint64_t seed);
 
-} // namespace Core::Data
+}  // namespace Core::Data

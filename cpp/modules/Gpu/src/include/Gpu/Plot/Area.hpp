@@ -19,7 +19,8 @@ struct Area
     /** A `width` × `height` frame less `insets`; empty if they leave no room. */
     static Area within(std::uint32_t width, std::uint32_t height, Type::Insets insets)
     {
-        if (insets.left + insets.right >= width || insets.top + insets.bottom >= height) {
+        if (insets.left + insets.right >= width || insets.top + insets.bottom >= height)
+        {
             return {};
         }
         return {
@@ -40,4 +41,4 @@ struct Area
     }
 };
 
-} // namespace Gpu::Plot
+}  // namespace Gpu::Plot

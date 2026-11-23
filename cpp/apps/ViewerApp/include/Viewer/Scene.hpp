@@ -59,4 +59,4 @@ struct Scene
                                                                std::span<const std::uint8_t> rgba);
 };
 
-} // namespace Viewer
+}  // namespace Viewer

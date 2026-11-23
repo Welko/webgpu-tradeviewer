@@ -32,4 +32,4 @@ struct ColumnSummary
  */
 [[nodiscard]] std::vector<ColumnSummary> summarizeColumns(const PreprocessedTrades& trades, TimeRange view, std::size_t across);
 
-} // namespace Core::Data
+}  // namespace Core::Data

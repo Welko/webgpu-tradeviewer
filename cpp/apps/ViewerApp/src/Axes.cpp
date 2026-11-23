@@ -11,15 +11,17 @@ namespace {
 constexpr double TimeTickSpacingCssPx = 120.0;
 constexpr double PriceTickSpacingCssPx = 50.0;
 
-} // namespace
+}  // namespace
 
 Gpu::Plot::Type::Grid Axes::getGrid() const
 {
     Gpu::Plot::Type::Grid grid;
-    for (const auto& tick : mTimes) {
+    for (const auto& tick : mTimes)
+    {
         grid.verticalLines.push_back(static_cast<float>(tick.fraction));
     }
-    for (const auto& tick : mPrices) {
+    for (const auto& tick : mPrices)
+    {
         grid.horizontalLines.push_back(static_cast<float>(tick.fraction));
     }
     return grid;
@@ -35,4 +37,4 @@ void Axes::update(const View& view, const Layout& layout)
     mPrices = Core::Plot::Axis::getNumberTicks(view.getPriceRange(), countFitting(layout.getPlotHeightPx(), PriceTickSpacingCssPx));
 }
 
-} // namespace Viewer
+}  // namespace Viewer

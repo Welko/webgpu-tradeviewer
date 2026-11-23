@@ -251,7 +251,10 @@ function renderComparison(platforms, images, results) {
 
 function renderReport(scenes, platforms, results, passed) {
   const about = platforms
-    .map((platform) => `<li><b>${escape(platform.platform)}</b>: ${escape(platform.version ?? '')}, ${escape(platform.gpu || 'unknown GPU')}</li>`)
+    .map(
+      (platform) =>
+        `<li><b>${escape(platform.platform)}</b>: ${escape(platform.version ?? '')}, ${escape(platform.gpu || 'unknown GPU')}</li>`,
+    )
     .join('');
   const sections = scenes.map((scene) => {
     const result = results.get(scene.name);
@@ -370,7 +373,9 @@ function updateReference(renderingsDir) {
 function main() {
   const args = process.argv.slice(2);
   const update = args.includes('--update-reference');
-  const renderingsDir = resolve(args.find((arg) => !arg.startsWith('--')) ?? process.env.TRADEVIEWER_RENDERINGS_DIR ?? join(root, 'renderings'));
+  const renderingsDir = resolve(
+    args.find((arg) => !arg.startsWith('--')) ?? process.env.TRADEVIEWER_RENDERINGS_DIR ?? join(root, 'renderings'),
+  );
   if (update) {
     updateReference(renderingsDir);
     return;
@@ -410,7 +415,9 @@ function main() {
       for (const check of checked.filter((check) => !check.passed)) {
         passed = false;
         const { sample } = check;
-        console.error(`${scene.name}, ${platform.platform}: ${check.what}: ${check.total - check.right} of ${check.total} pixels off; (${sample.xPx}, ${sample.yPx}) is ${sample.rgba.join(', ')}, not ${check.rgba.join(', ')} ±${check.tolerance}`);
+        console.error(
+          `${scene.name}, ${platform.platform}: ${check.what}: ${check.total - check.right} of ${check.total} pixels off; (${sample.xPx}, ${sample.yPx}) is ${sample.rgba.join(', ')}, not ${check.rgba.join(', ')} ±${check.tolerance}`,
+        );
       }
     }
 
@@ -422,7 +429,11 @@ function main() {
         if (!imageA || !imageB) continue;
         const { picture, ...result } = compare(imageA, imageB);
         const ok = !result.error && result.passed;
-        pairs.set([a.platform, b.platform].sort().join(' '), { ...result, passed: ok, picture: picture && result.largest > 0 ? dataUrl(encodePng(picture)) : null });
+        pairs.set([a.platform, b.platform].sort().join(' '), {
+          ...result,
+          passed: ok,
+          picture: picture && result.largest > 0 ? dataUrl(encodePng(picture)) : null,
+        });
         numbers[scene.name].pairs[`${a.platform} vs ${b.platform}`] = result;
         if (!ok) {
           passed = false;
@@ -438,7 +449,10 @@ function main() {
   mkdirSync(reportDir, { recursive: true });
   const report = join(reportDir, 'rendering-comparison.html');
   writeFileSync(report, renderReport(scenes, platforms, results, passed));
-  writeFileSync(join(reportDir, 'comparison.json'), `${JSON.stringify({ thresholds: Thresholds, platforms: platforms.map(({ dir, ...about }) => about), scenes: numbers }, null, 2)}\n`);
+  writeFileSync(
+    join(reportDir, 'comparison.json'),
+    `${JSON.stringify({ thresholds: Thresholds, platforms: platforms.map(({ dir, ...about }) => about), scenes: numbers }, null, 2)}\n`,
+  );
   const summary = renderSummary(scenes, platforms, results, passed);
   writeFileSync(join(reportDir, 'summary.md'), summary);
   console.log(summary);

@@ -15,22 +15,24 @@ namespace {
 std::optional<Gpu::Context> createContext()
 {
     std::optional<Gpu::Context> context;
-    Gpu::Context::create(Gpu::Handle(wgpuCreateInstance(nullptr)), nullptr, Gpu::Type::PowerPreference::Default,
-        [&](Gpu::Context::Result result) {
-            CHECK_MESSAGE(result, (result ? "" : result.error()));
-            if (result) {
-                context = std::move(*result);
-            }
-        });
+    Gpu::Handle instance(wgpuCreateInstance(nullptr));
+    Gpu::Context::create(std::move(instance), nullptr, Gpu::Type::PowerPreference::Default, [&](Gpu::Context::Result result) {
+        CHECK_MESSAGE(result, (result ? "" : result.error()));
+        if (result)
+        {
+            context = std::move(*result);
+        }
+    });
     return context;
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("A growable buffer refuses to grow past the largest buffer the device takes, and keeps what it has")
 {
     auto context = createContext();
-    if (!context) {
+    if (!context)
+    {
         return;
     }
     // A pretend device whose largest buffer is 20 bytes.
@@ -42,7 +44,8 @@ TEST_CASE("A growable buffer refuses to grow past the largest buffer the device 
 
     const auto refused = buffer.reserve(24);
     CHECK_FALSE(refused);
-    if (!refused) {
+    if (!refused)
+    {
         CHECK(refused.error() == "24 bytes are more than the largest buffer this GPU takes, 20 bytes");
     }
     CHECK(buffer.capacity() == 0);

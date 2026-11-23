@@ -72,12 +72,18 @@ test('with consent, sessions, loads, view and speed summaries and errors are sen
     window.viewer!.flushTelemetry();
   });
 
-  await expect.poll(() => getNames(page)).toEqual(expect.arrayContaining(['data_loaded', 'data_load_failed', 'error', 'view_summary', 'perf_summary']));
+  await expect
+    .poll(() => getNames(page))
+    .toEqual(expect.arrayContaining(['data_loaded', 'data_load_failed', 'error', 'view_summary', 'perf_summary']));
   const events = await getEvents(page);
   const find = (name: string) => events.find((event) => event.name === name)!.properties;
   expect(find('data_loaded')).toMatchObject({ source: 'file', rows: 2 });
   expect(find('data_load_failed')).toMatchObject({ source: 'file', stage: 'parse' });
-  expect(find('error')).toMatchObject({ kind: 'viewer', message: 'The summaries could not be uploaded', session: started.properties.session });
+  expect(find('error')).toMatchObject({
+    kind: 'viewer',
+    message: 'The summaries could not be uploaded',
+    session: started.properties.session,
+  });
   expect(find('view_summary').viewChanges).toBeGreaterThan(0);
   expect(find('perf_summary').frames).toBeGreaterThan(0);
   // Every event belongs to one session, and none holds a price or the file's name.

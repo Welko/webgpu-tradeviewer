@@ -40,7 +40,8 @@ public:
     [[nodiscard]] std::uint64_t getTotalBytes() const
     {
         std::uint64_t total = 0;
-        for (const auto bytes : mBytes) {
+        for (const auto bytes : mBytes)
+        {
             total += bytes;
         }
         return total;
@@ -49,8 +50,10 @@ public:
     /** Whether nothing is alive. */
     [[nodiscard]] bool empty() const
     {
-        for (const auto count : mCounts) {
-            if (count > 0) {
+        for (const auto count : mCounts)
+        {
+            if (count > 0)
+            {
                 return false;
             }
         }
@@ -66,4 +69,4 @@ private:
     std::array<std::uint64_t, KindCount> mBytes{};
 };
 
-} // namespace Gpu::Resource
+}  // namespace Gpu::Resource

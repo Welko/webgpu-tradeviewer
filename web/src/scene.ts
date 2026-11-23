@@ -4,6 +4,8 @@
  * the scenes. Once drawn, the body's data-status is "done" or "error" and
  * window.sceneResult holds what the tests read.
  */
+import { getElement } from './dom';
+import { describeGpu, type GpuInfo } from './viewer/gpuInfo';
 import { createViewer, loadModule, type SceneInfo, type ScenePatch } from './viewer/viewerModule';
 
 /** What the tests read once the scene is drawn. */
@@ -33,18 +35,29 @@ declare global {
 }
 
 /** RGBA rows as a PNG data URL. Lossless: every pixel is opaque. */
+/** A canvas's 2D context, which every browser that runs WebGPU has. */
+function get2dContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D;
+function get2dContext(canvas: OffscreenCanvas): OffscreenCanvasRenderingContext2D;
+function get2dContext(canvas: HTMLCanvasElement | OffscreenCanvas) {
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error("This browser can't draw on a 2D canvas");
+  }
+  return context;
+}
+
 function toPng(rgba: Uint8ClampedArray<ArrayBuffer>, widthPx: number, heightPx: number): string {
   const canvas = document.createElement('canvas');
   canvas.width = widthPx;
   canvas.height = heightPx;
-  canvas.getContext('2d')!.putImageData(new ImageData(rgba, widthPx, heightPx), 0, 0);
+  get2dContext(canvas).putImageData(new ImageData(rgba, widthPx, heightPx), 0, 0);
   return canvas.toDataURL('image/png');
 }
 
 /** The canvas's current frame. Only readable in the task that drew it: afterwards it's presented and gone. */
 function readCanvas(canvas: HTMLCanvasElement): Uint8ClampedArray<ArrayBuffer> {
   const copy = new OffscreenCanvas(canvas.width, canvas.height);
-  const context = copy.getContext('2d')!;
+  const context = get2dContext(copy);
   context.drawImage(canvas, 0, 0);
   return context.getImageData(0, 0, canvas.width, canvas.height).data;
 }
@@ -83,14 +96,13 @@ async function draw(scene: SceneInfo): Promise<SceneResult> {
   viewer.render();
   const shown = readCanvas(canvas);
   const copied = new Uint8ClampedArray((await engine).buffer as ArrayBuffer);
-  const info = viewer.info();
   return {
     name: scene.name,
     description: scene.description,
     widthPx: scene.widthPx,
     heightPx: scene.heightPx,
     patches,
-    gpu: [info.description || info.device, info.backend, info.adapter].filter(Boolean).join(' · '),
+    gpu: describeGpu(viewer.info() as GpuInfo),
     engine: toPng(copied, scene.widthPx, scene.heightPx),
     canvas: toPng(shown, scene.widthPx, scene.heightPx),
     canvasDifference: compare(copied, shown),
@@ -101,7 +113,7 @@ async function main() {
   const module = await loadModule();
   const scenes = module.scenes() as SceneInfo[];
   window.scenes = scenes;
-  const list = document.getElementById('scenes')!;
+  const list = getElement('scenes');
   for (const scene of scenes) {
     const item = document.createElement('li');
     item.innerHTML = `<a href="?scene=${scene.name}">${scene.name}</a>: ${scene.description}`;
@@ -119,7 +131,7 @@ async function main() {
   }
   const result = await draw(scene);
   window.sceneResult = result;
-  document.getElementById('result')!.textContent = [
+  getElement('result').textContent = [
     `${scene.name}: ${scene.description}`,
     `GPU: ${result.gpu}`,
     `Canvas vs the engine's copy: ${result.canvasDifference.pixels} pixels differ, by up to ${result.canvasDifference.largest}`,
@@ -129,6 +141,6 @@ async function main() {
 
 main().catch((error: unknown) => {
   window.sceneError = error instanceof Error ? error.message : String(error);
-  document.getElementById('result')!.textContent = window.sceneError;
+  getElement('result').textContent = window.sceneError;
   document.body.dataset.status = 'error';
 });

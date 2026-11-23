@@ -8,11 +8,11 @@ export type GpuInfo = { [Field in keyof WasmGpuInfo]: string };
 
 /**
  * A one-line label for the GPU, e.g. "nvidia ampere · WebGPU · DiscreteGPU".
- * Browsers usually hide `device` but expose `vendor` and `architecture`; when
+ * Browsers usually hide `description` and `device` but expose `vendor` and `architecture`; when
  * they hide those too, WebGL's renderer string often still names the GPU.
  */
 export function describeGpu(info: GpuInfo): string {
-  let name = info.device;
+  let name = info.description || info.device;
   if (!name) {
     name = [info.vendor, info.architecture].filter(Boolean).join(' ');
   }

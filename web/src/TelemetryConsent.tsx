@@ -20,12 +20,12 @@ export function TelemetryConsent() {
           Send anonymous usage statistics
         </label>
       </summary>
-      <p>
-        Off unless you turn it on. It helps us see which GPUs and browsers the viewer runs on, how fast it is, and
-        what goes wrong.
-      </p>
+      <p>Off unless you turn it on. It helps us see which GPUs and browsers the viewer runs on, how fast it is, and what goes wrong.</p>
       <ul>
-        <li>Sent: your browser, system and GPU, how fast frames are, how many trades a file has and how long it took to load, how far you zoom, and errors.</li>
+        <li>
+          Sent: your browser, system and GPU, how fast frames are, how many trades a file has and how long it took to load, how far you
+          zoom, and errors.
+        </li>
         <li>Never sent: the trades themselves, prices, file names, your IP address, or anything that identifies you. No cookies.</li>
         <li>About a dozen summaries an hour, to PostHog in the EU.</li>
       </ul>

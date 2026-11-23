@@ -151,7 +151,10 @@ function formatChange(now, before, unit) {
 /** Where a baseline row came from, for the line above its table. */
 function describeRow(row) {
   const repository = process.env.GITHUB_REPOSITORY;
-  const commit = repository && BuildableCommit.test(row.commit) ? `[${row.commit}](https://github.com/${repository}/commit/${row.commit})` : `\`${row.commit}\``;
+  const commit =
+    repository && BuildableCommit.test(row.commit)
+      ? `[${row.commit}](https://github.com/${repository}/commit/${row.commit})`
+      : `\`${row.commit}\``;
   return `${commit} (${row.date.slice(0, 10)}): ${row.description}`;
 }
 
@@ -197,7 +200,7 @@ function compare(metrics, getBefore, missing) {
 
 const TableHeader = '| | Baseline | Now | Change | |\n|---|--:|--:|--:|---|';
 const FlakyNote =
-  '_Recorded only_: these numbers vary too much from run to run to fail a build on, so they\'re shown for reference and never checked.';
+  "_Recorded only_: these numbers vary too much from run to run to fail a build on, so they're shown for reference and never checked.";
 
 /** A table's Markdown: what it's against, its rows, and a note on any flaky ones. */
 function section(title, against, metrics, compared) {
@@ -222,7 +225,11 @@ function getArtifactName(platform) {
 function describeAccepting(resultsPath, platform, runId, artifactUrl) {
   const command = (source, extra = '') => `node tools/check-regressions.mjs accept ${source} "<what changed and why>"${extra}`;
   const artifact = getArtifactName(platform);
-  const parts = ['', '### These numbers changed', 'If that\'s meant, make them the baseline, saying why, and commit `tools/regression-baseline.csv`.'];
+  const parts = [
+    '',
+    '### These numbers changed',
+    "If that's meant, make them the baseline, saying why, and commit `tools/regression-baseline.csv`.",
+  ];
   if (artifactUrl) {
     parts.push(
       '',
@@ -236,7 +243,14 @@ function describeAccepting(resultsPath, platform, runId, artifactUrl) {
   }
   if (runId) {
     const withGh = command(runId, ` --platform ${platform}`);
-    parts.push('', `${artifactUrl ? 'Or, with' : 'With'} the GitHub CLI (\`gh\`) signed in, which downloads it:`, '', '```bash', withGh, '```');
+    parts.push(
+      '',
+      `${artifactUrl ? 'Or, with' : 'With'} the GitHub CLI (\`gh\`) signed in, which downloads it:`,
+      '',
+      '```bash',
+      withGh,
+      '```',
+    );
   }
   if (!artifactUrl && !runId) {
     parts.push('', '```bash', command(resultsPath), '```');
@@ -275,7 +289,7 @@ function check(resultsPath, baselineRunPath, summaryPath, runId, artifactUrl) {
         ? `Against the baseline's commit, ${baselineRow ? describeRow(baselineRow) : 'as given'}, measured on this same machine in this run` +
             `${describeRuns(baselineRun)}; now${describeRuns(results) || ', one run'}. ` +
             `More than ${Thresholds.ratio}× slower or faster (and ${Thresholds.floorMs} ms) fails.`
-        : 'Not compared: no measurement of the baseline\'s commit on this machine (`--baseline`).',
+        : "Not compared: no measurement of the baseline's commit on this machine (`--baseline`).",
       timeMetrics,
       times,
     ),
@@ -312,10 +326,15 @@ function fetchRun(runId, platform) {
   const directory = mkdtempSync(join(tmpdir(), 'benchmark-'));
   try {
     try {
-      execFileSync('gh', ['run', 'download', runId, '--name', getArtifactName(platform), '--dir', directory], { cwd: root, stdio: 'inherit' });
+      execFileSync('gh', ['run', 'download', runId, '--name', getArtifactName(platform), '--dir', directory], {
+        cwd: root,
+        stdio: 'inherit',
+      });
     } catch (error) {
       if (error.code === 'ENOENT') {
-        console.error(`Downloading run ${runId} needs the GitHub CLI (gh), which isn't installed. Download its ${getArtifactName(platform)} artifact from the run's page and pass its benchmark.json instead.`);
+        console.error(
+          `Downloading run ${runId} needs the GitHub CLI (gh), which isn't installed. Download its ${getArtifactName(platform)} artifact from the run's page and pass its benchmark.json instead.`,
+        );
         process.exit(1);
       }
       throw error;
@@ -391,6 +410,10 @@ if (command === 'check' && args[0]) {
 } else if (command === 'accept' && args[0] && args[1]?.trim()) {
   process.exit(accept(args[0], args[1].trim(), option(args, '--platform') ?? 'native'));
 } else {
-  console.error(readFileSync(fileURLToPath(import.meta.url), 'utf8').match(/Usage:[\s\S]*?(?=\n \*\/)/)[0].replace(/\n \*/g, '\n'));
+  console.error(
+    readFileSync(fileURLToPath(import.meta.url), 'utf8')
+      .match(/Usage:[\s\S]*?(?=\n \*\/)/)[0]
+      .replace(/\n \*/g, '\n'),
+  );
   process.exit(2);
 }

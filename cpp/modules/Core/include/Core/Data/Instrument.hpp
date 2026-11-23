@@ -79,4 +79,4 @@ struct AssetNames
  */
 [[nodiscard]] int countDecimals(std::string_view text);
 
-} // namespace Core::Data
+}  // namespace Core::Data

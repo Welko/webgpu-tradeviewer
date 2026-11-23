@@ -34,4 +34,4 @@ private:
     std::vector<Core::Data::ColumnSummary> mColumns;
 };
 
-} // namespace Viewer
+}  // namespace Viewer

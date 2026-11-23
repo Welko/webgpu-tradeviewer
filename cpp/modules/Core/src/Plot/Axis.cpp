@@ -18,6 +18,7 @@ constexpr std::int64_t Hour = 60 * Minute;
 constexpr std::int64_t Day = 24 * Hour;
 
 /** Round time steps, in microseconds; each unit's own round numbers. */
+// clang-format off: one row per unit.
 constexpr std::array<std::int64_t, 36> TimeSteps{
     1, 2, 5, 10, 20, 50, 100, 200, 500,
     Millisecond, 2 * Millisecond, 5 * Millisecond, 10 * Millisecond, 20 * Millisecond, 50 * Millisecond,
@@ -27,46 +28,79 @@ constexpr std::array<std::int64_t, 36> TimeSteps{
     Hour, 2 * Hour, 3 * Hour, 6 * Hour, 12 * Hour,
     Day,
 };
+// clang-format on
 
 std::string formatTime(std::int64_t timeUs, std::int64_t stepUs)
 {
     using namespace std::chrono;
     const sys_time<microseconds> time{ microseconds(timeUs) };
-    if (stepUs >= Day || timeUs % Day == 0) {
+    if (stepUs >= Day || timeUs % Day == 0)
+    {
         return std::format("{:%F}", floor<days>(time));
     }
-    if (stepUs >= Minute) {
+    if (stepUs >= Minute)
+    {
         return std::format("{:%H:%M}", floor<minutes>(time));
     }
-    if (stepUs >= Second) {
+    if (stepUs >= Second)
+    {
         return std::format("{:%T}", floor<seconds>(time));
     }
-    if (stepUs >= Millisecond) {
+    if (stepUs >= Millisecond)
+    {
         return std::format("{:%T}", floor<milliseconds>(time));
     }
     return std::format("{:%T}", time);
 }
 
-} // namespace
+/** The smallest round step of at least `wanted` microseconds; whole days beyond the table. */
+std::int64_t getTimeStep(std::int64_t wanted)
+{
+    for (const std::int64_t step : TimeSteps)
+    {
+        if (step >= wanted)
+        {
+            return step;
+        }
+    }
+    return (wanted + Day - 1) / Day * Day;
+}
+
+/** 1, 2, 5 or 10: the smallest of them at least `mantissa`, which is between 1 and 10. */
+double roundUp(double mantissa)
+{
+    for (const double round : { 1.0, 2.0, 5.0 })
+    {
+        if (mantissa <= round)
+        {
+            return round;
+        }
+    }
+    return 10.0;
+}
+
+}  // namespace
 
 std::vector<Tick> getTimeTicks(TimeRange range, std::size_t maxCount)
 {
     const std::int64_t length = range.getLengthUs();
-    if (length <= 0 || maxCount == 0) {
+    if (length <= 0 || maxCount == 0)
+    {
         return {};
     }
-    // The smallest round step that keeps the count down; whole days beyond the table.
+    // The smallest round step that keeps the count down.
     const std::int64_t wanted = (length + static_cast<std::int64_t>(maxCount) - 1) / static_cast<std::int64_t>(maxCount);
-    const auto found = std::ranges::find_if(TimeSteps, [&](std::int64_t step) { return step >= wanted; });
-    const std::int64_t step = found != TimeSteps.end() ? *found : (wanted + Day - 1) / Day * Day;
+    const std::int64_t step = getTimeStep(wanted);
 
     // The first multiple of the step at or after the start, also before 1970.
     std::int64_t time = range.startUs / step * step;
-    if (time < range.startUs) {
+    if (time < range.startUs)
+    {
         time += step;
     }
     std::vector<Tick> ticks;
-    for (; time < range.endUs; time += step) {
+    for (; time < range.endUs; time += step)
+    {
         ticks.push_back({
             .fraction = static_cast<double>(time - range.startUs) / static_cast<double>(length),
             .label = formatTime(time, step),
@@ -78,7 +112,8 @@ std::vector<Tick> getTimeTicks(TimeRange range, std::size_t maxCount)
 std::vector<Tick> getNumberTicks(ValueRange range, std::size_t maxCount)
 {
     const double span = range.high - range.low;
-    if (!(span > 0.0) || maxCount == 0) {
+    if (!(span > 0.0) || maxCount == 0)
+    {
         return {};
     }
     // 1, 2 or 5 times the power of ten just below the step that would fit maxCount.
@@ -86,7 +121,7 @@ std::vector<Tick> getNumberTicks(ValueRange range, std::size_t maxCount)
     const int exponent = static_cast<int>(std::floor(std::log10(wanted)));
     const double power = std::pow(10.0, exponent);
     const double mantissa = wanted / power;
-    const double step = (mantissa <= 1.0 ? 1.0 : (mantissa <= 2.0 ? 2.0 : (mantissa <= 5.0 ? 5.0 : 10.0))) * power;
+    const double step = roundUp(mantissa) * power;
     const int decimals = std::max(0, -static_cast<int>(std::floor(std::log10(step) + 1e-9)));
 
     std::vector<Tick> ticks;
@@ -95,7 +130,8 @@ std::vector<Tick> getNumberTicks(ValueRange range, std::size_t maxCount)
     constexpr double Tolerance = 1e-9;
     const auto first = static_cast<std::int64_t>(std::ceil(range.low / step - Tolerance));
     const auto last = static_cast<std::int64_t>(std::floor(range.high / step + Tolerance));
-    for (std::int64_t index = first; index <= last; ++index) {
+    for (std::int64_t index = first; index <= last; ++index)
+    {
         const double price = static_cast<double>(index) * step;
         ticks.push_back({
             .fraction = (price - range.low) / span,
@@ -105,4 +141,4 @@ std::vector<Tick> getNumberTicks(ValueRange range, std::size_t maxCount)
     return ticks;
 }
 
-} // namespace Core::Plot::Axis
+}  // namespace Core::Plot::Axis

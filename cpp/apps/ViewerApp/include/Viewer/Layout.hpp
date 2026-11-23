@@ -18,4 +18,4 @@ struct Layout
     [[nodiscard]] double getPlotHeightPx() const;
 };
 
-} // namespace Viewer
+}  // namespace Viewer

@@ -33,14 +33,14 @@ std::unique_ptr<Engine> createOffscreen(std::uint32_t widthPx, std::uint32_t hei
 {
     std::unique_ptr<Engine> engine;
     bool done = false;
-    Engine::create({ .target = Gpu::Type::Target::Offscreen{ .width = widthPx, .height = heightPx } },
-        [&](Engine::CreatedResult result) {
-            done = true;
-            CHECK_MESSAGE(result, (result ? "" : result.error()));
-            if (result) {
-                engine = std::move(*result);
-            }
-        });
+    Engine::create({ .target = Gpu::Type::Target::Offscreen{ .width = widthPx, .height = heightPx } }, [&](Engine::CreatedResult result) {
+        done = true;
+        CHECK_MESSAGE(result, (result ? "" : result.error()));
+        if (result)
+        {
+            engine = std::move(*result);
+        }
+    });
     // Natively, creation always finishes before create() returns.
     CHECK_MESSAGE(done, "Engine creation didn't finish before create() returned");
     return engine;
@@ -54,12 +54,14 @@ std::optional<Pixels> readPixels(Engine& engine)
     engine.readPixels([&](std::expected<Pixels, std::string> result) {
         done = true;
         CHECK_MESSAGE(result, (result ? "" : result.error()));
-        if (result) {
+        if (result)
+        {
             pixels = std::move(*result);
         }
     });
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (!done && std::chrono::steady_clock::now() < deadline) {
+    while (!done && std::chrono::steady_clock::now() < deadline)
+    {
         engine.processEvents();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
@@ -77,7 +79,8 @@ void recordStats(Engine& engine, std::vector<FrameStats>& reported)
 bool waitForStats(Engine& engine, const std::vector<FrameStats>& reported, std::size_t count)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (reported.size() < count && std::chrono::steady_clock::now() < deadline) {
+    while (reported.size() < count && std::chrono::steady_clock::now() < deadline)
+    {
         engine.processEvents();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
@@ -88,9 +91,10 @@ bool waitForStats(Engine& engine, const std::vector<FrameStats>& reported, std::
 /** Whether every pixel is the engine's background, (0.07, 0.08, 0.10) in 8-bit RGBA. */
 bool isBackground(const Pixels& pixels)
 {
-    for (std::size_t i = 0; i + 3 < pixels.size(); i += 4) {
-        if (std::abs(pixels[i] - 18) > 1 || std::abs(pixels[i + 1] - 20) > 1 || std::abs(pixels[i + 2] - 26) > 1
-            || pixels[i + 3] != 255) {
+    for (std::size_t i = 0; i + 3 < pixels.size(); i += 4)
+    {
+        if (std::abs(pixels[i] - 18) > 1 || std::abs(pixels[i + 1] - 20) > 1 || std::abs(pixels[i + 2] - 26) > 1 || pixels[i + 3] != 255)
+        {
             return false;
         }
     }
@@ -109,7 +113,7 @@ struct Rgba
 Rgba pixelAt(const Pixels& pixels, std::uint32_t widthPx, std::uint32_t xPx, std::uint32_t yPx)
 {
     const std::size_t i = (std::size_t{ yPx } * widthPx + xPx) * 4;
-    return { pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3] };
+    return { .red = pixels[i], .green = pixels[i + 1], .blue = pixels[i + 2], .alpha = pixels[i + 3] };
 }
 
 bool isBuy(Rgba pixel)
@@ -154,23 +158,25 @@ Trades buyThenSell()
 /** 100 µs from noon, prices 99 to 101, showing `trades`. */
 Gpu::Market::Type::View viewOf(Core::IndexRange trades)
 {
-    return { .time = { NoonUs, NoonUs + 100 }, .price = { .low = 99.0, .high = 101.0 }, .trades = trades };
+    return { .time = { .startUs = NoonUs, .endUs = NoonUs + 100 }, .price = { .low = 99.0, .high = 101.0 }, .trades = trades };
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("Trades are drawn where their time and price fall, colored by side")
 {
     const auto engine = createOffscreen(100, 50);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     CHECK(engine->setTrades(buyThenSell()));
-    engine->setSettings({ .view = viewOf({ 0, 2 }) });
+    engine->setSettings({ .view = viewOf({ .first = 0, .last = 2 }) });
     engine->render();
 
     const auto pixels = readPixels(*engine);
-    if (!pixels) {
+    if (!pixels)
+    {
         return;
     }
     CHECK(isBuy(pixelAt(*pixels, 100, 25, 25)));
@@ -182,7 +188,8 @@ TEST_CASE("Trades are drawn where their time and price fall, colored by side")
 TEST_CASE("Insets keep trades and grid lines inside the plot")
 {
     const auto engine = createOffscreen(100, 50);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     CHECK(engine->setTrades(buyThenSell()));
@@ -190,12 +197,13 @@ TEST_CASE("Insets keep trades and grid lines inside the plot")
         // The plot is the top left 80 × 40 pixels.
         .insets = { .left = 0, .top = 0, .right = 20, .bottom = 10 },
         .grid = { .verticalLines = { 0.5f }, .horizontalLines = { 0.25f } },
-        .view = viewOf({ 0, 2 }),
+        .view = viewOf({ .first = 0, .last = 2 }),
     });
     engine->render();
 
     const auto pixels = readPixels(*engine);
-    if (!pixels) {
+    if (!pixels)
+    {
         return;
     }
     // A quarter of the plot across and half of it down.
@@ -215,15 +223,17 @@ TEST_CASE("Insets keep trades and grid lines inside the plot")
 TEST_CASE("Only the view's trades are drawn")
 {
     const auto engine = createOffscreen(100, 50);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     CHECK(engine->setTrades(buyThenSell()));
-    engine->setSettings({ .view = viewOf({ 1, 2 }) });
+    engine->setSettings({ .view = viewOf({ .first = 1, .last = 2 }) });
     engine->render();
 
     const auto pixels = readPixels(*engine);
-    if (!pixels) {
+    if (!pixels)
+    {
         return;
     }
     CHECK(isBackground(pixelAt(*pixels, 100, 25, 25)));
@@ -245,7 +255,7 @@ std::optional<Pixels> drawOne(Engine& engine, double amount, Side side, MarkerSc
     Trades trades;
     add(trades, NoonUs + 50, 100.0, amount, side);
     CHECK(engine.setTrades(trades));
-    settings.view = viewOf({ 0, 1 });
+    settings.view = viewOf({ .first = 0, .last = 1 });
     settings.markerSizing.scale = scale;
     settings.pixelRatio = pixelRatio;
     engine.setSettings(settings);
@@ -264,28 +274,34 @@ int measureDiameter(const Pixels& pixels)
 {
     const double halfCovered = (BackgroundColor.green + blend(DefaultTheme.buy.green, BackgroundColor.green)) / 2.0;
     int count = 0;
-    for (std::uint32_t x = 0; x < 100; ++x) {
+    for (std::uint32_t x = 0; x < 100; ++x)
+    {
         count += pixelAt(pixels, 100, x, 50).green > halfCovered ? 1 : 0;
     }
     return count;
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("Markers are drawn at the legend's sizes, scaled by the pixel ratio")
 {
     const auto engine = createOffscreen(100, 100);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
-    for (const auto scale : { MarkerScale::Area, MarkerScale::Log }) {
-        for (const auto& size : Style::getLegend({ .scale = scale }, DefaultTheme).sizes) {
-            for (const float pixelRatio : { 1.0f, 2.0f }) {
+    for (const auto scale : { MarkerScale::Area, MarkerScale::Log })
+    {
+        for (const auto& size : Style::getLegend({ .scale = scale }, DefaultTheme).sizes)
+        {
+            for (const float pixelRatio : { 1.0f, 2.0f })
+            {
                 CAPTURE(scale);
                 CAPTURE(size.amount);
                 CAPTURE(pixelRatio);
                 const auto pixels = drawOne(*engine, size.amount, Side::Buy, scale, pixelRatio);
-                if (!pixels) {
+                if (!pixels)
+                {
                     return;
                 }
                 // The middle row's pixel centers lie half a pixel off the marker's center.
@@ -299,14 +315,17 @@ TEST_CASE("Markers are drawn at the legend's sizes, scaled by the pixel ratio")
 TEST_CASE("Markers have the legend's colors, at its opacity")
 {
     const auto engine = createOffscreen(100, 100);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     const auto legend = Style::getLegend({ .scale = MarkerScale::Area }, DefaultTheme);
-    for (const auto side : { Side::Buy, Side::Sell }) {
+    for (const auto side : { Side::Buy, Side::Sell })
+    {
         CAPTURE(side == Side::Buy ? "buy" : "sell");
         const auto pixels = drawOne(*engine, 1.0, side, MarkerScale::Area, 1.0f);
-        if (!pixels) {
+        if (!pixels)
+        {
             return;
         }
         const auto color = side == Side::Buy ? legend.buy : legend.sell;
@@ -320,22 +339,25 @@ TEST_CASE("Markers have the legend's colors, at its opacity")
 TEST_CASE("The highlighted trade gets a ring in the cursor color, just outside its marker")
 {
     const auto engine = createOffscreen(100, 100);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     // A marker of radius 6 centered at (50, 50): by default, the area scale
     // reaches 16 at 1, so 9/64 gets 16 × 3/8. The ring runs from
     // 7.5 to 9.5 pixels out.
     const auto plain = drawOne(*engine, 9.0 / 64.0, Side::Buy, MarkerScale::Area, 1.0f);
-    if (!plain) {
+    if (!plain)
+    {
         return;
     }
     CHECK(isBackground(pixelAt(*plain, 100, 58, 50)));
 
-    engine->setSettings({ .view = viewOf({ 0, 1 }), .highlightedTrade = 0 });
+    engine->setSettings({ .view = viewOf({ .first = 0, .last = 1 }), .highlightedTrade = 0 });
     engine->render();
     const auto ringed = readPixels(*engine);
-    if (!ringed) {
+    if (!ringed)
+    {
         return;
     }
     const Rgba ring = pixelAt(*ringed, 100, 58, 50);
@@ -345,10 +367,11 @@ TEST_CASE("The highlighted trade gets a ring in the cursor color, just outside i
     CHECK(isBuy(pixelAt(*ringed, 100, 52, 50)));  // the marker itself is unchanged
     CHECK(isBackground(pixelAt(*ringed, 100, 62, 50)));
 
-    engine->setSettings({ .view = viewOf({ 0, 1 }) });
+    engine->setSettings({ .view = viewOf({ .first = 0, .last = 1 }) });
     engine->render();
     const auto cleared = readPixels(*engine);
-    if (!cleared) {
+    if (!cleared)
+    {
         return;
     }
     CHECK(isBackground(pixelAt(*cleared, 100, 58, 50)));
@@ -357,13 +380,14 @@ TEST_CASE("The highlighted trade gets a ring in the cursor color, just outside i
 TEST_CASE("Columns are drawn instead of trades, as bars over their price range, colored by side")
 {
     const auto engine = createOffscreen(100, 100);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     Trades trades;
     add(trades, NoonUs + 50, 100.0, 1.0, Side::Buy);  // drawn at (50, 50) when trades show
     CHECK(engine->setTrades(trades));
-    engine->setSettings({ .view = viewOf({ 0, 1 }) });
+    engine->setSettings({ .view = viewOf({ .first = 0, .last = 1 }) });
     // 10 columns of 10 pixels. Prices 99 to 101 fill the height, top down.
     engine->setColumns(Gpu::Market::Type::Columns{
         .across = 10,
@@ -374,7 +398,8 @@ TEST_CASE("Columns are drawn instead of trades, as bars over their price range, 
     });
     engine->render();
     const auto pixels = readPixels(*engine);
-    if (!pixels) {
+    if (!pixels)
+    {
         return;
     }
     // Each traded as much as the most, so both are opaque.
@@ -391,10 +416,11 @@ TEST_CASE("Columns are drawn instead of trades, as bars over their price range, 
     CHECK(isBackground(pixelAt(*pixels, 100, 75, 46)));
     CHECK(isBackground(pixelAt(*pixels, 100, 50, 50)));  // the trade isn't drawn
 
-    engine->setSettings({ .view = viewOf({ 0, 1 }), .highlightedColumn = 1 });
+    engine->setSettings({ .view = viewOf({ .first = 0, .last = 1 }), .highlightedColumn = 1 });
     engine->render();
     const auto highlighted = readPixels(*engine);
-    if (!highlighted) {
+    if (!highlighted)
+    {
         return;
     }
     CHECK(isExactly(pixelAt(*highlighted, 100, 75, 50), DefaultTheme.cursor));
@@ -403,7 +429,8 @@ TEST_CASE("Columns are drawn instead of trades, as bars over their price range, 
     engine->setColumns(std::nullopt);
     engine->render();
     const auto tradesAgain = readPixels(*engine);
-    if (!tradesAgain) {
+    if (!tradesAgain)
+    {
         return;
     }
     CHECK(isBuy(pixelAt(*tradesAgain, 100, 50, 50)));
@@ -413,7 +440,8 @@ TEST_CASE("Columns are drawn instead of trades, as bars over their price range, 
 TEST_CASE("A theme sets the background, grid and marker colors")
 {
     const auto engine = createOffscreen(100, 100);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     const Theme theme{
@@ -424,7 +452,8 @@ TEST_CASE("A theme sets the background, grid and marker colors")
     };
     const auto pixels = drawOne(*engine, 1.0, Side::Buy, MarkerScale::Area, 1.0f,
                                 { .grid = { .verticalLines = { 0.1f }, .horizontalLines = {} }, .theme = theme });
-    if (!pixels) {
+    if (!pixels)
+    {
         return;
     }
     const Rgba background = pixelAt(*pixels, 100, 30, 10);
@@ -443,7 +472,8 @@ TEST_CASE("A theme sets the background, grid and marker colors")
 TEST_CASE("Times are exact to the microsecond, decades after 1970")
 {
     const auto engine = createOffscreen(100, 50);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     // 3 µs before the lower 32 bits wrap, so the second trade's subtraction borrows.
@@ -453,11 +483,14 @@ TEST_CASE("Times are exact to the microsecond, decades after 1970")
     add(trades, StartUs + 2, 100.0, 1e-6, Side::Buy);
     add(trades, StartUs + 3, 100.0, 1e-6, Side::Sell);
     CHECK(engine->setTrades(trades));
-    engine->setSettings({ .view = { .time = { StartUs, StartUs + 10 }, .price = { .low = 99.0, .high = 101.0 }, .trades = { 0, 2 } } });
+    engine->setSettings({ .view = { .time = { .startUs = StartUs, .endUs = StartUs + 10 },
+                                    .price = { .low = 99.0, .high = 101.0 },
+                                    .trades = { .first = 0, .last = 2 } } });
     engine->render();
 
     const auto pixels = readPixels(*engine);
-    if (!pixels) {
+    if (!pixels)
+    {
         return;
     }
     // 10 pixels per microsecond.
@@ -469,7 +502,8 @@ TEST_CASE("Times are exact to the microsecond, decades after 1970")
 TEST_CASE("Appending past the reserved room keeps the earlier trades")
 {
     const auto engine = createOffscreen(100, 50);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     std::vector<FrameStats> reported;
@@ -484,11 +518,12 @@ TEST_CASE("Appending past the reserved room keeps the earlier trades")
     CHECK(engine->appendTrades(first));
     engine->render();
     CHECK(engine->appendTrades(second));
-    engine->setSettings({ .view = viewOf({ 0, 2 }) });
+    engine->setSettings({ .view = viewOf({ .first = 0, .last = 2 }) });
     engine->render();
 
     const auto pixels = readPixels(*engine);
-    if (!pixels || reported.size() != 2) {
+    if (!pixels || reported.size() != 2)
+    {
         CHECK(reported.size() == 2);
         return;
     }
@@ -502,19 +537,23 @@ TEST_CASE("Appending past the reserved room keeps the earlier trades")
 TEST_CASE("Zooming and panning allocate nothing")
 {
     const auto engine = createOffscreen(100, 50);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     std::vector<FrameStats> reported;
     recordStats(*engine, reported);
     CHECK(engine->setTrades(buyThenSell()));
-    for (std::int64_t step = 0; step < 50; ++step) {
-        engine->setSettings({ .view = { .time = { NoonUs + step, NoonUs + 100 + step * 3 }, .price = { .low = 99.0, .high = 101.0 },
-                                     .trades = { 0, 2 } } });
+    for (std::int64_t step = 0; step < 50; ++step)
+    {
+        engine->setSettings({ .view = { .time = { .startUs = NoonUs + step, .endUs = NoonUs + 100 + step * 3 },
+                                        .price = { .low = 99.0, .high = 101.0 },
+                                        .trades = { .first = 0, .last = 2 } } });
         engine->render();
     }
     CHECK(reported.size() == 50);
-    for (const auto& stats : reported) {
+    for (const auto& stats : reported)
+    {
         CHECK(stats.buffers == reported.front().buffers);
         CHECK(stats.textures == reported.front().textures);
         CHECK(stats.gpuBytes == reported.front().gpuBytes);
@@ -524,13 +563,15 @@ TEST_CASE("Zooming and panning allocate nothing")
 TEST_CASE("An offscreen engine draws its background into every pixel")
 {
     const auto engine = createOffscreen(64, 16);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     engine->render();
 
     const auto pixels = readPixels(*engine);
-    if (!pixels) {
+    if (!pixels)
+    {
         return;
     }
     CHECK(pixels->size() == 64 * 16 * 4);
@@ -540,7 +581,8 @@ TEST_CASE("An offscreen engine draws its background into every pixel")
 TEST_CASE("Resizing an offscreen engine replaces its texture")
 {
     const auto engine = createOffscreen(64, 16);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     std::vector<FrameStats> reported;
@@ -552,13 +594,15 @@ TEST_CASE("Resizing an offscreen engine replaces its texture")
     CHECK_FALSE(engine->needsRender());
 
     const auto pixels = readPixels(*engine);
-    if (!pixels) {
+    if (!pixels)
+    {
         return;
     }
     CHECK(pixels->size() == 32 * 8 * 4);
     CHECK(isBackground(*pixels));
     CHECK(reported.size() == 2);
-    if (reported.size() == 2) {
+    if (reported.size() == 2)
+    {
         CHECK(reported[1].textures == 1);
         CHECK(reported[0].gpuBytes - reported[1].gpuBytes == (64 * 16 - 32 * 8) * 4);
     }
@@ -566,18 +610,21 @@ TEST_CASE("Resizing an offscreen engine replaces its texture")
 
 TEST_CASE("Profiling reports CPU times and the GPU time of each pass")
 {
-    if constexpr (!Core::Profiling::Compiled) {
+    if constexpr (!Core::Profiling::Compiled)
+    {
         return;
     }
     const auto engine = createOffscreen(64, 16);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     std::vector<FrameStats> reported;
     recordStats(*engine, reported);
     engine->setProfiling(Engine::ProfilingOn{});
     engine->render();
-    if (!waitForStats(*engine, reported, 1)) {
+    if (!waitForStats(*engine, reported, 1))
+    {
         return;
     }
 
@@ -586,9 +633,11 @@ TEST_CASE("Profiling reports CPU times and the GPU time of each pass")
     // CI relies on this: it fails, rather than skips, on a device without
     // timestamp-query.
     CHECK_MESSAGE(stats.gpu, "No GPU timings arrived; the device needs timestamp-query");
-    if (stats.gpu) {
+    if (stats.gpu)
+    {
         CHECK(stats.gpu->passes.size() == 2);
-        if (stats.gpu->passes.size() == 2) {
+        if (stats.gpu->passes.size() == 2)
+        {
             CHECK(stats.gpu->passes[0].name == "grid");
             CHECK(stats.gpu->passes[1].name == "trades");
         }
@@ -598,7 +647,8 @@ TEST_CASE("Profiling reports CPU times and the GPU time of each pass")
 TEST_CASE("Each frame is reported once, in order, with times only if it was profiled")
 {
     const auto engine = createOffscreen(16, 16);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     std::vector<FrameStats> reported;
@@ -610,10 +660,12 @@ TEST_CASE("Each frame is reported once, in order, with times only if it was prof
     engine->setProfiling(Engine::ProfilingOff{});
     // Untimed, but still reported after frame 2, whose GPU times are on their way.
     engine->render();
-    if (!waitForStats(*engine, reported, 3)) {
+    if (!waitForStats(*engine, reported, 3))
+    {
         return;
     }
-    for (std::size_t i = 0; i < reported.size(); ++i) {
+    for (std::size_t i = 0; i < reported.size(); ++i)
+    {
         CHECK(reported[i].frame == i + 1);
     }
     CHECK_FALSE(reported[0].cpu);
@@ -626,11 +678,13 @@ TEST_CASE("Each frame is reported once, in order, with times only if it was prof
 
 TEST_CASE("Profiling a share of frames on the GPU times every frame on the CPU, and says which it left out")
 {
-    if (!Core::Profiling::Compiled) {
+    if (!Core::Profiling::Compiled)
+    {
         return;
     }
     const auto engine = createOffscreen(16, 16);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     std::vector<FrameStats> reported;
@@ -642,10 +696,12 @@ TEST_CASE("Profiling a share of frames on the GPU times every frame on the CPU, 
     engine->render();
     engine->setProfiling(Engine::ProfilingOn{ .gpuTimingProbability = 1.0 });
     engine->render();
-    if (!waitForStats(*engine, reported, 3)) {
+    if (!waitForStats(*engine, reported, 3))
+    {
         return;
     }
-    for (const auto& stats : reported) {
+    for (const auto& stats : reported)
+    {
         CHECK(stats.cpu);
     }
     CHECK(reported[0].gpu.error_or({}) == UntimedReason::NotSampled);
@@ -657,9 +713,10 @@ TEST_CASE("An offscreen target needs a size")
 {
     std::optional<Engine::CreatedResult> result;
     Engine::create({ .target = Gpu::Type::Target::Offscreen{ .width = 0, .height = 16 } },
-        [&](Engine::CreatedResult created) { result = std::move(created); });
+                   [&](Engine::CreatedResult created) { result = std::move(created); });
     CHECK(result);
-    if (result) {
+    if (result)
+    {
         CHECK_FALSE(*result);
     }
 }

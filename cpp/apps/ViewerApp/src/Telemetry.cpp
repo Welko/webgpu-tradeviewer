@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <format>
+#include <string>
 #include <utility>
 
 namespace Viewer {
@@ -25,7 +26,8 @@ constexpr const char* Platform = "native";
 
 void addSample(std::vector<double>& samples, double value)
 {
-    if (samples.size() < MaxSamples) {
+    if (samples.size() < MaxSamples)
+    {
         samples.push_back(value);
     }
 }
@@ -50,12 +52,33 @@ Telemetry::Property property(std::string name, Core::Telemetry::Value value)
     return { .name = std::move(name), .value = std::move(value) };
 }
 
+/**
+ * The GPU's name and where it came from: "webgpu", "webgl" or "none".
+ * Browsers often hide the device's name; WebGL's renderer may still say it.
+ */
+std::pair<std::string, std::string> getGpuName(const Gpu::Type::Info& gpu)
+{
+    if (!gpu.description.empty())
+    {
+        return { gpu.description, "webgpu" };
+    }
+    if (!gpu.device.empty())
+    {
+        return { gpu.device, "webgpu" };
+    }
+    if (!gpu.webglRenderer.empty())
+    {
+        return { gpu.webglRenderer, "webgl" };
+    }
+    return { "", "none" };
+}
+
 Telemetry::Property count(std::string name, std::size_t value)
 {
     return property(std::move(name), static_cast<std::int64_t>(value));
 }
 
-} // namespace
+}  // namespace
 
 Telemetry::Telemetry()
     : mClient(Platform, TRADEVIEWER_BUILD, TRADEVIEWER_VERSION)
@@ -67,15 +90,15 @@ void Telemetry::setSink(std::unique_ptr<Core::Telemetry::Sink> sink, std::vector
     mView = {};
     mPerformance = {};
     mPeriodStartMs.reset();
-    if (!mClient.isEnabled()) {
+    if (!mClient.isEnabled())
+    {
         return;
     }
-    // Browsers often hide the device's name; WebGL's renderer may still say it.
-    const bool named = !gpu.description.empty() || !gpu.device.empty();
+    const auto [name, source] = getGpuName(gpu);
     environment.push_back(property("gpuVendor", gpu.vendor));
     environment.push_back(property("gpuArchitecture", gpu.architecture));
-    environment.push_back(property("gpuName", !gpu.description.empty() ? gpu.description : !gpu.device.empty() ? gpu.device : gpu.webglRenderer));
-    environment.push_back(property("gpuNameSource", named ? "webgpu" : gpu.webglRenderer.empty() ? "none" : "webgl"));
+    environment.push_back(property("gpuName", name));
+    environment.push_back(property("gpuNameSource", source));
     environment.push_back(property("backend", gpu.backend));
     environment.push_back(property("adapter", gpu.adapter));
     mClient.send("session_started", std::move(environment));
@@ -83,7 +106,8 @@ void Telemetry::setSink(std::unique_ptr<Core::Telemetry::Sink> sink, std::vector
 
 void Telemetry::recordViewChange(std::int64_t lengthUs, bool reset, bool wholeDay)
 {
-    if (!isEnabled()) {
+    if (!isEnabled())
+    {
         return;
     }
     ++mView.changes;
@@ -94,14 +118,16 @@ void Telemetry::recordViewChange(std::int64_t lengthUs, bool reset, bool wholeDa
 
 void Telemetry::recordPick()
 {
-    if (isEnabled()) {
+    if (isEnabled())
+    {
         ++mView.picks;
     }
 }
 
 void Telemetry::recordFrame(bool summarized, std::size_t visibleTrades)
 {
-    if (!isEnabled()) {
+    if (!isEnabled())
+    {
         return;
     }
     ++mView.frames;
@@ -111,25 +137,30 @@ void Telemetry::recordFrame(bool summarized, std::size_t visibleTrades)
 
 void Telemetry::recordFrameTimes(const Gpu::Type::FrameStats& stats)
 {
-    if (!isEnabled()) {
+    if (!isEnabled())
+    {
         return;
     }
     auto& performance = mPerformance;
     ++performance.frames;
     performance.gpuBytesPeak = std::max(performance.gpuBytesPeak, stats.gpuBytes);
-    if (stats.cpu) {
+    if (stats.cpu)
+    {
         addSample(performance.cpuMs, stats.cpu->acquireMs + stats.cpu->encodeMs + stats.cpu->submitMs);
         addSample(performance.encodeMs, stats.cpu->encodeMs);
     }
-    if (stats.gpu) {
+    if (stats.gpu)
+    {
         addSample(performance.gpuMs, stats.gpu->totalMs);
-        for (const auto& pass : stats.gpu->passes) {
+        for (const auto& pass : stats.gpu->passes)
+        {
             addSample(performance.passMs[pass.name], pass.gpuMs);
         }
         return;
     }
     using Reason = Gpu::Type::FrameStats::UntimedReason;
-    switch (stats.gpu.error()) {
+    switch (stats.gpu.error())
+    {
     case Reason::Unsupported:
         performance.gpuUnsupported = true;
         break;
@@ -148,13 +179,16 @@ void Telemetry::recordFrameTimes(const Gpu::Type::FrameStats& stats)
 
 void Telemetry::update(double nowMs)
 {
-    if (!isEnabled()) {
+    if (!isEnabled())
+    {
         return;
     }
-    if (!mPeriodStartMs) {
+    if (!mPeriodStartMs)
+    {
         mPeriodStartMs = nowMs;
     }
-    if (nowMs - *mPeriodStartMs >= SummaryPeriodMs) {
+    if (nowMs - *mPeriodStartMs >= SummaryPeriodMs)
+    {
         sendSummaries();
         mPeriodStartMs = nowMs;
     }
@@ -162,7 +196,8 @@ void Telemetry::update(double nowMs)
 
 void Telemetry::flush()
 {
-    if (isEnabled()) {
+    if (isEnabled())
+    {
         sendSummaries();
     }
 }
@@ -170,26 +205,31 @@ void Telemetry::flush()
 void Telemetry::sendSummaries()
 {
     auto& view = mView;
-    if (view.changes > 0 || view.picks > 0) {
+    if (view.changes > 0 || view.picks > 0)
+    {
         std::vector<Property> properties{
             count("viewChanges", view.changes),
             count("resets", view.resets),
             count("picks", view.picks),
             property("fullDayUsed", view.wholeDay),
         };
-        if (!view.lengthsS.empty()) {
+        if (!view.lengthsS.empty())
+        {
             properties.push_back(property("minVisibleSpanS", rounded(*std::ranges::min_element(view.lengthsS))));
             properties.push_back(property("maxVisibleSpanS", rounded(*std::ranges::max_element(view.lengthsS))));
             properties.push_back(property("medianVisibleSpanS", rounded(getPercentile(view.lengthsS, 0.5))));
         }
-        if (view.frames > 0) {
-            properties.push_back(property("aggregatedFraction", rounded(static_cast<double>(view.summarizedFrames) / static_cast<double>(view.frames))));
+        if (view.frames > 0)
+        {
+            properties.push_back(
+                property("aggregatedFraction", rounded(static_cast<double>(view.summarizedFrames) / static_cast<double>(view.frames))));
         }
         mClient.send("view_summary", std::move(properties));
     }
 
     auto& performance = mPerformance;
-    if (performance.frames > 0) {
+    if (performance.frames > 0)
+    {
         std::vector<Property> properties{
             count("frames", performance.frames),
             count("gpuFrames", performance.gpuMs.size()),
@@ -198,20 +238,24 @@ void Telemetry::sendSummaries()
             property("gpuBytesPeak", static_cast<std::int64_t>(performance.gpuBytesPeak)),
             count("droppedEvents", mClient.getDropped()),
         };
-        if (!performance.cpuMs.empty()) {
+        if (!performance.cpuMs.empty())
+        {
             properties.push_back(property("cpuFrameMsP50", rounded(getPercentile(performance.cpuMs, 0.5))));
             properties.push_back(property("cpuFrameMsP95", rounded(getPercentile(performance.cpuMs, 0.95))));
             properties.push_back(property("cpuFrameMsP99", rounded(getPercentile(performance.cpuMs, 0.99))));
             properties.push_back(property("cpuEncodeMsP95", rounded(getPercentile(performance.encodeMs, 0.95))));
         }
-        if (!performance.gpuMs.empty()) {
+        if (!performance.gpuMs.empty())
+        {
             properties.push_back(property("gpuMsP50", rounded(getPercentile(performance.gpuMs, 0.5))));
             properties.push_back(property("gpuMsP95", rounded(getPercentile(performance.gpuMs, 0.95))));
-            for (auto& [pass, times] : performance.passMs) {
+            for (auto& [pass, times] : performance.passMs)
+            {
                 properties.push_back(property(std::format("gpu_{}_p95", pass), rounded(getPercentile(times, 0.95))));
             }
         }
-        if (!view.visibleTrades.empty()) {
+        if (!view.visibleTrades.empty())
+        {
             properties.push_back(property("visibleTradesP95", std::round(getPercentile(view.visibleTrades, 0.95))));
         }
         mClient.send("perf_summary", std::move(properties));
@@ -220,4 +264,4 @@ void Telemetry::sendSummaries()
     mPerformance = {};
 }
 
-} // namespace Viewer
+}  // namespace Viewer

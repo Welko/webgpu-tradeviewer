@@ -10,8 +10,8 @@ CompileFlags:
 Diagnostics:
   UnusedIncludes: Strict
 ---
-# The web entry point is only built by Emscripten.
+# The web app is only built by Emscripten.
 If:
-  PathMatch: cpp/apps/ViewerApp/src/WebMain\.cpp
+  PathMatch: cpp/apps/ViewerApp/src/Web/.*\.cpp
 CompileFlags:
   CompilationDatabase: cpp/build/web

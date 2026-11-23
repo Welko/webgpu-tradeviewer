@@ -150,4 +150,4 @@ private:
     GpuSession mGpu;
 };
 
-} // namespace Viewer
+}  // namespace Viewer

@@ -1,10 +1,10 @@
 #include "Viewer/App.hpp"
 #include "Viewer/Scene.hpp"
 
+#include "Core/Data/TradeParser.hpp"
 #include "Core/Log.hpp"
 #include "Core/Memory.hpp"
 #include "Core/Plot/Axis.hpp"
-#include "Core/Data/TradeParser.hpp"
 
 #include <emscripten/bind.h>
 #include <emscripten/em_js.h>
@@ -29,8 +29,8 @@
  * be well short of.
  */
 EM_JS(void, viewerAbortOutOfMemory, (double heapBytes, double maxBytes), {
-    abort("Out of memory: the viewer had " + Math.round(heapBytes / 1048576) + " MiB, and needed more than the " +
-          Math.round(maxBytes / 1048576) + " MiB a page can have");
+    abort("Out of memory: the viewer had " + Math.round(heapBytes / 1048576) + " MiB, and needed more than the "
+          + Math.round(maxBytes / 1048576) + " MiB a page can have");
 });
 
 namespace {
@@ -39,19 +39,20 @@ using emscripten::val;
 
 /** Lets JavaScript tell running out of memory from other aborts. Exceptions are off, so new can only abort. */
 const bool OutOfMemoryHandled = [] {
-    std::set_new_handler([] {
-        viewerAbortOutOfMemory(static_cast<double>(emscripten_get_heap_size()), static_cast<double>(emscripten_get_heap_max()));
-    });
+    std::set_new_handler(
+        [] { viewerAbortOutOfMemory(static_cast<double>(emscripten_get_heap_size()), static_cast<double>(emscripten_get_heap_max())); });
     return true;
 }();
 
 /** Accepts the WebGPU spelling: "low-power", "high-performance", anything else is the default. */
 Gpu::Type::PowerPreference parsePowerPreference(const std::string& value)
 {
-    if (value == "low-power") {
+    if (value == "low-power")
+    {
         return Gpu::Type::PowerPreference::LowPower;
     }
-    if (value == "high-performance") {
+    if (value == "high-performance")
+    {
         return Gpu::Type::PowerPreference::HighPerformance;
     }
     return Gpu::Type::PowerPreference::Default;
@@ -70,7 +71,8 @@ struct WebTradeStats
 val toWeb(const std::vector<Core::Plot::Axis::Tick>& ticks)
 {
     val array = val::array();
-    for (const auto& tick : ticks) {
+    for (const auto& tick : ticks)
+    {
         val object = val::object();
         object.set("fraction", tick.fraction);
         object.set("label", tick.label);
@@ -97,7 +99,8 @@ val toWeb(const Gpu::Market::Type::Legend& legend)
 {
     using Bound = Gpu::Market::Type::LegendSize::Bound;
     val sizes = val::array();
-    for (const auto& size : legend.sizes) {
+    for (const auto& size : legend.sizes)
+    {
         val object = val::object();
         object.set("amount", size.amount);
         object.set("radiusCssPx", size.radiusCssPx);
@@ -138,7 +141,8 @@ void setErrorListener(val onError)
 val getScenes()
 {
     val array = val::array();
-    for (const auto& scene : Viewer::Scene::getScenes()) {
+    for (const auto& scene : Viewer::Scene::getScenes())
+    {
         val object = val::object();
         object.set("name", std::string(scene.name));
         object.set("description", std::string(scene.description));
@@ -153,9 +157,11 @@ val getScenes()
 val toWeb(const std::vector<Viewer::Scene::Patch>& patches)
 {
     val array = val::array();
-    for (const auto& patch : patches) {
+    for (const auto& patch : patches)
+    {
         val rgba = val::array();
-        for (const std::uint8_t channel : patch.rgba) {
+        for (const std::uint8_t channel : patch.rgba)
+        {
             rgba.call<void>("push", channel);
         }
         val object = val::object();
@@ -175,7 +181,8 @@ val toWeb(const std::vector<Viewer::Scene::Patch>& patches)
 const char* toWeb(Gpu::Type::FrameStats::UntimedReason reason)
 {
     using Reason = Gpu::Type::FrameStats::UntimedReason;
-    switch (reason) {
+    switch (reason)
+    {
     case Reason::Undefined:
         return "undefined";
     case Reason::ProfilingOff:
@@ -205,18 +212,23 @@ val toWeb(const Gpu::Type::FrameStats& stats)
 {
     val object = val::object();
     object.set("frame", static_cast<double>(stats.frame));
-    if (stats.cpu) {
+    if (stats.cpu)
+    {
         val cpu = val::object();
         cpu.set("acquireMs", stats.cpu->acquireMs);
         cpu.set("encodeMs", stats.cpu->encodeMs);
         cpu.set("submitMs", stats.cpu->submitMs);
         object.set("cpu", cpu);
-    } else {
+    }
+    else
+    {
         object.set("cpu", val::null());
     }
-    if (stats.gpu) {
+    if (stats.gpu)
+    {
         val passes = val::array();
-        for (const auto& pass : stats.gpu->passes) {
+        for (const auto& pass : stats.gpu->passes)
+        {
             val entry = val::object();
             entry.set("name", pass.name);
             entry.set("gpuMs", pass.gpuMs);
@@ -227,7 +239,9 @@ val toWeb(const Gpu::Type::FrameStats& stats)
         gpu.set("passes", passes);
         object.set("gpu", gpu);
         object.set("untimed", val::null());
-    } else {
+    }
+    else
+    {
         object.set("gpu", val::null());
         object.set("untimed", toWeb(stats.gpu.error()));
     }
@@ -241,13 +255,17 @@ val toWeb(const Gpu::Type::FrameStats& stats)
 val toWeb(const std::vector<Core::Telemetry::Property>& properties)
 {
     val object = val::object();
-    for (const auto& property : properties) {
+    for (const auto& property : properties)
+    {
         std::visit(
             [&](const auto& value) {
                 using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_same_v<T, std::int64_t>) {
+                if constexpr (std::is_same_v<T, std::int64_t>)
+                {
                     object.set(property.name, static_cast<double>(value));
-                } else {
+                }
+                else
+                {
                     object.set(property.name, value);
                 }
             },
@@ -261,15 +279,21 @@ std::vector<Core::Telemetry::Property> toProperties(const val& object)
 {
     std::vector<Core::Telemetry::Property> properties;
     const val keys = val::global("Object").call<val>("keys", object);
-    for (std::size_t i = 0; i < keys["length"].as<std::size_t>(); ++i) {
+    for (std::size_t i = 0; i < keys["length"].as<std::size_t>(); ++i)
+    {
         const auto name = keys[i].as<std::string>();
         const val value = object[name];
         const auto type = value.typeOf().as<std::string>();
-        if (type == "number") {
+        if (type == "number")
+        {
             properties.push_back({ .name = name, .value = value.as<double>() });
-        } else if (type == "string") {
+        }
+        else if (type == "string")
+        {
             properties.push_back({ .name = name, .value = value.as<std::string>() });
-        } else if (type == "boolean") {
+        }
+        else if (type == "boolean")
+        {
             properties.push_back({ .name = name, .value = value.as<bool>() });
         }
     }
@@ -294,7 +318,8 @@ private:
 val toLoadResult(const std::optional<std::string>& error, const std::vector<std::string>& warnings = {})
 {
     val array = val::array();
-    for (const auto& warning : warnings) {
+    for (const auto& warning : warnings)
+    {
         array.call<void>("push", warning);
     }
     val result = val::object();
@@ -327,16 +352,19 @@ public:
         };
         Viewer::App::create(params, [slot, onDone](Viewer::App::Result result) {
             auto app = slot.lock();
-            if (!app) {
+            if (!app)
+            {
                 // delete() was called before initialization finished.
                 return;
             }
-            if (!result) {
+            if (!result)
+            {
                 onDone(result.error());
                 return;
             }
             *app = std::move(*result);
-            if (auto set = (*app)->setTrades(Viewer::generateSyntheticDay()); !set) {
+            if (auto set = (*app)->setTrades(Viewer::generateSyntheticDay()); !set)
+            {
                 onDone(set.error());
                 return;
             }
@@ -345,33 +373,30 @@ public:
     }
 
     /** The GPU in use, as a plain JavaScript object. Empty until init() succeeds. */
-    Gpu::Type::Info getInfo() const
-    {
-        return *mApp ? (*mApp)->getInfo() : Gpu::Type::Info{};
-    }
+    Gpu::Type::Info getInfo() const { return *mApp ? (*mApp)->getInfo() : Gpu::Type::Info{}; }
 
     void resize(std::uint32_t widthPx, std::uint32_t heightPx)
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->setSize(widthPx, heightPx);
         }
     }
 
     void update(double nowMs)
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->update(nowMs);
         }
     }
 
-    bool needsRender() const
-    {
-        return *mApp && (*mApp)->needsRender();
-    }
+    bool needsRender() const { return *mApp && (*mApp)->needsRender(); }
 
     void render()
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->render();
         }
     }
@@ -379,7 +404,8 @@ public:
     /** The time range on screen. Empty until init() succeeds. */
     WebTimeRange getView() const
     {
-        if (!*mApp) {
+        if (!*mApp)
+        {
             return {};
         }
         const auto view = (*mApp)->getView().getTimeRange();
@@ -387,15 +413,13 @@ public:
     }
 
     /** The trades in view. Empty until init() succeeds. */
-    WebTradeStats getViewStats() const
-    {
-        return *mApp ? toWeb((*mApp)->getView().getStats()) : WebTradeStats{};
-    }
+    WebTradeStats getViewStats() const { return *mApp ? toWeb((*mApp)->getView().getStats()) : WebTradeStats{}; }
 
     /** The axes' ticks as { times, prices }, each an array of { fraction, label }. Null until init() succeeds. */
     val getAxes() const
     {
-        if (!*mApp) {
+        if (!*mApp)
+        {
             return val::null();
         }
         const auto& axes = (*mApp)->getAxes();
@@ -408,7 +432,8 @@ public:
     /** Takes { background, grid, buy, sell, cursor, markerOpacity }, each color a { red, green, blue } from 0 to 1. */
     void setTheme(const val& theme)
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->setTheme({
                 .plot = { .background = toColor(theme["background"]), .grid = toColor(theme["grid"]) },
                 .buy = toColor(theme["buy"]),
@@ -422,14 +447,16 @@ public:
     /** From the canvas's top left corner. */
     void setPointer(double xPx, double yPx)
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->setPointer(xPx, yPx);
         }
     }
 
     void clearPointer()
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->clearPointer();
         }
     }
@@ -442,7 +469,8 @@ public:
     val getPickedTrade() const
     {
         const auto* picked = *mApp ? std::get_if<Viewer::Pointer::Picked::Trade>(&(*mApp)->getPointer().getPicked()) : nullptr;
-        if (!picked) {
+        if (!picked)
+        {
             return val::null();
         }
         val result = val::object();
@@ -465,7 +493,8 @@ public:
     val getPickedColumn() const
     {
         const auto* picked = *mApp ? std::get_if<Viewer::Pointer::Picked::Column>(&(*mApp)->getPointer().getPicked()) : nullptr;
-        if (!picked) {
+        if (!picked)
+        {
             return val::null();
         }
         const auto& summary = picked->summary;
@@ -491,7 +520,8 @@ public:
      */
     val getSummaries() const
     {
-        if (!*mApp || (*mApp)->getSummaries().getNumColumns() == 0) {
+        if (!*mApp || (*mApp)->getSummaries().getNumColumns() == 0)
+        {
             return val::null();
         }
         val result = val::object();
@@ -503,7 +533,8 @@ public:
     /** Whether crowded views may show column summaries (the default), or always every trade. */
     void setSummariesAllowed(bool allowed)
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->setSummariesAllowed(allowed);
         }
     }
@@ -511,28 +542,28 @@ public:
     /** Trades per CSS pixel column, on average, above which summaries are shown. 32 by default. */
     void setSummaryThreshold(double tradesPerColumn)
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->setSummaryThreshold(tradesPerColumn);
         }
     }
 
     /** What markers look like at the current marker scale, for a legend; null before init() succeeds. */
-    val getLegend() const
-    {
-        return *mApp ? toWeb((*mApp)->getLegend()) : val::null();
-    }
+    val getLegend() const { return *mApp ? toWeb((*mApp)->getLegend()) : val::null(); }
 
     /** Space around the plot for axis labels. */
     void setPlotInsets(std::uint32_t leftPx, std::uint32_t topPx, std::uint32_t rightPx, std::uint32_t bottomPx)
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->setPlotInsets({ .left = leftPx, .top = topPx, .right = rightPx, .bottom = bottomPx });
         }
     }
 
     void resetView()
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             if (const auto initialView = (*mApp)->getInitialView())
             {
                 (*mApp)->setView(*initialView);
@@ -542,7 +573,8 @@ public:
 
     void showDay()
     {
-        if (*mApp && !(*mApp)->getTrades().empty()) {
+        if (*mApp && !(*mApp)->getTrades().empty())
+        {
             (*mApp)->setView(Core::getUtcDay((*mApp)->getTrades().timeUs.front()));
         }
     }
@@ -550,14 +582,16 @@ public:
     /** `xPx` from the canvas's left edge; a `factor` above 1 zooms out. */
     void zoomAt(double xPx, double factor)
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->zoomAt(xPx, factor);
         }
     }
 
     void panBy(double dxPx)
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->panBy(dxPx);
         }
     }
@@ -565,14 +599,16 @@ public:
     /** "area" or "log". */
     void setMarkerScale(const std::string& scale)
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->setMarkerScale(scale == "log" ? Gpu::Market::Type::MarkerScale::Log : Gpu::Market::Type::MarkerScale::Area);
         }
     }
 
     void setPixelRatio(float ratio)
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->setPixelRatio(ratio);
         }
     }
@@ -585,7 +621,8 @@ public:
      */
     val getInstrument() const
     {
-        if (!*mApp) {
+        if (!*mApp)
+        {
             return val::null();
         }
         const auto& instrument = (*mApp)->getInstrument();
@@ -598,20 +635,20 @@ public:
     }
 
     /** The trades on show. Empty until init() succeeds. */
-    WebTradeStats getTradeStats() const
-    {
-        return *mApp ? toWeb(Core::Data::getStats((*mApp)->getTrades())) : WebTradeStats{};
-    }
+    WebTradeStats getTradeStats() const { return *mApp ? toWeb(Core::Data::getStats((*mApp)->getTrades())) : WebTradeStats{}; }
 
-    /** How the GPU is doing, as { restarting, restarts, failure, errors, errorCount } (see Viewer::GpuSession::Health). Null until init() succeeds. */
+    /** How the GPU is doing, as { restarting, restarts, failure, errors, errorCount } (see Viewer::GpuSession::Health). Null until init()
+     * succeeds. */
     val getGpuHealth() const
     {
-        if (!*mApp) {
+        if (!*mApp)
+        {
             return val::null();
         }
         const auto health = (*mApp)->getGpuHealth();
         val errors = val::array();
-        for (const auto& error : health.errors) {
+        for (const auto& error : health.errors)
+        {
             errors.call<void>("push", error);
         }
         val object = val::object();
@@ -630,7 +667,8 @@ public:
      */
     val getMemoryStats() const
     {
-        if (!*mApp) {
+        if (!*mApp)
+        {
             return val::null();
         }
         const auto memory = (*mApp)->getMemoryStats();
@@ -648,7 +686,8 @@ public:
     /** Calls `onWake()` when the viewer needs a frame without any input: when the GPU is lost, and once it's back. */
     void setWakeCallback(val onWake)
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->setWakeCallback([onWake] { onWake(); });
         }
     }
@@ -656,7 +695,8 @@ public:
     /** Turns frame timing on or off. Off by default. */
     void setProfiling(bool enabled)
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->setProfiling(enabled);
         }
     }
@@ -667,10 +707,12 @@ public:
      */
     void setStatsCallback(val onStats)
     {
-        if (!*mApp) {
+        if (!*mApp)
+        {
             return;
         }
-        if (onStats.isNull()) {
+        if (onStats.isNull())
+        {
             (*mApp)->setStatsCallback(nullptr);
             return;
         }
@@ -684,10 +726,12 @@ public:
      */
     void setTelemetry(val onEvent, const val& environment)
     {
-        if (!*mApp) {
+        if (!*mApp)
+        {
             return;
         }
-        if (onEvent.isNull() || onEvent.isUndefined()) {
+        if (onEvent.isNull() || onEvent.isUndefined())
+        {
             (*mApp)->setTelemetry(nullptr);
             return;
         }
@@ -697,37 +741,34 @@ public:
     /** Sends telemetry's summary of what happened so far, such as when the page closes. */
     void flushTelemetry()
     {
-        if (*mApp) {
+        if (*mApp)
+        {
             (*mApp)->flushTelemetry();
         }
     }
 
     /** What every telemetry event carries, for events the page sends itself, such as errors. Null until init() succeeds. */
-    val getTelemetryProperties() const
-    {
-        return *mApp ? toWeb((*mApp)->getTelemetry().getCommonProperties()) : val::null();
-    }
+    val getTelemetryProperties() const { return *mApp ? toWeb((*mApp)->getTelemetry().getCommonProperties()) : val::null(); }
 
     /**
      * Starts reading a trades file, which appendChunk() then receives piece
      * by piece. Its name gives the assets when the file doesn't, as
      * Binance's don't: BTCUSDT-trades-2019-12-01.zip.
      */
-    void beginLoad(const std::string& fileName)
-    {
-        mParser.emplace(fileName);
-    }
+    void beginLoad(const std::string& fileName) { mParser.emplace(fileName); }
 
     /** Parses a Uint8Array of the file. { error, warnings }, as finishLoad() gives them: warnings come only at the end. */
     val appendChunk(const val& bytes)
     {
-        if (!mParser) {
+        if (!mParser)
+        {
             return toLoadResult("beginLoad() wasn't called");
         }
         mChunk.resize(bytes["length"].as<std::size_t>());
         val(emscripten::typed_memory_view(mChunk.size(), mChunk.data())).call<void>("set", bytes);
         auto appended = mParser->append(std::string_view(mChunk.data(), mChunk.size()));
-        if (!appended) {
+        if (!appended)
+        {
             mParser.reset();
             return toLoadResult(appended.error());
         }
@@ -741,15 +782,18 @@ public:
      */
     val finishLoad()
     {
-        if (!mParser || !*mApp) {
+        if (!mParser || !*mApp)
+        {
             return toLoadResult("beginLoad() wasn't called");
         }
         auto parsed = mParser->finish();
         mParser.reset();
-        if (!parsed) {
+        if (!parsed)
+        {
             return toLoadResult(parsed.error());
         }
-        if (auto set = (*mApp)->setTrades(std::move(parsed->trades)); !set) {
+        if (auto set = (*mApp)->setTrades(std::move(parsed->trades)); !set)
+        {
             return toLoadResult(set.error());
         }
         return toLoadResult(std::nullopt, parsed->warnings);
@@ -763,7 +807,8 @@ public:
     val showScene(const std::string& name)
     {
         const auto* scene = Viewer::Scene::find(name);
-        if (!*mApp || !scene) {
+        if (!*mApp || !scene)
+        {
             return val::null();
         }
         return toWeb(Viewer::Scene::show(*scene, **mApp));
@@ -775,12 +820,14 @@ public:
      */
     void readPixels(val onDone)
     {
-        if (!*mApp) {
+        if (!*mApp)
+        {
             onDone(val::null(), std::string("The viewer isn't ready"));
             return;
         }
         (*mApp)->readPixels([onDone](const std::expected<std::vector<std::uint8_t>, std::string>& pixels) {
-            if (!pixels) {
+            if (!pixels)
+            {
                 onDone(val::null(), pixels.error());
                 return;
             }
@@ -805,28 +852,16 @@ private:
 struct Testing
 {
     /** Loses `viewer`'s GPU device, as a driver reset would. False before init() succeeds, or while the GPU restarts. */
-    static bool loseGpu(WebViewer& viewer)
-    {
-        return *viewer.mApp && (*viewer.mApp)->loseGpu();
-    }
+    static bool loseGpu(WebViewer& viewer) { return *viewer.mApp && (*viewer.mApp)->loseGpu(); }
 
     /** Stops the module, as a bug would. */
-    static void crash()
-    {
-        std::abort();
-    }
+    static void crash() { std::abort(); }
 
     /** Crashes inside the wasm code without aborting, as a memory bug would. */
-    static void trap()
-    {
-        __builtin_trap();
-    }
+    static void trap() { __builtin_trap(); }
 
     /** Logs an error, as the engine would when something fails. */
-    static void logError(const std::string& message)
-    {
-        Core::Log::error("{}", message);
-    }
+    static void logError(const std::string& message) { Core::Log::error("{}", message); }
 
     /** Asks for as much memory as the heap can ever have, which fails at once without using any. */
     static void exhaustMemory()
@@ -837,7 +872,7 @@ struct Testing
     }
 };
 
-} // namespace
+}  // namespace
 
 EMSCRIPTEN_BINDINGS(Testing)
 {
@@ -866,9 +901,7 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .field("lastMs", &WebTradeStats::lastMs)
         .field("totalAmount", &WebTradeStats::totalAmount);
 
-    emscripten::value_object<WebTimeRange>("TimeRange")
-        .field("startMs", &WebTimeRange::startMs)
-        .field("endMs", &WebTimeRange::endMs);
+    emscripten::value_object<WebTimeRange>("TimeRange").field("startMs", &WebTimeRange::startMs).field("endMs", &WebTimeRange::endMs);
 
     emscripten::class_<WebViewer>("Viewer")
         .constructor<>()

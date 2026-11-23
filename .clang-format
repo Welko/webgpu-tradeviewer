@@ -1,0 +1,62 @@
+# The C++ style, checked in CI with clang-format 20 (tools/lint-cpp.sh).
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: Latest
+ColumnLimit: 140
+IndentWidth: 4
+ContinuationIndentWidth: 4
+AccessModifierOffset: -4
+UseTab: Never
+
+# Braces on their own line, except for namespaces and lambdas.
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: false
+  AfterStruct: true
+  AfterUnion: true
+  AfterExternBlock: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: false
+  BeforeWhile: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AlwaysBreakTemplateDeclarations: Yes
+SpaceAfterTemplateKeyword: false
+
+NamespaceIndentation: None
+FixNamespaceComments: true
+IndentCaseLabels: false
+EmptyLineBeforeAccessModifier: LogicalBlock
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+InsertNewlineAtEOF: true
+
+PointerAlignment: Left
+ReferenceAlignment: Left
+Cpp11BracedListStyle: false
+SpacesBeforeTrailingComments: 2
+AlignTrailingComments:
+  Kind: Never
+BreakBeforeBinaryOperators: NonAssignment
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerIndentWidth: 4
+PackConstructorInitializers: Never
+
+# Includes keep their groups (own header, project, external, standard), sorted within each.
+IncludeBlocks: Preserve
+SortIncludes: CaseSensitive

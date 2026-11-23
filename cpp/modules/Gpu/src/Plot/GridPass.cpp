@@ -56,8 +56,7 @@ Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat f
 
     // Premultiplied alpha.
     WGPUBlendState blend{};
-    blend.color = { .operation = WGPUBlendOperation_Add, .srcFactor = WGPUBlendFactor_One,
-                    .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha };
+    blend.color = { .operation = WGPUBlendOperation_Add, .srcFactor = WGPUBlendFactor_One, .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha };
     blend.alpha = blend.color;
 
     WGPUColorTargetState target{};
@@ -84,7 +83,7 @@ Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat f
     return Handle(wgpuDeviceCreateRenderPipeline(device, &descriptor));
 }
 
-} // namespace
+}  // namespace
 
 GridPass::GridPass(const Context& context, Resource::Stats& stats, WGPUTextureFormat format)
     : mContext(&context),
@@ -116,14 +115,17 @@ void GridPass::setGrid(const Type::Grid& grid)
 {
     std::vector<GpuLine> lines;
     lines.reserve(grid.verticalLines.size() + grid.horizontalLines.size());
-    for (const float position : grid.verticalLines) {
+    for (const float position : grid.verticalLines)
+    {
         lines.push_back({ .position = position, .vertical = 1 });
     }
-    for (const float position : grid.horizontalLines) {
+    for (const float position : grid.horizontalLines)
+    {
         lines.push_back({ .position = position, .vertical = 0 });
     }
     mLineCount = std::min<std::uint32_t>(static_cast<std::uint32_t>(lines.size()), MaxLines);
-    if (mLineCount > 0) {
+    if (mLineCount > 0)
+    {
         wgpuQueueWriteBuffer(mContext->queue.get(), mLines.get(), 0, lines.data(), mLineCount * sizeof(GpuLine));
     }
 }
@@ -143,7 +145,8 @@ void GridPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Area p
     descriptor.timestampWrites = profiler.measurePass("grid");
     const Handle pass(wgpuCommandEncoderBeginRenderPass(encoder, &descriptor));
 
-    if (mLineCount > 0 && !plot.empty()) {
+    if (mLineCount > 0 && !plot.empty())
+    {
         const Uniforms uniforms{
             .widthPx = static_cast<float>(plot.width),
             .heightPx = static_cast<float>(plot.height),
@@ -161,4 +164,4 @@ void GridPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Area p
     wgpuRenderPassEncoderEnd(pass.get());
 }
 
-} // namespace Gpu::Plot
+}  // namespace Gpu::Plot

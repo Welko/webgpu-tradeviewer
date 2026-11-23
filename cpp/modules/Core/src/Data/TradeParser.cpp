@@ -20,7 +20,7 @@ constexpr std::size_t BinanceFields = 7;
 
 // Far longer than any trade's line: past this, it's not a trades file, and
 // holding on to it could take as much memory as the file.
-constexpr std::size_t MaxLineBytes = 64 * 1024;
+constexpr std::size_t MaxLineBytes = std::size_t{ 64 } * 1024;
 
 // How much of a field an error message quotes.
 constexpr std::size_t MaxQuotedBytes = 40;
@@ -47,10 +47,12 @@ using Fields = std::array<std::string_view, MaxFields>;
 /** Splits `line` at its commas. The number of fields, or 0 if there are too many. */
 std::size_t split(std::string_view line, Fields& fields)
 {
-    for (std::size_t count = 0; count < fields.size(); ++count) {
+    for (std::size_t count = 0; count < fields.size(); ++count)
+    {
         const auto comma = line.find(',');
         fields[count] = line.substr(0, comma);
-        if (comma == std::string_view::npos) {
+        if (comma == std::string_view::npos)
+        {
             return count + 1;
         }
         line.remove_prefix(comma + 1);
@@ -59,13 +61,14 @@ std::size_t split(std::string_view line, Fields& fields)
 }
 
 /** `text` as a number, if all of it is one. */
-template <typename T>
+template<typename T>
 std::optional<T> number(std::string_view text)
 {
     T value{};
     const char* end = text.data() + text.size();
     const auto [parsedEnd, error] = std::from_chars(text.data(), end, value);
-    if (error != std::errc{} || parsedEnd != end) {
+    if (error != std::errc{} || parsedEnd != end)
+    {
         return std::nullopt;
     }
     return value;
@@ -87,10 +90,12 @@ std::string quote(std::string_view text)
 
 std::optional<Side> tardisSide(std::string_view text)
 {
-    if (text == "buy") {
+    if (text == "buy")
+    {
         return Side::Buy;
     }
-    if (text == "sell") {
+    if (text == "sell")
+    {
         return Side::Sell;
     }
     return std::nullopt;
@@ -99,10 +104,12 @@ std::optional<Side> tardisSide(std::string_view text)
 /** When the buyer's order was resting, the seller took liquidity. */
 std::optional<Side> binanceSide(std::string_view isBuyerMaker)
 {
-    if (isBuyerMaker == "True" || isBuyerMaker == "true") {
+    if (isBuyerMaker == "True" || isBuyerMaker == "true")
+    {
         return Side::Sell;
     }
-    if (isBuyerMaker == "False" || isBuyerMaker == "false") {
+    if (isBuyerMaker == "False" || isBuyerMaker == "false")
+    {
         return Side::Buy;
     }
     return std::nullopt;
@@ -117,7 +124,8 @@ void sortByTime(Trades& trades)
 
     const auto reorder = [&order](auto& column) {
         auto sorted = column;
-        for (std::size_t index = 0; index < order.size(); ++index) {
+        for (std::size_t index = 0; index < order.size(); ++index)
+        {
             sorted[index] = column[order[index]];
         }
         column = std::move(sorted);
@@ -128,7 +136,7 @@ void sortByTime(Trades& trades)
     reorder(trades.side);
 }
 
-} // namespace
+}  // namespace
 
 TradeParser::TradeParser(std::string_view fileName)
 {
@@ -139,22 +147,27 @@ TradeParser::TradeParser(std::string_view fileName)
 
 std::expected<void, std::string> TradeParser::append(std::string_view chunk)
 {
-    if (!mPartialLine.empty()) {
+    if (!mPartialLine.empty())
+    {
         const auto newline = chunk.find('\n');
-        if (newline == std::string_view::npos) {
+        if (newline == std::string_view::npos)
+        {
             mPartialLine += chunk;
             return checkPartialLine();
         }
         mPartialLine += chunk.substr(0, newline);
         chunk.remove_prefix(newline + 1);
-        if (auto parsed = parseLine(mPartialLine); !parsed) {
+        if (auto parsed = parseLine(mPartialLine); !parsed)
+        {
             return parsed;
         }
         mPartialLine.clear();
     }
 
-    for (auto newline = chunk.find('\n'); newline != std::string_view::npos; newline = chunk.find('\n')) {
-        if (auto parsed = parseLine(chunk.substr(0, newline)); !parsed) {
+    for (auto newline = chunk.find('\n'); newline != std::string_view::npos; newline = chunk.find('\n'))
+    {
+        if (auto parsed = parseLine(chunk.substr(0, newline)); !parsed)
+        {
             return parsed;
         }
         chunk.remove_prefix(newline + 1);
@@ -165,7 +178,8 @@ std::expected<void, std::string> TradeParser::append(std::string_view chunk)
 
 std::expected<void, std::string> TradeParser::checkPartialLine() const
 {
-    if (mPartialLine.size() > MaxLineBytes) {
+    if (mPartialLine.size() > MaxLineBytes)
+    {
         return std::unexpected(std::format("Line {} is too long for a trades file", mLine + 1));
     }
     return {};
@@ -173,43 +187,56 @@ std::expected<void, std::string> TradeParser::checkPartialLine() const
 
 std::expected<TradeParser::Finished, std::string> TradeParser::finish()
 {
-    if (!mPartialLine.empty()) {
-        if (auto parsed = parseLine(mPartialLine); !parsed) {
+    if (!mPartialLine.empty())
+    {
+        if (auto parsed = parseLine(mPartialLine); !parsed)
+        {
             return std::unexpected(std::move(parsed.error()));
         }
         mPartialLine.clear();
     }
-    if (mTrades.empty()) {
+    if (mTrades.empty())
+    {
         return std::unexpected(mFormat == Format::Unknown ? "The file is empty" : "The file has no trades");
     }
     // As many decimals as let the total fit in 64 bits.
     double total = 0.0;
-    for (const double amount : mTrades.amount) {
+    for (const double amount : mTrades.amount)
+    {
         total += amount;
     }
     auto& instrument = mTrades.instrument;
-    while (instrument.amountDecimals > 0 && total * instrument.getUnitsPerWhole() >= MaxTotalUnits) {
+    while (instrument.amountDecimals > 0 && total * instrument.getUnitsPerWhole() >= MaxTotalUnits)
+    {
         --instrument.amountDecimals;
     }
-    if (total * instrument.getUnitsPerWhole() >= MaxTotalUnits) {
+    if (total * instrument.getUnitsPerWhole() >= MaxTotalUnits)
+    {
         return std::unexpected("The amounts add up to too much to count exactly");
     }
     std::vector<std::string> warnings;
-    if (mInfo.numFineAmounts > 0) {
+    if (mInfo.numFineAmounts > 0)
+    {
         warnings.push_back(std::format("{} more decimals than totals can count, so totals are rounded", amountsHave(mInfo.numFineAmounts)));
     }
-    if (instrument.amountDecimals < mInfo.mostAmountDecimals) {
+    if (instrument.amountDecimals < mInfo.mostAmountDecimals)
+    {
         warnings.push_back(std::format("Totals are rounded to {} decimals, because they're so large", instrument.amountDecimals));
     }
-    const auto tooSmall = static_cast<std::size_t>(std::ranges::count_if(mTrades.amount, [&](double amount) { return instrument.toAmountUnits(amount) == 0; }));
-    if (tooSmall > 0) {
-        warnings.push_back(std::format("{} an amount too small to count, adding nothing to totals", tooSmall == 1 ? "1 trade has" : std::format("{} trades have", tooSmall)));
+    const auto tooSmall = static_cast<std::size_t>(
+        std::ranges::count_if(mTrades.amount, [&](double amount) { return instrument.toAmountUnits(amount) == 0; }));
+    if (tooSmall > 0)
+    {
+        warnings.push_back(std::format("{} an amount too small to count, adding nothing to totals",
+                                       tooSmall == 1 ? "1 trade has" : std::format("{} trades have", tooSmall)));
     }
     const auto [earliest, latest] = std::ranges::minmax(mTrades.timeUs);
-    if (earliest > -FirstMicrosecondTime && latest < FirstMicrosecondTime) {
+    if (earliest > -FirstMicrosecondTime && latest < FirstMicrosecondTime)
+    {
         warnings.emplace_back("These trades are dated around 1970. If that's wrong, their times may be in another unit");
     }
-    if (!mSorted) {
+    if (!mSorted)
+    {
         sortByTime(mTrades);
     }
     return Finished{ .trades = std::move(mTrades), .warnings = std::move(warnings) };
@@ -218,22 +245,28 @@ std::expected<TradeParser::Finished, std::string> TradeParser::finish()
 std::expected<void, std::string> TradeParser::parseLine(std::string_view line)
 {
     ++mLine;
-    if (line.ends_with('\r')) {
+    if (line.ends_with('\r'))
+    {
         line.remove_suffix(1);
     }
-    if (mLine == 1 && line.starts_with(ByteOrderMark)) {
+    if (mLine == 1 && line.starts_with(ByteOrderMark))
+    {
         line.remove_prefix(ByteOrderMark.size());
     }
-    if (line.empty()) {
+    if (line.empty())
+    {
         return {};
     }
 
     // Binance rows start with a trade id; anything else is a Tardis header.
-    if (mFormat == Format::Unknown) {
-        if (line.starts_with("PK\x03\x04") || line.starts_with("PK\x05\x06")) {
+    if (mFormat == Format::Unknown)
+    {
+        if (line.starts_with("PK\x03\x04") || line.starts_with("PK\x05\x06"))
+        {
             return std::unexpected("This is a zip file: unzip it first");
         }
-        if (line.front() < '0' || line.front() > '9') {
+        if (line.front() < '0' || line.front() > '9')
+        {
             mFormat = Format::Tardis;
             return parseHeader(line);
         }
@@ -246,7 +279,8 @@ std::expected<void, std::string> TradeParser::parseHeader(std::string_view line)
 {
     Fields fields;
     const std::size_t count = split(line, fields);
-    if (count == 0) {
+    if (count == 0)
+    {
         return std::unexpected(formatError("too many columns"));
     }
 
@@ -254,8 +288,10 @@ std::expected<void, std::string> TradeParser::parseHeader(std::string_view line)
     const auto column = [&](std::string_view name) {
         return static_cast<std::size_t>(std::ranges::find(fields.begin(), fields.begin() + count, name) - fields.begin());
     };
-    for (const std::string_view name : { "timestamp", "side", "price", "amount" }) {
-        if (column(name) == count) {
+    for (const std::string_view name : { "timestamp", "side", "price", "amount" })
+    {
+        if (column(name) == count)
+        {
             return std::unexpected(formatError(std::format("no \"{}\" column", name)));
         }
     }
@@ -275,10 +311,12 @@ std::expected<void, std::string> TradeParser::parseTrade(std::string_view line)
     Fields fields;
     const std::size_t count = split(line, fields);
     const std::size_t expected = mFormat == Format::Tardis ? mColumns.count : BinanceFields;
-    if (count == 0) {
+    if (count == 0)
+    {
         return std::unexpected(formatError(std::format("expected {} fields, found more than {}", expected, MaxFields)));
     }
-    if (count != expected) {
+    if (count != expected)
+    {
         return std::unexpected(formatError(std::format("expected {} fields, found {}", expected, count)));
     }
 
@@ -288,50 +326,39 @@ std::expected<void, std::string> TradeParser::parseTrade(std::string_view line)
     const std::string_view amountText = fields[tardis ? mColumns.amount : 2];
     const std::string_view sideText = fields[tardis ? mColumns.side : 5];
 
-    auto timeUs = number<std::int64_t>(timeText);
-    if (!timeUs) {
-        return std::unexpected(formatError(std::format("the time {} isn't a whole number", quote(timeText))));
+    const auto timeUs = parseTime(timeText);
+    if (!timeUs)
+    {
+        return std::unexpected(timeUs.error());
     }
-    if (!tardis && *timeUs > -FirstMicrosecondTime && *timeUs < FirstMicrosecondTime) {
-        *timeUs *= 1000;
+    const auto price = parsePositive("price", priceText);
+    if (!price)
+    {
+        return std::unexpected(price.error());
     }
-    if (*timeUs < -MaxTimeUs || *timeUs > MaxTimeUs) {
-        return std::unexpected(formatError(std::format("the time {} is out of range", quote(timeText))));
-    }
-
-    const auto checkPositive = [&](std::string_view what, std::string_view text, const std::optional<double>& value) -> std::expected<void, std::string> {
-        if (!value || !std::isfinite(*value) || *value <= 0.0) {
-            return std::unexpected(formatError(std::format("the {} {} isn't a number above zero", what, quote(text))));
-        }
-        if (*value > MaxValue) {
-            return std::unexpected(formatError(std::format("the {} {} is out of range", what, quote(text))));
-        }
-        return {};
-    };
-    const auto price = number<double>(priceText);
-    if (auto checked = checkPositive("price", priceText, price); !checked) {
-        return checked;
-    }
-    if (*price < MinPrice) {
+    if (*price < MinPrice)
+    {
         return std::unexpected(formatError(std::format("the price {} is out of range", quote(priceText))));
     }
-    const auto amount = number<double>(amountText);
-    if (auto checked = checkPositive("amount", amountText, amount); !checked) {
-        return checked;
+    const auto amount = parsePositive("amount", amountText);
+    if (!amount)
+    {
+        return std::unexpected(amount.error());
     }
-
-    const auto side = tardis ? tardisSide(sideText) : binanceSide(sideText);
-    if (!side) {
-        return std::unexpected(formatError(tardis ? std::format("the side {} isn't buy or sell", quote(sideText))
-                                                  : std::format("the buyer-maker flag {} isn't true or false", quote(sideText))));
+    const auto side = parseSide(sideText);
+    if (!side)
+    {
+        return std::unexpected(side.error());
     }
 
     // The symbol names the assets better than the file's name can.
-    if (auto names = tardis && mTrades.empty() && mColumns.symbol < count ? parseSymbol(fields[mColumns.symbol]) : std::nullopt) {
+    if (auto names = tardis && mTrades.empty() && mColumns.symbol < count ? parseSymbol(fields[mColumns.symbol]) : std::nullopt)
+    {
         mTrades.instrument.base = std::move(names->base);
         mTrades.instrument.quote = std::move(names->quote);
     }
-    if (!mTrades.empty() && *timeUs < mTrades.timeUs.back()) {
+    if (!mTrades.empty() && *timeUs < mTrades.timeUs.back())
+    {
         mSorted = false;
     }
     auto& instrument = mTrades.instrument;
@@ -347,9 +374,60 @@ std::expected<void, std::string> TradeParser::parseTrade(std::string_view line)
     return {};
 }
 
+/** A trade's time in microseconds; Binance's older files give milliseconds. */
+std::expected<std::int64_t, std::string> TradeParser::parseTime(std::string_view text) const
+{
+    auto timeUs = number<std::int64_t>(text);
+    if (!timeUs)
+    {
+        return std::unexpected(formatError(std::format("the time {} isn't a whole number", quote(text))));
+    }
+    if (mFormat != Format::Tardis && *timeUs > -FirstMicrosecondTime && *timeUs < FirstMicrosecondTime)
+    {
+        *timeUs *= 1000;
+    }
+    if (*timeUs < -MaxTimeUs || *timeUs > MaxTimeUs)
+    {
+        return std::unexpected(formatError(std::format("the time {} is out of range", quote(text))));
+    }
+    return *timeUs;
+}
+
+/** A price or an amount, `what`: a finite number above zero. */
+std::expected<double, std::string> TradeParser::parsePositive(std::string_view what, std::string_view text) const
+{
+    const auto value = number<double>(text);
+    if (!value || !std::isfinite(*value) || *value <= 0.0)
+    {
+        return std::unexpected(formatError(std::format("the {} {} isn't a number above zero", what, quote(text))));
+    }
+    if (*value > MaxValue)
+    {
+        return std::unexpected(formatError(std::format("the {} {} is out of range", what, quote(text))));
+    }
+    return *value;
+}
+
+std::expected<Side, std::string> TradeParser::parseSide(std::string_view text) const
+{
+    if (mFormat == Format::Tardis)
+    {
+        if (const auto side = tardisSide(text))
+        {
+            return *side;
+        }
+        return std::unexpected(formatError(std::format("the side {} isn't buy or sell", quote(text))));
+    }
+    if (const auto side = binanceSide(text))
+    {
+        return *side;
+    }
+    return std::unexpected(formatError(std::format("the buyer-maker flag {} isn't true or false", quote(text))));
+}
+
 std::string TradeParser::formatError(std::string_view message) const
 {
     return std::format("Line {}: {}", mLine, message);
 }
 
-} // namespace Core::Data
+}  // namespace Core::Data

@@ -16,22 +16,22 @@ using Core::Data::Side;
 using Core::Data::TradeParser;
 using Core::Data::Trades;
 
-constexpr std::string_view Tardis =
-    "exchange,symbol,timestamp,local_timestamp,id,side,price,amount\n"
-    "binance,BTCUSDT,1575158403572000,1575158403820370,211646077,sell,7540.78,0.039741\n"
-    "binance,BTCUSDT,1575158403579000,1575158403820405,211646078,buy,7540.79,1.5\n";
+constexpr std::string_view Tardis = "exchange,symbol,timestamp,local_timestamp,id,side,price,amount\n"
+                                    "binance,BTCUSDT,1575158403572000,1575158403820370,211646077,sell,7540.78,0.039741\n"
+                                    "binance,BTCUSDT,1575158403579000,1575158403820405,211646078,buy,7540.79,1.5\n";
 
-constexpr std::string_view Binance =
-    "211646077,7540.78000000,0.03974100,299.67,1575158403572,True,True\n"
-    "211646078,7540.79000000,1.50000000,11311.18,1575158403579,False,True\n";
+constexpr std::string_view Binance = "211646077,7540.78000000,0.03974100,299.67,1575158403572,True,True\n"
+                                     "211646078,7540.79000000,1.50000000,11311.18,1575158403579,False,True\n";
 
 /** `text`, parsed in chunks of `chunkSize` bytes, from a file called `fileName`. */
 std::expected<Trades, std::string> parse(std::string_view text, std::size_t chunkSize = std::string_view::npos,
                                          std::string_view fileName = {})
 {
     TradeParser parser(fileName);
-    for (std::size_t offset = 0; offset < text.size(); offset += chunkSize) {
-        if (auto appended = parser.append(text.substr(offset, chunkSize)); !appended) {
+    for (std::size_t offset = 0; offset < text.size(); offset += chunkSize)
+    {
+        if (auto appended = parser.append(text.substr(offset, chunkSize)); !appended)
+        {
             return std::unexpected(appended.error());
         }
     }
@@ -42,7 +42,8 @@ std::expected<Trades, std::string> parse(std::string_view text, std::size_t chun
 void checkSample(const std::expected<Trades, std::string>& trades)
 {
     CHECK_MESSAGE(trades, (trades ? "" : trades.error()));
-    if (!trades) {
+    if (!trades)
+    {
         return;
     }
     CHECK(trades->timeUs == std::vector<std::int64_t>{ 1575158403572000, 1575158403579000 });
@@ -58,7 +59,7 @@ std::string errorOf(std::string_view text)
     return trades ? "" : trades.error();
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("Tardis trades are read by column name")
 {
@@ -80,8 +81,10 @@ TEST_CASE("Binance trades are read without a header, with times in milliseconds 
 
 TEST_CASE("Lines may be split across chunks anywhere")
 {
-    for (const std::string_view text : { Tardis, Binance }) {
-        for (std::size_t chunkSize = 1; chunkSize <= text.size(); ++chunkSize) {
+    for (const std::string_view text : { Tardis, Binance })
+    {
+        for (std::size_t chunkSize = 1; chunkSize <= text.size(); ++chunkSize)
+        {
             CAPTURE(chunkSize);
             checkSample(parse(text, chunkSize));
         }
@@ -92,7 +95,8 @@ TEST_CASE("Windows line endings and a missing final newline are fine")
 {
     std::string text(Tardis);
     std::ranges::replace(text, '\n', '\r');
-    for (auto position = text.find('\r'); position != std::string::npos; position = text.find('\r', position + 2)) {
+    for (auto position = text.find('\r'); position != std::string::npos; position = text.find('\r', position + 2))
+    {
         text.insert(position + 1, "\n");
     }
     text.resize(text.size() - 2);
@@ -107,7 +111,8 @@ TEST_CASE("Trades out of time order are sorted, keeping equal times in file orde
                               "3,sell,3,1\n"
                               "2,buy,4,1\n");
     CHECK(trades);
-    if (trades) {
+    if (trades)
+    {
         CHECK(trades->timeUs == std::vector<std::int64_t>{ 1, 2, 3, 3 });
         CHECK(trades->price == std::vector<double>{ 2, 4, 1, 3 });
         CHECK(trades->side == std::vector<Side>{ Side::Buy, Side::Buy, Side::Buy, Side::Sell });
@@ -129,19 +134,22 @@ TEST_CASE("The instrument comes from the file: the symbol column, else the file'
 {
     const auto tardis = parse(Tardis, std::string_view::npos, "trades.csv.gz");
     CHECK(tardis);
-    if (tardis) {
+    if (tardis)
+    {
         CHECK(tardis->instrument.base == "BTC");
         CHECK(tardis->instrument.quote == "USDT");
     }
     const auto binance = parse(Binance, std::string_view::npos, "BTCUSDT-trades-2019-12-01.csv");
     CHECK(binance);
-    if (binance) {
+    if (binance)
+    {
         CHECK(binance->instrument.base == "BTC");
         CHECK(binance->instrument.quote == "USDT");
     }
     const auto unnamed = parse(Binance);
     CHECK(unnamed);
-    if (unnamed) {
+    if (unnamed)
+    {
         CHECK(unnamed->instrument.base == "base");
         CHECK(unnamed->instrument.quote == "quote");
     }
@@ -150,17 +158,20 @@ TEST_CASE("The instrument comes from the file: the symbol column, else the file'
 TEST_CASE("The instrument's decimals are the most the file writes, trailing zeros left out")
 {
     // Binance pads every number to 8 decimals.
-    for (const auto text : { Tardis, Binance }) {
+    for (const auto text : { Tardis, Binance })
+    {
         const auto trades = parse(text);
         CHECK(trades);
-        if (trades) {
+        if (trades)
+        {
             CHECK(trades->instrument.amountDecimals == 6);
             CHECK(trades->instrument.priceDecimals == 2);
         }
     }
     const auto whole = parse("exchange,timestamp,side,price,amount\nbinance,1,buy,0.00001234,5000\n");
     CHECK(whole);
-    if (whole) {
+    if (whole)
+    {
         CHECK(whole->instrument.amountDecimals == 0);
         CHECK(whole->instrument.priceDecimals == 8);
     }
@@ -170,7 +181,8 @@ TEST_CASE("A summary counts the trades, their time range and amount")
 {
     const auto trades = parse(Tardis);
     CHECK(trades);
-    if (trades) {
+    if (trades)
+    {
         const auto summary = Core::Data::getStats(*trades);
         CHECK(summary.count == 2);
         CHECK(summary.firstUs == 1575158403572000);

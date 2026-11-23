@@ -40,13 +40,15 @@ void record(StatsQueue& queue, std::vector<FrameStats>& reported)
 std::vector<std::uint64_t> numbers(const std::vector<FrameStats>& reported)
 {
     std::vector<std::uint64_t> frames;
-    for (const auto& stats : reported) {
+    frames.reserve(reported.size());
+    for (const auto& stats : reported)
+    {
         frames.push_back(stats.frame);
     }
     return frames;
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("Frames are reported with their times, in the order they were drawn")
 {
@@ -63,9 +65,11 @@ TEST_CASE("Frames are reported with their times, in the order they were drawn")
 
     queue.setTimes(1, timed(1.0));
     CHECK(numbers(reported) == std::vector<std::uint64_t>{ 1, 2, 3 });
-    if (reported.size() == 3) {
+    if (reported.size() == 3)
+    {
         CHECK(reported[1].gpu);
-        if (reported[1].gpu) {
+        if (reported[1].gpu)
+        {
             CHECK(reported[1].gpu->totalMs == 2.0);
         }
         CHECK(reported[2].gpu.error_or({}) == UntimedReason::ProfilingOff);
@@ -88,7 +92,8 @@ TEST_CASE("When full, the oldest frame is reported without GPU times")
     // Frame 1 makes room, and frames 2 and 3 no longer wait for it.
     queue.push(drawn(4));
     CHECK(numbers(reported) == std::vector<std::uint64_t>{ 1, 2, 3 });
-    if (reported.size() == 3) {
+    if (reported.size() == 3)
+    {
         CHECK(reported[0].gpu.error_or({}) == UntimedReason::Overflow);
         CHECK(reported[1].gpu);
     }

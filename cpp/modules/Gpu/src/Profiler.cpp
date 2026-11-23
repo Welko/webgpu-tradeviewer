@@ -16,14 +16,15 @@ constexpr std::uint32_t MaxNumTimestamps = 2 * MaxNumPasses;
 
 using UntimedReason = Type::FrameStats::UntimedReason;
 
-} // namespace
+}  // namespace
 
 Type::FrameStats::Gpu Profiler::toGpuTimes(const std::vector<std::string>& passNames, std::span<const std::uint64_t> timestamps,
                                            double nanosecondsPerTick)
 {
     std::vector<Type::FrameStats::Gpu::PassTiming> passes;
     double totalMs = 0.0;
-    for (std::size_t pass = 0; pass < passNames.size(); ++pass) {
+    for (std::size_t pass = 0; pass < passNames.size(); ++pass)
+    {
         const std::uint64_t begin = timestamps[2 * pass];
         const std::uint64_t end = timestamps[2 * pass + 1];
         // Some drivers report end before begin for very short passes.
@@ -51,7 +52,8 @@ Profiler::Profiler(const Context& context, TimesCallback onTimes)
         return;
     }
 
-    if (!context.features.timestampQuery) {
+    if (!context.features.timestampQuery)
+    {
         mTimestamps = std::unexpected(UntimedReason::Unsupported);
         return;
     }
@@ -73,8 +75,9 @@ Profiler::Profiler(const Context& context, TimesCallback onTimes)
         .querySet = std::move(querySet),
         .resolveBuffer = std::move(resolveBuffer),
     };
-    
-    for (auto& slot : mTimestamps->slots) {
+
+    for (auto& slot : mTimestamps->slots)
+    {
         WGPUBufferDescriptor slotDescriptor{};
         slotDescriptor.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
         slotDescriptor.size = TimestampBytes;
@@ -84,7 +87,8 @@ Profiler::Profiler(const Context& context, TimesCallback onTimes)
 
 void Profiler::beginFrame(std::optional<UntimedReason> untimed)
 {
-    if (mCurrentFrame) {
+    if (mCurrentFrame)
+    {
         Core::Log::warn("GPU profiling: beginFrame() called before endFrame(); dropping the unfinished frame");
         mCurrentFrame->slot->busy = false;
     }
@@ -95,13 +99,16 @@ void Profiler::beginFrame(std::optional<UntimedReason> untimed)
         return;
     }
 
-    if (untimed) {
+    if (untimed)
+    {
         mCurrentFrame = std::unexpected(*untimed);
         return;
     }
 
-    for (auto& slot : mTimestamps->slots) {
-        if (!slot.busy) {
+    for (auto& slot : mTimestamps->slots)
+    {
+        if (!slot.busy)
+        {
             slot.busy = true;
             slot.passNames.clear();
             mCurrentFrame = {
@@ -144,16 +151,18 @@ const Profiler::TimestampWrites* Profiler::measurePass(std::string_view name)
 
 void Profiler::endPasses(WGPUCommandEncoder encoder)
 {
-    if (!mDropped.passes.empty()) {
+    if (!mDropped.passes.empty())
+    {
         // TODO: Warn or something (throttle)
         mDropped.passes.clear();
     }
 
-    if (!mCurrentFrame || mCurrentFrame->slot->passNames.empty()) {
+    if (!mCurrentFrame || mCurrentFrame->slot->passNames.empty())
+    {
         return;
     }
 
-    Slot& slot = *mCurrentFrame->slot;
+    const Slot& slot = *mCurrentFrame->slot;
     const auto timestamps = static_cast<std::uint32_t>(2 * slot.passNames.size());
 
     wgpuCommandEncoderResolveQuerySet(encoder, mTimestamps->querySet.get(), 0, timestamps, mTimestamps->resolveBuffer.get(), 0);
@@ -182,26 +191,25 @@ void Profiler::endFrame(std::uint64_t frame)
 
     const std::uint64_t size = 2 * slot.passNames.size() * sizeof(std::uint64_t);
     Readback::map(slot.buffer.get(), size,
-        [profilerWeak = weak_from_this(), slot = &slot, frame](std::expected<Readback::Bytes, std::string> bytes)
-        {
-            const auto profiler = profilerWeak.lock();
-            if (!profiler)
-            {
-                return;
-            }
+                  [profilerWeak = weak_from_this(), slot = &slot, frame](std::expected<Readback::Bytes, std::string> bytes) {
+                      const auto profiler = profilerWeak.lock();
+                      if (!profiler)
+                      {
+                          return;
+                      }
 
-            slot->busy = false;
-            if (bytes)
-            {
-                std::array<std::uint64_t, MaxNumTimestamps> timestamps{};
-                std::memcpy(timestamps.data(), bytes->data(), 2 * slot->passNames.size() * sizeof(std::uint64_t));
-                profiler->mOnTimes(frame, toGpuTimes(slot->passNames, timestamps, profiler->mNanosecondsPerTick));
-            }
-            else
-            {
-                profiler->mOnTimes(frame, std::unexpected(UntimedReason::ReadbackFailed));
-            }
-        });
+                      slot->busy = false;
+                      if (bytes)
+                      {
+                          std::array<std::uint64_t, MaxNumTimestamps> timestamps{};
+                          std::memcpy(timestamps.data(), bytes->data(), 2 * slot->passNames.size() * sizeof(std::uint64_t));
+                          profiler->mOnTimes(frame, toGpuTimes(slot->passNames, timestamps, profiler->mNanosecondsPerTick));
+                      }
+                      else
+                      {
+                          profiler->mOnTimes(frame, std::unexpected(UntimedReason::ReadbackFailed));
+                      }
+                  });
 }
 
 Profiler::StatsQueue::StatsQueue(std::size_t capacity)
@@ -216,11 +224,13 @@ void Profiler::StatsQueue::setCallback(Callback onStats)
 void Profiler::StatsQueue::push(Type::FrameStats stats)
 {
     auto evicted = mFrames.pushBack({ .stats = std::move(stats), .ready = false });
-    if (!evicted) {
+    if (!evicted)
+    {
         return;
     }
     evicted->stats.gpu = std::unexpected(UntimedReason::Overflow);
-    if (mOnStats) {
+    if (mOnStats)
+    {
         mOnStats(evicted->stats);
     }
     // Frames that were waiting only for it.
@@ -229,7 +239,8 @@ void Profiler::StatsQueue::push(Type::FrameStats stats)
 
 void Profiler::StatsQueue::setTimes(std::uint64_t frame, Times times)
 {
-    if (mFrames.empty() || frame < mFrames.front().stats.frame) {
+    if (mFrames.empty() || frame < mFrames.front().stats.frame)
+    {
         return;
     }
     auto& waiting = mFrames.at(frame - mFrames.front().stats.frame);
@@ -240,12 +251,14 @@ void Profiler::StatsQueue::setTimes(std::uint64_t frame, Times times)
 
 void Profiler::StatsQueue::reportReady()
 {
-    while (!mFrames.empty() && mFrames.front().ready) {
+    while (!mFrames.empty() && mFrames.front().ready)
+    {
         const auto frame = mFrames.popFront();
-        if (mOnStats) {
+        if (mOnStats)
+        {
             mOnStats(frame.stats);
         }
     }
 }
 
-} // namespace Gpu
+}  // namespace Gpu

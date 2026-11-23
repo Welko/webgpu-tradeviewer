@@ -60,4 +60,4 @@ private:
     std::uint64_t mSize = 0;
 };
 
-} // namespace Gpu
+}  // namespace Gpu

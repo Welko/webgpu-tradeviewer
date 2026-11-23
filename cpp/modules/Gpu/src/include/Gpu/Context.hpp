@@ -17,9 +17,10 @@
 // Submitting to a lost device crashes wgpu-native (a Rust panic), where
 // browsers ignore it. So nothing submits but Context::submit(), which skips
 // a lost device: with warnings as errors, other uses don't compile.
-extern "C" {
-[[deprecated("Submitting to a lost device crashes wgpu-native: use Gpu::Context::submit()")]]
-void wgpuQueueSubmit(WGPUQueue queue, size_t commandCount, WGPUCommandBuffer const* commands);
+extern "C"
+{
+    [[deprecated("Submitting to a lost device crashes wgpu-native: use Gpu::Context::submit()")]]
+    void wgpuQueueSubmit(WGPUQueue queue, size_t commandCount, WGPUCommandBuffer const* commands);
 }
 
 namespace Gpu {
@@ -60,8 +61,7 @@ struct Context
      * device, then calls `onDone` exactly once: natively before returning,
      * on the web later.
      */
-    static void create(Handle<WGPUInstance> instance, WGPUSurface compatible, Type::PowerPreference powerPreference,
-                       Callback onDone);
+    static void create(Handle<WGPUInstance> instance, WGPUSurface compatible, Type::PowerPreference powerPreference, Callback onDone);
 
     /** Submits `commands` to the queue, unless the device is lost: then they're dropped. */
     void submit(WGPUCommandBuffer commands) const;
@@ -90,4 +90,4 @@ struct Context
     std::shared_ptr<Health> health;
 };
 
-} // namespace Gpu
+}  // namespace Gpu

@@ -29,15 +29,17 @@ EM_JS_DEPS(GpuContext, "$stringToNewUTF8");
  */
 EM_JS(char*, gpuQueryWebglRenderer, (), {
     const gl = document.createElement("canvas").getContext("webgl");
-    if (!gl) {
+    if (!gl)
+    {
         return 0;
     }
     let renderer = gl.getParameter(gl.RENDERER);
-    if (renderer === "WebKit WebGL") {
+    if (renderer == = "WebKit WebGL")
+    {
         const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
         renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : null;
     }
-    return (typeof renderer === "string" && renderer !== "") ? stringToNewUTF8(renderer) : 0;
+    return (typeof renderer == = "string" && renderer != = "") ? stringToNewUTF8(renderer) : 0;
 });
 #endif
 
@@ -55,10 +57,11 @@ struct Pending
 /** Read once per page, since each read creates a WebGL context. */
 const std::string& getWebglRenderer()
 {
-    static const std::string renderer = [] {
+    static const std::string Renderer = [] {
 #ifdef __EMSCRIPTEN__
         char* queried = gpuQueryWebglRenderer();
-        if (!queried) {
+        if (!queried)
+        {
             return std::string();
         }
         std::string result(queried);
@@ -68,13 +71,14 @@ const std::string& getWebglRenderer()
         return std::string();
 #endif
     }();
-    return renderer;
+    return Renderer;
 }
 
 Type::Info readInfo(WGPUAdapter adapter)
 {
     WGPUAdapterInfo info{};
-    if (wgpuAdapterGetInfo(adapter, &info) != WGPUStatus_Success) {
+    if (wgpuAdapterGetInfo(adapter, &info) != WGPUStatus_Success)
+    {
         Core::Log::warn("Failed to get WebGPU adapter info");
         return Type::Info{
             .vendor = {},
@@ -87,7 +91,7 @@ Type::Info readInfo(WGPUAdapter adapter)
         };
     }
 
-    Type::Info result {
+    Type::Info result{
         .vendor = std::string(Convert::FromWgpu::stringView(info.vendor)),
         .device = std::string(Convert::FromWgpu::stringView(info.device)),
         .architecture = std::string(Convert::FromWgpu::stringView(info.architecture)),
@@ -108,11 +112,12 @@ void fail(std::unique_ptr<Pending> pending, std::string_view what, WGPUStringVie
     onDone(std::unexpected(detail.empty() ? std::string(what) : std::format("{}: {}", what, detail)));
 }
 
-void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message, void* userdata1, void*);
+void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message, void* userdata1, void* /*userdata2*/);
 
 std::string_view describe(WGPUErrorType type)
 {
-    switch (type) {
+    switch (type)
+    {
     case WGPUErrorType_Validation:
         return "WebGPU validation error (a bug in the viewer)";
     case WGPUErrorType_OutOfMemory:
@@ -124,40 +129,45 @@ std::string_view describe(WGPUErrorType type)
     }
 }
 
-void onUncapturedError(WGPUDevice const*, WGPUErrorType type, WGPUStringView message, void* userdata1, void*)
+void onUncapturedError(WGPUDevice const* /*device*/, WGPUErrorType type, WGPUStringView message, void* userdata1, void* /*userdata2*/)
 {
     auto& health = *static_cast<Context::Health*>(userdata1);
-    if (health.lost) {
+    if (health.lost)
+    {
         // wgpu-native reports every call on a lost device; the loss says it all.
         return;
     }
     auto error = std::format("{}: {}", describe(type), Convert::FromWgpu::stringView(message));
     Core::Log::error("{}", error);
-    if (health.errors.size() < Context::Health::KeptErrors) {
+    if (health.errors.size() < Context::Health::KeptErrors)
+    {
         health.errors.push_back(std::move(error));
     }
     ++health.errorCount;
 }
 
-void onDeviceLost(WGPUDevice const*, WGPUDeviceLostReason reason, WGPUStringView message, void* userdata1, void*)
+void onDeviceLost(WGPUDevice const* /*device*/, WGPUDeviceLostReason reason, WGPUStringView message, void* userdata1, void* /*userdata2*/)
 {
     const std::unique_ptr<std::shared_ptr<Context::Health>> owned(static_cast<std::shared_ptr<Context::Health>*>(userdata1));
     auto& health = **owned;
     const auto detail = Convert::FromWgpu::stringView(message);
     health.lost = detail.empty() ? std::format("reason {}", static_cast<int>(reason)) : std::string(detail);
-    if (health.released || reason == WGPUDeviceLostReason_FailedCreation || reason == WGPUDeviceLostReason_CallbackCancelled) {
+    if (health.released || reason == WGPUDeviceLostReason_FailedCreation || reason == WGPUDeviceLostReason_CallbackCancelled)
+    {
         return;
     }
     Core::Log::warn("The GPU device was lost: {}", *health.lost);
-    if (health.onLost) {
+    if (health.onLost)
+    {
         health.onLost();
     }
 }
 
-void onAdapter(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message, void* userdata1, void*)
+void onAdapter(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message, void* userdata1, void* /*userdata2*/)
 {
     std::unique_ptr<Pending> pending(static_cast<Pending*>(userdata1));
-    if (status != WGPURequestAdapterStatus_Success) {
+    if (status != WGPURequestAdapterStatus_Success)
+    {
         fail(std::move(pending), "No WebGPU adapter is available", message);
         return;
     }
@@ -166,7 +176,8 @@ void onAdapter(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringV
     // Optional features are requested only when the adapter has them;
     // requesting a missing one fails the whole device request.
     std::vector<WGPUFeatureName> features;
-    if (wgpuAdapterHasFeature(adapter, WGPUFeatureName_TimestampQuery)) {
+    if (wgpuAdapterHasFeature(adapter, WGPUFeatureName_TimestampQuery))
+    {
         features.push_back(WGPUFeatureName_TimestampQuery);
     }
 
@@ -175,7 +186,8 @@ void onAdapter(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringV
     // their defaults.
     WGPULimits supported = WGPU_LIMITS_INIT;
     WGPULimits required = WGPU_LIMITS_INIT;
-    if (wgpuAdapterGetLimits(adapter, &supported) == WGPUStatus_Success) {
+    if (wgpuAdapterGetLimits(adapter, &supported) == WGPUStatus_Success)
+    {
         required.maxBufferSize = supported.maxBufferSize;
     }
 
@@ -194,19 +206,21 @@ void onAdapter(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringV
     descriptor.deviceLostCallbackInfo.callback = onDeviceLost;
     descriptor.deviceLostCallbackInfo.userdata1 = new std::shared_ptr<Context::Health>(health);
 
-    wgpuAdapterRequestDevice(adapter, &descriptor, WGPURequestDeviceCallbackInfo {
-        .nextInChain = nullptr,
-        .mode = WGPUCallbackMode_AllowSpontaneous,
-        .callback = onDevice,
-        .userdata1 = pending.release(),
-        .userdata2 = nullptr,
-    });
+    wgpuAdapterRequestDevice(adapter, &descriptor,
+                             WGPURequestDeviceCallbackInfo{
+                                 .nextInChain = nullptr,
+                                 .mode = WGPUCallbackMode_AllowSpontaneous,
+                                 .callback = onDevice,
+                                 .userdata1 = pending.release(),
+                                 .userdata2 = nullptr,
+                             });
 }
 
-void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message, void* userdata1, void*)
+void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message, void* userdata1, void* /*userdata2*/)
 {
     std::unique_ptr<Pending> pending(static_cast<Pending*>(userdata1));
-    if (status != WGPURequestDeviceStatus_Success) {
+    if (status != WGPURequestDeviceStatus_Success)
+    {
         fail(std::move(pending), "Failed to get a WebGPU device", message);
         return;
     }
@@ -220,7 +234,8 @@ void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView 
 #endif
     context.info = readInfo(context.adapter.get());
     WGPULimits limits = WGPU_LIMITS_INIT;
-    if (wgpuDeviceGetLimits(device, &limits) == WGPUStatus_Success) {
+    if (wgpuDeviceGetLimits(device, &limits) == WGPUStatus_Success)
+    {
         context.maxBufferBytes = limits.maxBufferSize;
     }
     Core::Log::info("GPU timestamps: {}", context.features.timestampQuery
@@ -233,11 +248,12 @@ void onDevice(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView 
     onDone(std::move(result));
 }
 
-} // namespace
+}  // namespace
 
 void Context::submit(WGPUCommandBuffer commands) const
 {
-    if (health && health->lost) {
+    if (health && health->lost)
+    {
         return;
     }
 #pragma GCC diagnostic push
@@ -246,8 +262,7 @@ void Context::submit(WGPUCommandBuffer commands) const
 #pragma GCC diagnostic pop
 }
 
-void Context::create(Handle<WGPUInstance> instance, WGPUSurface compatible, Type::PowerPreference powerPreference,
-                     Callback onDone)
+void Context::create(Handle<WGPUInstance> instance, WGPUSurface compatible, Type::PowerPreference powerPreference, Callback onDone)
 {
 #ifndef __EMSCRIPTEN__
     // Natively, events are pumped below until creation finishes, so onDone
@@ -255,7 +270,8 @@ void Context::create(Handle<WGPUInstance> instance, WGPUSurface compatible, Type
     constexpr auto Timeout = std::chrono::seconds(10);
     const auto finished = std::make_shared<bool>(false);
     onDone = [finished, onDone = std::move(onDone)](Result result) {
-        if (!*finished) {
+        if (!*finished)
+        {
             *finished = true;
             onDone(std::move(result));
         }
@@ -277,26 +293,30 @@ void Context::create(Handle<WGPUInstance> instance, WGPUSurface compatible, Type
     // Read before the call: argument order is unspecified, and one argument
     // releases `pending`.
     const WGPUInstance raw = pending->context.instance.get();
-    wgpuInstanceRequestAdapter(raw, &options, WGPURequestAdapterCallbackInfo {
-        .nextInChain = nullptr,
-        .mode = WGPUCallbackMode_AllowSpontaneous,
-        .callback = onAdapter,
-        .userdata1 = pending.release(),
-        .userdata2 = nullptr,
-    });
+    wgpuInstanceRequestAdapter(raw, &options,
+                               WGPURequestAdapterCallbackInfo{
+                                   .nextInChain = nullptr,
+                                   .mode = WGPUCallbackMode_AllowSpontaneous,
+                                   .callback = onAdapter,
+                                   .userdata1 = pending.release(),
+                                   .userdata2 = nullptr,
+                               });
 
 #ifndef __EMSCRIPTEN__
     const auto deadline = std::chrono::steady_clock::now() + Timeout;
-    while (!*finished && std::chrono::steady_clock::now() < deadline) {
+    while (!*finished && std::chrono::steady_clock::now() < deadline)
+    {
         wgpuInstanceProcessEvents(pumped.get());
-        if (!*finished) {
+        if (!*finished)
+        {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
-    if (!*finished) {
+    if (!*finished)
+    {
         finish(std::unexpected("Timed out waiting for the GPU to become ready"));
     }
 #endif
 }
 
-} // namespace Gpu
+}  // namespace Gpu

@@ -19,7 +19,7 @@ constexpr std::uint64_t SyntheticSeed = 1;
 
 constexpr double TelemetryGpuTimingProbability = 1.0 / 30.0;
 
-} // namespace
+}  // namespace
 
 Core::Data::Trades generateSyntheticDay()
 {
@@ -29,7 +29,8 @@ Core::Data::Trades generateSyntheticDay()
 void App::create(const Gpu::Market::Engine::Params& params, Callback onDone)
 {
     Gpu::Market::Engine::create(params, [params, onDone = std::move(onDone)](Gpu::Market::Engine::CreatedResult result) {
-        if (!result) {
+        if (!result)
+        {
             onDone(std::unexpected(std::move(result.error())));
             return;
         }
@@ -42,7 +43,8 @@ App::App(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market::Engine::Param
 {
     mGpu.setStatsCallback([this](const Gpu::Type::FrameStats& stats) {
         mTelemetry.recordFrameTimes(stats);
-        if (mOnStats) {
+        if (mOnStats)
+        {
             mOnStats(stats);
         }
     });
@@ -50,8 +52,10 @@ App::App(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market::Engine::Param
 
 std::expected<void, std::string> App::setTrades(Core::Data::Trades&& trades)
 {
-    if (auto* engine = mGpu.getEngine()) {
-        if (auto set = engine->setTrades(trades); !set) {
+    if (auto* engine = mGpu.getEngine())
+    {
+        if (auto set = engine->setTrades(trades); !set)
+        {
             return set;
         }
     }
@@ -70,7 +74,8 @@ std::expected<void, std::string> App::setTrades(Core::Data::Trades&& trades)
 void App::setSize(std::uint32_t widthPx, std::uint32_t heightPx)
 {
     // The native loop calls this every iteration.
-    if (widthPx == mLayout.widthPx && heightPx == mLayout.heightPx) {
+    if (widthPx == mLayout.widthPx && heightPx == mLayout.heightPx)
+    {
         return;
     }
     mLayout.widthPx = widthPx;
@@ -108,7 +113,8 @@ void App::setView(Core::TimeRange time)
 
 std::optional<Core::TimeRange> App::getInitialView() const
 {
-    if (mData.getTrades().empty()) {
+    if (mData.getTrades().empty())
+    {
         return std::nullopt;
     }
     const std::int64_t dayStartUs = Core::getUtcDay(getTrades().timeUs.front()).startUs;
@@ -192,10 +198,12 @@ void App::updateAxes()
 
 void App::updateSummaries()
 {
-    if (!mSummaries.update(mData, mView, mLayout)) {
+    if (!mSummaries.update(mData, mView, mLayout))
+    {
         return;
     }
-    if (auto* engine = mGpu.getEngine()) {
+    if (auto* engine = mGpu.getEngine())
+    {
         engine->setColumns(mSummaries.getEngineColumns());
     }
 }
@@ -207,14 +215,16 @@ void App::updatePick()
     mPointer.update(mData, mView, mSummaries, mLayout, mMarkerSizing);
     const auto newTrade = mPointer.getHighlightedTrade();
     const auto newColumn = mPointer.getHighlightedColumn();
-    if ((newTrade && newTrade != trade) || (newColumn && newColumn != column)) {
+    if ((newTrade && newTrade != trade) || (newColumn && newColumn != column))
+    {
         mTelemetry.recordPick();
     }
 }
 
 void App::syncSettings()
 {
-    if (auto* engine = mGpu.getEngine()) {
+    if (auto* engine = mGpu.getEngine())
+    {
         engine->setSettings(getEngineSettings());
     }
 }
@@ -239,7 +249,8 @@ void App::update(double nowMs)
 {
     mTelemetry.update(nowMs);
     mGpu.restartIfLost(nowMs);
-    if (auto* engine = mGpu.getEngine()) {
+    if (auto* engine = mGpu.getEngine())
+    {
         engine->update(nowMs);
     }
 }
@@ -247,12 +258,13 @@ void App::update(double nowMs)
 bool App::needsRender() const
 {
     const auto* engine = mGpu.getEngine();
-    return engine && engine->needsRender();
+    return engine != nullptr && engine->needsRender();
 }
 
 void App::render()
 {
-    if (auto* engine = mGpu.getEngine()) {
+    if (auto* engine = mGpu.getEngine())
+    {
         engine->render();
         mTelemetry.recordFrame(mSummaries.getNumColumns() > 0, mView.getTrades().size());
     }
@@ -261,7 +273,8 @@ void App::render()
 #ifndef __EMSCRIPTEN__
 void App::processEvents()
 {
-    if (auto* engine = mGpu.getEngine()) {
+    if (auto* engine = mGpu.getEngine())
+    {
         engine->processEvents();
     }
 }
@@ -275,7 +288,8 @@ void App::setWakeCallback(std::function<void()> onWake)
 void App::readPixels(Gpu::Market::Engine::PixelsCallback onDone)
 {
     auto* engine = mGpu.getEngine();
-    if (!engine) {
+    if (!engine)
+    {
         onDone(std::unexpected("The GPU is restarting"));
         return;
     }
@@ -314,7 +328,8 @@ void App::setStatsCallback(Gpu::Market::Engine::StatsCallback onStats)
 bool App::loseGpu()
 {
     auto* engine = mGpu.getEngine();
-    if (!engine) {
+    if (!engine)
+    {
         return false;
     }
     engine->loseDevice();
@@ -334,11 +349,16 @@ void App::flushTelemetry()
 
 void App::syncProfiling()
 {
-    if (mProfiling) {
+    if (mProfiling)
+    {
         mGpu.setProfiling(Gpu::Market::Engine::ProfilingOn{});
-    } else if (mTelemetry.isEnabled()) {
+    }
+    else if (mTelemetry.isEnabled())
+    {
         mGpu.setProfiling(Gpu::Market::Engine::ProfilingOn{ .gpuTimingProbability = TelemetryGpuTimingProbability });
-    } else {
+    }
+    else
+    {
         mGpu.setProfiling(Gpu::Market::Engine::ProfilingOff{});
     }
 }
@@ -346,7 +366,8 @@ void App::syncProfiling()
 std::expected<void, std::string> App::setUpEngine(Gpu::Market::Engine& engine)
 {
     // Fails only if the new GPU holds fewer than the old one did.
-    if (auto set = engine.setTrades(mData.getTrades()); !set) {
+    if (auto set = engine.setTrades(mData.getTrades()); !set)
+    {
         return set;
     }
     engine.setColumns(mSummaries.getEngineColumns());
@@ -354,4 +375,4 @@ std::expected<void, std::string> App::setUpEngine(Gpu::Market::Engine& engine)
     return {};
 }
 
-} // namespace Viewer
+}  // namespace Viewer

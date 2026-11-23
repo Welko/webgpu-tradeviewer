@@ -102,4 +102,4 @@ private:
     std::shared_ptr<int> mAlive = std::make_shared<int>();
 };
 
-} // namespace Viewer
+}  // namespace Viewer

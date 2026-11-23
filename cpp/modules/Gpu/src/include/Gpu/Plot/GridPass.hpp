@@ -44,4 +44,4 @@ private:
     Type::Theme mTheme;
 };
 
-} // namespace Gpu::Plot
+}  // namespace Gpu::Plot

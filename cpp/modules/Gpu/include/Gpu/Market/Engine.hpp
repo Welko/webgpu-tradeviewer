@@ -122,8 +122,12 @@ public:
     /** Draws a frame, needed or not. */
     void render();
 
-    struct ProfilingOff {};
-    struct ProfilingOn { double gpuTimingProbability = 1.0; };
+    struct ProfilingOff
+    {};
+    struct ProfilingOn
+    {
+        double gpuTimingProbability = 1.0;
+    };
     void setProfiling(std::variant<ProfilingOff, ProfilingOn> profiling);
 
     /**
@@ -173,4 +177,4 @@ private:
     std::unique_ptr<Impl> mImpl;
 };
 
-} // namespace Gpu::Market
+}  // namespace Gpu::Market

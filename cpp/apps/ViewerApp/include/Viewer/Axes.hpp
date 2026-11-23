@@ -24,4 +24,4 @@ private:
     std::vector<Core::Plot::Axis::Tick> mPrices;
 };
 
-} // namespace Viewer
+}  // namespace Viewer

@@ -9,7 +9,7 @@
  */
 import type { Viewer } from './viewer/viewerModule';
 
-const Key: string | undefined = import.meta.env.VITE_POSTHOG_KEY;
+const Key = import.meta.env.VITE_POSTHOG_KEY;
 // The EU cloud, so the data stays in the EU.
 const Host = 'https://eu.i.posthog.com';
 const ConsentStorageKey = 'telemetry-consent';
@@ -92,11 +92,15 @@ export function setTelemetryConsent(given: boolean) {
 /** Loads PostHog, only now that the user agreed. */
 async function connect(): Promise<Connection> {
   if (recording) {
-    window.telemetryEvents ??= [];
-    return { send: (name, properties) => window.telemetryEvents!.push({ name, properties }), resume() {}, pause() {} };
+    const events = (window.telemetryEvents ??= []);
+    // Kept in the page, so there's nothing to resume or pause.
+    return { send: (name, properties) => events.push({ name, properties }), resume: () => undefined, pause: () => undefined };
+  }
+  if (!Key) {
+    throw new Error('This build has no PostHog key');
   }
   const { default: posthog } = await import('posthog-js');
-  posthog.init(Key!, {
+  posthog.init(Key, {
     api_host: Host,
     // Our own events only: no cookies or storage, no clicks or page views, no recordings or surveys.
     persistence: 'memory',
@@ -143,29 +147,33 @@ function stop() {
   void connection?.then((connected) => connected.pause());
 }
 
+// What a user agent string says, first match first: Edge's also says Chrome, and Chrome's says Safari.
+const BrowserMarks: [string, string][] = [
+  ['Edg/', 'Edge'],
+  ['Firefox/', 'Firefox'],
+  ['Chrome/', 'Chrome'],
+  ['Safari/', 'Safari'],
+];
+// Android's says Linux, and iOS's says Mac OS.
+const SystemMarks: [string, string][] = [
+  ['Windows', 'Windows'],
+  ['Android', 'Android'],
+  ['iPhone', 'iOS'],
+  ['iPad', 'iOS'],
+  ['Mac OS', 'macOS'],
+  ['Linux', 'Linux'],
+];
+
+/** The name of the first of `marks` that `agent` contains, or "other". */
+function findMark(agent: string, marks: [string, string][]): string {
+  return marks.find(([mark]) => agent.includes(mark))?.[1] ?? 'other';
+}
+
 /** What only the page knows, for the first event: no more than a broad picture of the machine. */
 function getEnvironment(): Properties {
   const agent = navigator.userAgent;
-  const browser = /Edg\//.test(agent)
-    ? 'Edge'
-    : /Firefox\//.test(agent)
-      ? 'Firefox'
-      : /Chrome\//.test(agent)
-        ? 'Chrome'
-        : /Safari\//.test(agent)
-          ? 'Safari'
-          : 'other';
-  const os = /Windows/.test(agent)
-    ? 'Windows'
-    : /Android/.test(agent)
-      ? 'Android'
-      : /iPhone|iPad/.test(agent)
-        ? 'iOS'
-        : /Mac OS/.test(agent)
-          ? 'macOS'
-          : /Linux/.test(agent)
-            ? 'Linux'
-            : 'other';
+  const browser = findMark(agent, BrowserMarks);
+  const os = findMark(agent, SystemMarks);
   const width = screen.width;
   const screenClass = width < 800 ? 'small' : width < 1400 ? 'medium' : width < 2200 ? 'large' : 'huge';
   return { browser, os, screenClass, devicePixelRatio: Math.round(devicePixelRatio * 100) / 100 };

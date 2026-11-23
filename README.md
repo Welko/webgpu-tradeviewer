@@ -24,8 +24,9 @@ cpp/
                        App.cpp          ViewerAppLib: the platform-independent part
                                         (view state, input, engine), shared with BenchmarkApp
                        Scene.cpp        the image tests' scenes, drawn alike on every platform
-                       NativeMain.cpp   GLFW window and loop
-                       WebMain.cpp      embind `Viewer` class, loop driven by JS
+                       Native/          the native app: Main (the loop), Options (the command line),
+                                        Window (GLFW, input), Report (the title and the log), Snapshot
+                       Web/Main.cpp     the web app: the embind `Viewer` class, its loop driven by JS
   apps/TradeStatsApp native command line: a time range's trade count and amount, as the viewer computes them
   apps/BenchmarkApp  native command line: frame times at four zoom levels (and the whole day
                      drawing every trade), from the profiler
@@ -55,6 +56,7 @@ The platform side owns the frame loop: `requestAnimationFrame` on the web, a GLF
 - Native, Linux only for now: `sudo apt install libwayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev zlib1g-dev`
 - A browser with WebGPU
 - Optional: [naga](https://crates.io/crates/naga-cli), to check shaders while building: `cargo install naga-cli --version 29.0.4`
+- To check the code as CI does: clang-format and clang-tidy 20, `sudo apt install clang-format-20 clang-tidy-20` (see [Code style](#code-style))
 
 The first configure downloads WebGPU-distribution (wgpu-native or emdawnwebgpu) and GLFW.
 
@@ -83,8 +85,8 @@ npm run dev        # builds the wasm, then starts Vite on http://localhost:5173
 
 Work happens on `dev`; `main` gets what's ready to publish. `.github/workflows/ci.yml` runs on every push to either (and manually from the Actions tab):
 
-1. **Native:** builds with the `native` preset and runs the tests with `ctest`, then again with profiling and telemetry compiled out. It draws the image tests' scenes through a window (on Xvfb) and opens a real day's file. It then builds and tests the `native-release` preset, a single binary with wgpu-native linked in statically, and packages it with the licenses of what's linked in. Along the way it checks the visible counts (see [Viewing trades](#viewing-trades)) and runs `BenchmarkApp` on Mesa's lavapipe; both tables appear on the run's page, signed in to GitHub, and the benchmark is also kept as the `benchmark-native` artifact. The benchmark's memory and times are checked against the baseline (see [Memory and speed between commits](#memory-and-speed-between-commits)): a change in memory, or a big change in speed either way, fails the job.
-2. **Web:** installs Emscripten, runs `npm ci` and `npm run build`, which builds the wasm module, type-checks and writes `docs/`. It then runs the same tests compiled to wasm in Node, the site's smoke tests in Chromium, and the image tests' scenes in Chromium and Firefox. Last, it runs the benchmark in Chromium (`benchmark.html`, see [Frame times](#frame-times)), kept as the `benchmark-web` artifact, and checks it against the baseline as the native job does.
+1. **Native:** builds with the `native` preset, checks the C++ with `tools/lint-cpp.sh` (see [Code style](#code-style)) and runs the tests with `ctest`, then again with profiling and telemetry compiled out. It draws the image tests' scenes through a window (on Xvfb) and opens a real day's file. It then builds and tests the `native-release` preset, a single binary with wgpu-native linked in statically, and packages it with the licenses of what's linked in. Along the way it checks the visible counts (see [Viewing trades](#viewing-trades)) and runs `BenchmarkApp` on Mesa's lavapipe; both tables appear on the run's page, signed in to GitHub, and the benchmark is also kept as the `benchmark-native` artifact. The benchmark's memory and times are checked against the baseline (see [Memory and speed between commits](#memory-and-speed-between-commits)): a change in memory, or a big change in speed either way, fails the job.
+2. **Web:** installs Emscripten, runs `npm ci` and `npm run build`, which builds the wasm module, type-checks and writes `docs/`, then `npm run lint`. It then runs the same tests compiled to wasm in Node, the site's smoke tests in Chromium, and the image tests' scenes in Chromium and Firefox. Last, it runs the benchmark in Chromium (`benchmark.html`, see [Frame times](#frame-times)), kept as the `benchmark-web` artifact, and checks it against the baseline as the native job does.
 3. **Compare renderings:** compares the scenes as native, Chromium and Firefox drew them, with each other and with the reference renderings (see [Image tests](#image-tests)). The numbers appear on the run's page, with a link to the report with the pictures (the `rendering-comparison.html` artifact, which opens in the browser).
 4. **On `main` only, if everything passes:** publishes `docs/` to GitHub Pages, with the rendering comparison at `ci/renderings/`, and replaces the [`latest` release](../../releases/latest) with the new Linux binary. If anything fails, both keep their previous version.
 
@@ -117,6 +119,19 @@ ctest --test-dir build/web --output-on-failure      # wasm, run in Node (after b
 The wasm run matters: wasm32 has a 32-bit `size_t` and `long`, uses libc++, and has no exception support. A `throw` aborts the program. Node has no GPU, so only GPU-free tests run there.
 
 `GpuDeviceTests` drive a real GPU and are native only: they render offscreen and read the pixels back. CI runs them on Mesa's software Vulkan driver (lavapipe, package `mesa-vulkan-drivers`); without a GPU they fail rather than skip.
+
+## Code style
+
+The C++ follows `.clang-format` and `.clang-tidy`; the web code (TypeScript, CSS, HTML) Prettier (`.prettierrc.json`) and ESLint (`web/eslint.config.js`, strict and type-aware). CI fails on any difference or warning.
+
+```bash
+tools/lint-cpp.sh            # C++: the format, then clang-tidy (build the native preset first)
+tools/lint-cpp.sh --fix      # reformats the C++ instead of checking it, then runs clang-tidy
+cd web && npm run lint       # type-checks the app and its tests, then ESLint and Prettier
+cd web && npm run format     # reformats the web code
+```
+
+Both clang tools are version 20, as on CI's Ubuntu 24.04: other versions format differently, and clang-tidy 18 can't read GCC 13's `std::expected`. clang-tidy reads the native build's `compile_commands.json`, so `Web/Main.cpp`, built only by Emscripten, isn't checked.
 
 The built site has smoke tests in a real browser ([Playwright](https://playwright.dev), Chromium with WebGPU on its software renderer, SwiftShader). They need Node 20 or newer:
 
@@ -224,7 +239,7 @@ Some files load, but what's shown can't be exactly what's in them, or looks wron
 
 **Losing the device natively.** wgpu-native (v29) notices a lost device only on the next call to it, and some calls then panic instead of failing: submitting work, getting a window's texture for a frame, and presenting it. A real loss, such as a driver reset, surfaces at exactly those calls, so in a native window it crashes the app whatever the app checks. Recovering is for the web: browsers turn every call on a lost device into nothing, and the engine needs no checks there. Offscreen, natively, a loss surfaces at an earlier call, so the app's restart can be tested in C++. That needs one guard, since the frame's submit comes after: everything submits through `Gpu::Context::submit()`, which drops the commands once the device is lost. `Context.hpp` declares `wgpuQueueSubmit` deprecated, so any other call fails to compile, with a message saying to use `submit()`. The engine itself never checks.
 
-**Test hooks.** Tests that lose the GPU create the engine themselves and hand it to the app, keeping a pointer to it. The browser tests need theirs in the published build, which is what they run against, so they're grouped apart from the viewer: `window.viewerTesting` (`loseGpu`, `crash`, `exhaustMemory`, bound as `Testing` in `WebMain.cpp`). Each harms only the page that calls it.
+**Test hooks.** Tests lose the GPU through `App::loseGpu()`. The browser tests need theirs in the published build, which is what they run against, so they're grouped apart from the viewer: `window.viewerTesting` (`loseGpu`, `crash`, `exhaustMemory`, bound as `Testing` in `Web/Main.cpp`). Each harms only the page that calls it.
 
 **Memory.** The app counts the memory its large parts hold, room to grow included. Each trade takes about 47 bytes: 25 for the trade, 20 for running totals and 2 for the price tree. On the GPU it takes 20. Natively the app logs a breakdown after loading, with the process's resident memory. The page shows the same breakdown in the data panel, under "Memory", with the wasm heap. The derived data (running totals, price tree, column summaries) adds about 89% to the trades. Tests check these numbers exactly, and that 10 rounds of zooming, panning and resizing leave them as they were. Trades are copied to vectors of exactly their size after loading, since reading leaves up to half of their room unused. `shrink_to_fit()` would do nothing here: libstdc++ skips it without exceptions.
 

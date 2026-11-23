@@ -1,5 +1,8 @@
 # Lint checks, run by clangd in the editor. Noisy checks that fight the
 # project's style are turned off below, with the reason.
+# Headers too, but only the project's own.
+HeaderFilterRegex: '.*/cpp/(apps|modules)/.*'
+
 Checks: >
   -*,
   bugprone-*,
@@ -20,7 +23,8 @@ Checks: >
   -readability-convert-member-functions-to-static,
   -readability-identifier-length,
   -readability-magic-numbers,
-  -readability-math-missing-parentheses
+  -readability-math-missing-parentheses,
+  -readability-uppercase-literal-suffix
 
 # Why each is off:
 # bugprone-invalid-enum-default-initialization: `WGPUSurfaceTexture texture{};` is the WebGPU idiom.
@@ -33,6 +37,7 @@ Checks: >
 # performance-enum-size: int-sized enums are fine here.
 # readability-magic-numbers, readability-math-missing-parentheses: colours,
 #   sizes and test values read better inline.
+# readability-uppercase-literal-suffix: `1.0f` is as clear as `1.0F`, and no literal uses `l`.
 
 CheckOptions:
   # `if (pointer)` and `if (count)` are fine.
@@ -40,6 +45,8 @@ CheckOptions:
   readability-implicit-bool-conversion.AllowIntegerConditions: true
   # C callbacks must take `void* userdata`.
   misc-const-correctness.AnalyzePointers: false
+  # std::from_chars takes the end too.
+  bugprone-suspicious-stringview-data-usage.AllowedCallees: '::std::from_chars'
   # doctest's CHECK macros inflate the score of every test.
   readability-function-cognitive-complexity.IgnoreMacros: true
 

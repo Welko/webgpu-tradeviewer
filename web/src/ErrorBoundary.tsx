@@ -6,7 +6,7 @@ import { reportErrorEvent } from './telemetry';
  * leave it blank.
  */
 export class ErrorBoundary extends Component<{ children: ReactNode }, { message: string | null }> {
-  override state = { message: null };
+  override state: { message: string | null } = { message: null };
 
   static getDerivedStateFromError(error: unknown) {
     return { message: error instanceof Error ? error.message : String(error) };

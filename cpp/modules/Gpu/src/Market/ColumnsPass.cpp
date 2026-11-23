@@ -84,8 +84,7 @@ Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat f
 
     // Premultiplied alpha.
     WGPUBlendState blend{};
-    blend.color = { .operation = WGPUBlendOperation_Add, .srcFactor = WGPUBlendFactor_One,
-                    .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha };
+    blend.color = { .operation = WGPUBlendOperation_Add, .srcFactor = WGPUBlendFactor_One, .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha };
     blend.alpha = blend.color;
 
     WGPUColorTargetState target{};
@@ -112,7 +111,7 @@ Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat f
     return Handle(wgpuDeviceCreateRenderPipeline(device, &descriptor));
 }
 
-} // namespace
+}  // namespace
 
 ColumnsPass::ColumnsPass(const Context& context, Resource::Stats& stats, WGPUTextureFormat format)
     : mContext(&context),
@@ -140,12 +139,14 @@ void ColumnsPass::setColumns(const Type::Columns& columns)
 {
     mAcross = columns.across;
     double largest = 0.0;
-    for (const auto& column : columns.columns) {
+    for (const auto& column : columns.columns)
+    {
         largest = std::max(largest, column.buyAmount + column.sellAmount);
     }
     std::vector<GpuColumn> packed;
     packed.reserve(columns.columns.size());
-    for (const auto& column : columns.columns) {
+    for (const auto& column : columns.columns)
+    {
         const double amount = column.buyAmount + column.sellAmount;
         packed.push_back({
             .index = column.index,
@@ -156,7 +157,8 @@ void ColumnsPass::setColumns(const Type::Columns& columns)
         });
     }
     mColumns.clear();
-    if (auto appended = mColumns.append(std::as_bytes(std::span(packed))); !appended) {
+    if (auto appended = mColumns.append(std::as_bytes(std::span(packed))); !appended)
+    {
         Core::Log::error("Failed to upload {} column summaries: {}", packed.size(), appended.error());
         mAcross = 0;
     }
@@ -198,7 +200,8 @@ void ColumnsPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plo
     const Handle pass(wgpuCommandEncoderBeginRenderPass(encoder, &descriptor));
 
     const auto count = static_cast<std::uint32_t>(mColumns.size() / sizeof(GpuColumn));
-    if (count > 0 && mAcross > 0 && !plot.empty() && mView.price.high > mView.price.low) {
+    if (count > 0 && mAcross > 0 && !plot.empty() && mView.price.high > mView.price.low)
+    {
         plot.apply(pass.get());
         wgpuRenderPassEncoderSetPipeline(pass.get(), mPipeline.get());
         wgpuRenderPassEncoderSetBindGroup(pass.get(), 0, mBindGroup.get(), 0, nullptr);
@@ -208,4 +211,4 @@ void ColumnsPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plo
     wgpuRenderPassEncoderEnd(pass.get());
 }
 
-} // namespace Gpu::Market
+}  // namespace Gpu::Market

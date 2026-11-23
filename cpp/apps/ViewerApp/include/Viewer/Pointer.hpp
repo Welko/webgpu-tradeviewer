@@ -63,4 +63,4 @@ private:
     std::optional<std::size_t> mColumnPosition;
 };
 
-} // namespace Viewer
+}  // namespace Viewer

@@ -12,31 +12,31 @@ constexpr std::int64_t NoonUs = 1'575'201'600'000'000;  // 2019-12-01 12:00 UTC
 constexpr std::int64_t HourUs = 3'600'000'000;
 constexpr std::int64_t DayUs = 86'400'000'000;
 
-} // namespace
+}  // namespace
 
 TEST_CASE("Zooming keeps the anchor in place")
 {
-    const TimeRange hour{ NoonUs, NoonUs + HourUs };
+    const TimeRange hour{ .startUs = NoonUs, .endUs = NoonUs + HourUs };
 
     CHECK(hour.zoomed(0.0, 0.5) == TimeRange{ NoonUs, NoonUs + HourUs / 2 });
     CHECK(hour.zoomed(1.0, 0.5) == TimeRange{ NoonUs + HourUs / 2, NoonUs + HourUs });
     CHECK(hour.zoomed(0.5, 2.0) == TimeRange{ NoonUs - HourUs / 2, NoonUs + HourUs * 3 / 2 });
 
     // Down to single microseconds, far from the epoch.
-    const TimeRange tiny{ NoonUs, NoonUs + 10 };
+    const TimeRange tiny{ .startUs = NoonUs, .endUs = NoonUs + 10 };
     CHECK(tiny.zoomed(0.3, 0.5) == TimeRange{ NoonUs + 2, NoonUs + 7 });
 }
 
 TEST_CASE("Panning moves by a fraction of the length")
 {
-    const TimeRange hour{ NoonUs, NoonUs + HourUs };
+    const TimeRange hour{ .startUs = NoonUs, .endUs = NoonUs + HourUs };
     CHECK(hour.panned(0.25) == TimeRange{ NoonUs + HourUs / 4, NoonUs + HourUs * 5 / 4 });
     CHECK(hour.panned(-1.0) == TimeRange{ NoonUs - HourUs, NoonUs });
 }
 
 TEST_CASE("A time's UTC day runs from its midnight to the next")
 {
-    const TimeRange day{ NoonUs - 12 * HourUs, NoonUs + 12 * HourUs };
+    const TimeRange day{ .startUs = NoonUs - 12 * HourUs, .endUs = NoonUs + 12 * HourUs };
     CHECK(Core::getUtcDay(NoonUs) == day);
     CHECK(Core::getUtcDay(day.startUs) == day);
     CHECK(Core::getUtcDay(day.endUs - 1) == day);

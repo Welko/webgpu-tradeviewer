@@ -74,6 +74,9 @@ private:
     std::expected<void, std::string> parseLine(std::string_view line);
     std::expected<void, std::string> parseHeader(std::string_view line);
     std::expected<void, std::string> parseTrade(std::string_view line);
+    [[nodiscard]] std::expected<std::int64_t, std::string> parseTime(std::string_view text) const;
+    [[nodiscard]] std::expected<double, std::string> parsePositive(std::string_view what, std::string_view text) const;
+    [[nodiscard]] std::expected<Side, std::string> parseSide(std::string_view text) const;
     [[nodiscard]] std::expected<void, std::string> checkPartialLine() const;
     [[nodiscard]] std::string formatError(std::string_view message) const;
 
@@ -91,4 +94,4 @@ private:
     } mInfo;
 };
 
-} // namespace Core::Data
+}  // namespace Core::Data

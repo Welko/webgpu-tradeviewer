@@ -29,4 +29,4 @@ struct Tick
 /** Ticks at multiples of 1, 2 or 5 times a power of ten, labeled with the decimals the step needs. */
 [[nodiscard]] std::vector<Tick> getNumberTicks(ValueRange range, std::size_t maxCount);
 
-} // namespace Core::Plot::Axis
+}  // namespace Core::Plot::Axis

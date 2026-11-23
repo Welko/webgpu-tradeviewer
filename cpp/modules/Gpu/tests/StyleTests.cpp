@@ -23,7 +23,8 @@ constexpr Style::MarkerSizing Log{ .scale = MarkerScale::Log, .lowAmount = LowAm
 Core::Data::Trades tradesOf(std::initializer_list<double> amounts)
 {
     Core::Data::Trades trades;
-    for (const double amount : amounts) {
+    for (const double amount : amounts)
+    {
         trades.timeUs.push_back(static_cast<std::int64_t>(trades.size()));
         trades.price.push_back(100.0);
         trades.amount.push_back(amount);
@@ -32,12 +33,13 @@ Core::Data::Trades tradesOf(std::initializer_list<double> amounts)
     return trades;
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("Marker sizing is fitted to the trades' amounts, keeping the scale, however few or odd")
 {
     Core::Data::Trades trades;
-    for (int amount = 1; amount <= 1000; ++amount) {
+    for (int amount = 1; amount <= 1000; ++amount)
+    {
         trades.timeUs.push_back(amount);
         trades.price.push_back(100.0);
         trades.amount.push_back(amount);
@@ -51,7 +53,8 @@ TEST_CASE("Marker sizing is fitted to the trades' amounts, keeping the scale, ho
     // No trades: the default.
     CHECK(Style::fitMarkerSizing(MarkerScale::Log, {}) == Style::MarkerSizing{ .scale = MarkerScale::Log });
     // Extremes stay within what the shader's 32-bit floats can hold, ratio included.
-    for (const auto& trades : { tradesOf({ 1e-300, 1e-300 }), tradesOf({ 1e-300, 1e15 }), tradesOf({ 1e15, 1e15 }) }) {
+    for (const auto& trades : { tradesOf({ 1e-300, 1e-300 }), tradesOf({ 1e-300, 1e15 }), tradesOf({ 1e15, 1e15 }) })
+    {
         const auto sizing = Style::fitMarkerSizing(MarkerScale::Log, trades);
         CHECK(sizing.lowAmount > 1e-37);
         CHECK(sizing.highAmount < 1e37);
@@ -80,11 +83,13 @@ TEST_CASE("On the log scale, each power of ten adds the same radius, from the lo
 
 TEST_CASE("Sizes follow the market: a thousand times the amounts, the same sizes")
 {
-    for (const auto scale : { MarkerScale::Area, MarkerScale::Log }) {
+    for (const auto scale : { MarkerScale::Area, MarkerScale::Log })
+    {
         CAPTURE(scale);
         const Style::MarkerSizing sizing{ .scale = scale, .lowAmount = LowAmount, .highAmount = HighAmount };
         const Style::MarkerSizing larger{ .scale = scale, .lowAmount = LowAmount * 1000.0, .highAmount = HighAmount * 1000.0 };
-        for (const double amount : { 1e-4, 0.01, 1.0 }) {
+        for (const double amount : { 1e-4, 0.01, 1.0 })
+        {
             CHECK(larger.getRadiusCssPx(amount * 1000.0) == doctest::Approx(sizing.getRadiusCssPx(amount)));
         }
     }
@@ -92,7 +97,8 @@ TEST_CASE("Sizes follow the market: a thousand times the amounts, the same sizes
 
 TEST_CASE("Amounts of zero or less get the smallest marker")
 {
-    for (const auto& sizing : { Area, Log }) {
+    for (const auto& sizing : { Area, Log })
+    {
         CHECK(sizing.getRadiusCssPx(0.0) == Style::MarkerMinRadiusCssPx);
         CHECK(sizing.getRadiusCssPx(-1.0) == Style::MarkerMinRadiusCssPx);
     }
@@ -100,9 +106,10 @@ TEST_CASE("Amounts of zero or less get the smallest marker")
 
 TEST_CASE("A legend has the theme's marker colors")
 {
-    const Gpu::Market::Type::Theme theme{
-        .plot = {}, .buy = { .red = 0.1f, .green = 0.2f, .blue = 0.9f }, .sell = { .red = 0.9f, .green = 0.6f, .blue = 0.1f }, .markerOpacity = 0.5f
-    };
+    const Gpu::Market::Type::Theme theme{ .plot = {},
+                                          .buy = { .red = 0.1f, .green = 0.2f, .blue = 0.9f },
+                                          .sell = { .red = 0.9f, .green = 0.6f, .blue = 0.1f },
+                                          .markerOpacity = 0.5f };
     const auto legend = Style::getLegend(Area, theme);
     CHECK(legend.buy.blue == 0.9f);
     CHECK(legend.sell.green == 0.6f);
@@ -122,7 +129,8 @@ TEST_CASE("A legend spans the scale from where it stops shrinking to where it st
         { .scale = MarkerScale::Area, .lowAmount = 10.0, .highAmount = 100.0 },
         { .scale = MarkerScale::Log, .lowAmount = 10.0, .highAmount = 100.0 },
     };
-    for (const auto& sizing : sizings) {
+    for (const auto& sizing : sizings)
+    {
         CAPTURE(sizing.scale);
         CAPTURE(sizing.highAmount);
         const auto legend = Style::getLegend(sizing, {});
@@ -130,22 +138,26 @@ TEST_CASE("A legend spans the scale from where it stops shrinking to where it st
         const auto& sizes = legend.sizes;
         CHECK(sizes.size() >= 3);
         CHECK(sizes.size() <= 6);
-        if (sizes.size() < 3) {
+        if (sizes.size() < 3)
+        {
             continue;
         }
         CHECK(sizes.front().bound == Bound::AtMost);
         CHECK(sizes.front().radiusCssPx == Style::MarkerMinRadiusCssPx);
         CHECK(sizes.back().bound == Bound::AtLeast);
         CHECK(sizes.back().radiusCssPx == Style::MarkerMaxRadiusCssPx);
-        for (std::size_t i = 0; i < sizes.size(); ++i) {
+        for (std::size_t i = 0; i < sizes.size(); ++i)
+        {
             CAPTURE(sizes[i].amount);
             // Each size is what the amount is drawn with.
             CHECK(sizing.getRadiusCssPx(sizes[i].amount) == doctest::Approx(sizes[i].radiusCssPx));
-            if (i > 0) {
+            if (i > 0)
+            {
                 CHECK(sizes[i].amount > sizes[i - 1].amount);
                 CHECK(sizes[i].radiusCssPx > sizes[i - 1].radiusCssPx);
             }
-            if (i > 0 && i + 1 < sizes.size()) {
+            if (i > 0 && i + 1 < sizes.size())
+            {
                 CHECK(sizes[i].bound == Bound::Exact);
             }
         }

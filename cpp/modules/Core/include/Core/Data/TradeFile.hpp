@@ -14,4 +14,4 @@ namespace Core::Data {
  */
 std::expected<TradeParser::Finished, std::string> readTradeFile(const std::string& path);
 
-} // namespace Core::Data
+}  // namespace Core::Data

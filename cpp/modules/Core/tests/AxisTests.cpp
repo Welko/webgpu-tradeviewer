@@ -16,20 +16,23 @@ constexpr std::int64_t NoonUs = DayStartUs + 12 * 3'600'000'000LL;
 std::vector<std::string> labelsOf(const std::vector<Tick>& ticks)
 {
     std::vector<std::string> labels;
-    for (const auto& tick : ticks) {
+    labels.reserve(ticks.size());
+    for (const auto& tick : ticks)
+    {
         labels.push_back(tick.label);
     }
     return labels;
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("Time ticks fall on round times, without the range's end")
 {
-    const auto ticks = Core::Plot::Axis::getTimeTicks({ NoonUs, NoonUs + 3'600'000'000 }, 6);
+    const auto ticks = Core::Plot::Axis::getTimeTicks({ .startUs = NoonUs, .endUs = NoonUs + 3'600'000'000 }, 6);
     CHECK(labelsOf(ticks) == std::vector<std::string>{ "12:00", "12:10", "12:20", "12:30", "12:40", "12:50" });
     CHECK(ticks.size() == 6);
-    if (ticks.size() == 6) {
+    if (ticks.size() == 6)
+    {
         CHECK(ticks[0].fraction == 0.0);
         CHECK(ticks[3].fraction == doctest::Approx(0.5));
     }

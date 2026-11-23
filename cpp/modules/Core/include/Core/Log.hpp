@@ -43,9 +43,10 @@ void error(std::format_string<Args...> fmt, Args&&... args)
 {
     std::string message = std::format(fmt, std::forward<Args>(args)...);
     std::cerr << "ERROR  : " << message << std::endl;
-    if (onError) {
+    if (onError)
+    {
         onError(message);
     }
 }
 
-} // namespace Core::Log
+}  // namespace Core::Log

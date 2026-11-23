@@ -72,11 +72,12 @@ public:
      * how long getting the image and submitting took to `times`. A template,
      * so `encode` is called directly, never copied or allocated.
      */
-    template <std::invocable<WGPUCommandEncoder, WGPUTextureView> Encode>
+    template<std::invocable<WGPUCommandEncoder, WGPUTextureView> Encode>
     [[nodiscard]] bool draw(Encode&& encode, Type::FrameStats::Cpu& times, bool timed)
     {
         auto frame = beginFrame(times, timed);
-        if (!frame) {
+        if (!frame)
+        {
             return false;
         }
         encode(frame->encoder.get(), frame->view.get());
@@ -132,4 +133,4 @@ private:
     std::vector<Readback::Callback> mPendingReads;  // waiting for the next frame on a surface
 };
 
-} // namespace Gpu
+}  // namespace Gpu

@@ -24,14 +24,16 @@ public:
     Scope(double& targetMs, bool enabled) noexcept
         : mTargetMs(enabled ? &targetMs : nullptr)
     {
-        if (mTargetMs) {
+        if (mTargetMs)
+        {
             mStart = Clock::now();
         }
     }
 
     ~Scope()
     {
-        if (mTargetMs) {
+        if (mTargetMs)
+        {
             *mTargetMs = std::chrono::duration<double, std::milli>(Clock::now() - mStart).count();
         }
     }
@@ -59,4 +61,4 @@ public:
 
 #endif
 
-} // namespace Core::Profiling
+}  // namespace Core::Profiling

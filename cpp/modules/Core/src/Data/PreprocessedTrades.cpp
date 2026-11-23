@@ -16,7 +16,8 @@ ValueRange join(ValueRange a, ValueRange b)
 ValueRange scan(const std::vector<double>& prices, std::size_t first, std::size_t last)
 {
     ValueRange range{ .low = prices[first], .high = prices[first] };
-    for (std::size_t i = first + 1; i < last; ++i) {
+    for (std::size_t i = first + 1; i < last; ++i)
+    {
         range = join(range, { .low = prices[i], .high = prices[i] });
     }
     return range;
@@ -28,14 +29,15 @@ Trades shrunk(Trades&& trades)
     return std::move(trades);
 }
 
-} // namespace
+}  // namespace
 
 PreprocessedTrades::RunningTotals::RunningTotals(const Trades& trades)
 {
     mRunning.reserve(trades.size() + 1);
     mRunningBuys.reserve(trades.size() + 1);
     mBuyCounts.reserve(trades.size() + 1);
-    for (std::size_t i = 0; i < trades.size(); ++i) {
+    for (std::size_t i = 0; i < trades.size(); ++i)
+    {
         const std::int64_t units = trades.instrument.toAmountUnits(trades.amount[i]);
         const bool buy = trades.side[i] == Side::Buy;
         mRunning.push_back(mRunning.back() + units);
@@ -55,10 +57,12 @@ PreprocessedTrades::PriceTree::PriceTree(const Trades& trades)
       mBlocks((trades.size() + BlockSize - 1) / BlockSize),
       mNodes(2 * mBlocks)
 {
-    for (std::size_t b = 0; b < mBlocks; ++b) {
+    for (std::size_t b = 0; b < mBlocks; ++b)
+    {
         mNodes[mBlocks + b] = scan(trades.price, b * BlockSize, std::min((b + 1) * BlockSize, mSize));
     }
-    for (std::size_t k = mBlocks - 1; k > 0 && k < mBlocks; --k) {
+    for (std::size_t k = mBlocks - 1; k > 0 && k < mBlocks; --k)
+    {
         mNodes[k] = join(mNodes[2 * k], mNodes[2 * k + 1]);
     }
 }
@@ -67,33 +71,40 @@ std::optional<ValueRange> PreprocessedTrades::PriceTree::getRange(const Trades& 
 {
     const std::size_t first = std::min(indices.first, mSize);
     const std::size_t last = std::min(indices.last, mSize);
-    if (first >= last) {
+    if (first >= last)
+    {
         return std::nullopt;
     }
     // The blocks wholly inside; none if the range starts and ends in the same
     // block or the next.
     const std::size_t firstBlock = (first + BlockSize - 1) / BlockSize;
     const std::size_t lastBlock = last / BlockSize;
-    if (firstBlock >= lastBlock) {
+    if (firstBlock >= lastBlock)
+    {
         return scan(trades.price, first, last);
     }
 
     std::optional<ValueRange> range;
     const auto add = [&range](ValueRange part) { range = range ? join(*range, part) : part; };
-    if (first < firstBlock * BlockSize) {
+    if (first < firstBlock * BlockSize)
+    {
         add(scan(trades.price, first, firstBlock * BlockSize));
     }
-    if (lastBlock * BlockSize < last) {
+    if (lastBlock * BlockSize < last)
+    {
         add(scan(trades.price, lastBlock * BlockSize, last));
     }
     // Climbs from both ends, taking each node that lies wholly inside.
     std::size_t left = firstBlock + mBlocks;
     std::size_t right = lastBlock + mBlocks;
-    while (left < right) {
-        if (left % 2 == 1) {
+    while (left < right)
+    {
+        if (left % 2 == 1)
+        {
             add(mNodes[left++]);
         }
-        if (right % 2 == 1) {
+        if (right % 2 == 1)
+        {
             add(mNodes[--right]);
         }
         left /= 2;
@@ -106,8 +117,7 @@ PreprocessedTrades::PreprocessedTrades(Trades&& trades)
     : mTrades(shrunk(std::move(trades))),
       mTotals(mTrades),
       mPrices(mTrades)
-{
-}
+{}
 
 std::optional<ValueRange> PreprocessedTrades::getPriceRange(IndexRange indices) const
 {
@@ -119,4 +129,4 @@ PreprocessedTrades::Bytes PreprocessedTrades::getBytes() const
     return { .trades = mTrades.getBytes(), .totals = mTotals.getBytes(), .priceTree = mPrices.getBytes() };
 }
 
-} // namespace Core::Data
+}  // namespace Core::Data

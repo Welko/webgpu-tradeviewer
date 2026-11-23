@@ -8,9 +8,9 @@
 
 namespace {
 
-using Core::Plot::PickRule;
-using Core::Plot::Mapping;
 using Core::Data::Trades;
+using Core::Plot::Mapping;
+using Core::Plot::PickRule;
 
 constexpr std::int64_t NoonUs = 1'575'201'600'000'000;  // 2019-12-01 12:00 UTC
 
@@ -31,17 +31,17 @@ void add(Trades& trades, std::int64_t offsetUs, double price, double amount = 1.
 }
 
 /** Markers of radius 5, whatever the amount. */
-float smallMarkers(double)
+float smallMarkers(double /*amount*/)
 {
     return 5.0f;
 }
 
 std::optional<std::size_t> pick(const Trades& trades, double x, double y, const PickRule& rule = Rule)
 {
-    return Core::Plot::pickTrade(trades, { 0, trades.size() }, Plot, x, y, rule, smallMarkers);
+    return Core::Plot::pickTrade(trades, { .first = 0, .last = trades.size() }, Plot, x, y, rule, smallMarkers);
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("The trade whose center is nearest on screen wins, counting both axes")
 {
@@ -89,8 +89,8 @@ TEST_CASE("Only visible trades inside the plot are picked")
     CHECK(Core::Plot::pickTrade(trades, { 1, 2 }, Plot, 600.0, 50.0, Rule, smallMarkers) == 1);
     CHECK(pick(trades, -1.0, 50.0) == std::nullopt);
     CHECK(pick(trades, 500.0, 101.0) == std::nullopt);
-    CHECK(Core::Plot::pickTrade(trades, { 0, 2 }, Mapping{ .time = Plot.time, .price = Plot.price, .width = 0.0, .height = 100.0 },
-                                0.0, 50.0, Rule, smallMarkers)
+    CHECK(Core::Plot::pickTrade(trades, { 0, 2 }, Mapping{ .time = Plot.time, .price = Plot.price, .width = 0.0, .height = 100.0 }, 0.0,
+                                50.0, Rule, smallMarkers)
           == std::nullopt);
 }
 
@@ -101,10 +101,15 @@ using Core::Data::ColumnSummary;
 /** A column with trades from `low` to `high`; amounts don't matter for picking. */
 ColumnSummary columnAt(std::size_t index, double low, double high)
 {
-    return { .index = index, .trades = { 0, 1 }, .price = { .low = low, .high = high }, .buyAmount = 1.0, .sellAmount = 0.0, .buyCount = 1 };
+    return { .index = index,
+             .trades = { .first = 0, .last = 1 },
+             .price = { .low = low, .high = high },
+             .buyAmount = 1.0,
+             .sellAmount = 0.0,
+             .buyCount = 1 };
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("The nearest bar wins, measured to its nearest point, within the pick radius")
 {

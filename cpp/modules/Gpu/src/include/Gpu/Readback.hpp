@@ -31,4 +31,4 @@ void map(WGPUBuffer buffer, std::uint64_t size, Callback onDone);
 void texture(const Context& context, WGPUTexture texture, WGPUTextureFormat format, std::uint32_t width, std::uint32_t height,
              Callback onDone);
 
-} // namespace Gpu::Readback
+}  // namespace Gpu::Readback

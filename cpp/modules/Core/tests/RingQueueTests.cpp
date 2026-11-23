@@ -10,13 +10,15 @@ namespace {
 std::vector<int> items(const Core::RingQueue<int>& ring)
 {
     std::vector<int> all;
-    for (std::size_t index = 0; index < ring.size(); ++index) {
+    all.reserve(ring.size());
+    for (std::size_t index = 0; index < ring.size(); ++index)
+    {
         all.push_back(ring.at(index));
     }
     return all;
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("A ring queue starts empty")
 {
@@ -54,9 +56,11 @@ TEST_CASE("Pushing to a full ring queue evicts the oldest item")
 TEST_CASE("Items stay in order as the ring queue wraps around")
 {
     Core::RingQueue<int> ring(3);
-    for (int item = 1; item <= 10; ++item) {
+    for (int item = 1; item <= 10; ++item)
+    {
         ring.pushBack(item);
-        if (item % 2 == 0) {
+        if (item % 2 == 0)
+        {
             ring.popFront();
         }
     }

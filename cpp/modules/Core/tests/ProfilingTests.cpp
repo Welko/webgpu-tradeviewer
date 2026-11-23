@@ -10,11 +10,12 @@ namespace {
 void spin(std::chrono::milliseconds duration)
 {
     const auto end = std::chrono::steady_clock::now() + duration;
-    while (std::chrono::steady_clock::now() < end) {
+    while (std::chrono::steady_clock::now() < end)
+    {
     }
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("An enabled scope writes the elapsed time when compiled in")
 {
@@ -23,9 +24,12 @@ TEST_CASE("An enabled scope writes the elapsed time when compiled in")
         const Core::Profiling::Scope scope(elapsedMs, true);
         spin(std::chrono::milliseconds(2));
     }
-    if constexpr (Core::Profiling::Compiled) {
+    if constexpr (Core::Profiling::Compiled)
+    {
         CHECK(elapsedMs >= 2.0);
-    } else {
+    }
+    else
+    {
         CHECK(elapsedMs == -1.0);
     }
 }

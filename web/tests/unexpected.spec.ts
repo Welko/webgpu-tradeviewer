@@ -31,7 +31,7 @@ test.beforeAll(async ({ browser }) => {
   await page.close();
 });
 
-test('files that can\'t be read say why, and leave the trades on show', async ({ page }) => {
+test("files that can't be read say why, and leave the trades on show", async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/');
   await waitUntilReady(page);
@@ -73,8 +73,8 @@ test('files that can\'t be read say why, and leave the trades on show', async ({
     ['start-only.gz', gzipped.subarray(0, 4), 'The file is damaged or cut off'],
     ['cut.zip', zipped.subarray(0, zipped.length / 2), 'The zip file is damaged or cut off'],
     ['start-only.zip', Buffer.from('PK\x03\x04'), 'The zip file is damaged or cut off'],
-    ['empty.zip', Buffer.from([0x50, 0x4b, 0x05, 0x06, ...new Array(18).fill(0)]), 'The zip file holds no files'],
-    ['stored.zip', stored, 'The zip file uses compression method 99, which can\'t be read here'],
+    ['empty.zip', Buffer.from([0x50, 0x4b, 0x05, 0x06, ...new Array<number>(18).fill(0)]), 'The zip file holds no files'],
+    ['stored.zip', stored, "The zip file uses compression method 99, which can't be read here"],
     ['locked.zip', locked, 'The zip file is password-protected'],
   ];
   for (const [name, content, message] of cases) {
@@ -96,7 +96,7 @@ test('files that can\'t be read say why, and leave the trades on show', async ({
   expect(errors).toEqual([]);
 });
 
-test('what a file holds decides how it\'s read, not what it\'s called', async ({ page }) => {
+test("what a file holds decides how it's read, not what it's called", async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/');
   await waitUntilReady(page);
@@ -106,7 +106,7 @@ test('what a file holds decides how it\'s read, not what it\'s called', async ({
     ['gzip-named.csv', gzipSync(Trades)],
     ['zip-named.csv', zip('trades.csv', Trades)],
     ['no-extension', gzipSync(Trades)],
-    ['marked.csv', `﻿${Trades}`],
+    ['marked.csv', `\uFEFF${Trades}`],
   ];
   for (const [name, content] of cases) {
     await test.step(name, async () => {
@@ -156,7 +156,7 @@ test('odd but valid trades show without breaking the page', async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
-test('the Binance sample says so when it can\'t be fetched', async ({ page }) => {
+test("the Binance sample says so when it can't be fetched", async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/');
   await waitUntilReady(page);

@@ -11,7 +11,7 @@ namespace {
 constexpr std::int64_t HourUs = 3'600'000'000;
 constexpr std::int64_t StartUs = 1'575'158'400'000'000;  // 2019-12-01 00:00 UTC
 
-} // namespace
+}  // namespace
 
 TEST_CASE("Synthetic trades fill the range plausibly, in time order")
 {

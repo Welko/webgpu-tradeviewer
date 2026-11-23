@@ -2,7 +2,6 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { SceneResult } from '../src/scene';
 import { waitForAdapter } from './adapter';
 
 /**
@@ -12,8 +11,7 @@ import { waitForAdapter } from './adapter';
  * the other platforms'. TRADEVIEWER_RENDERINGS_DIR sets
  * <renderings>; by default it's renderings/ at the repository's root.
  */
-const renderingsDir =
-  process.env.TRADEVIEWER_RENDERINGS_DIR ?? fileURLToPath(new URL('../../renderings', import.meta.url));
+const renderingsDir = process.env.TRADEVIEWER_RENDERINGS_DIR ?? fileURLToPath(new URL('../../renderings', import.meta.url));
 
 /** Waits for the scene page to finish, failing with its error otherwise. */
 async function waitUntilDrawn(page: Page) {
@@ -45,7 +43,7 @@ test('every scene draws, and the canvas shows exactly what the engine drew', asy
     await test.step(name, async () => {
       await page.goto(`/scene.html?scene=${name}`);
       await waitUntilDrawn(page);
-      const result = (await page.evaluate(() => window.sceneResult)) as SceneResult;
+      const result = (await page.evaluate(() => window.sceneResult))!;
       gpu = result.gpu;
       writeFileSync(join(dir, `${name}.png`), Buffer.from(result.engine.split(',')[1], 'base64'));
       // As ViewerApp --snapshot writes it natively.

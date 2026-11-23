@@ -40,7 +40,11 @@ function Tooltip({
   const across = leftCssPx + OffsetCssPx + FlipWidthCssPx > canvasWidthCssPx ? `calc(-100% - ${OffsetCssPx}px)` : `${OffsetCssPx}px`;
   const down = topCssPx + OffsetCssPx + FlipHeightCssPx > canvasHeightCssPx ? `calc(-100% - ${OffsetCssPx}px)` : `${OffsetCssPx}px`;
   return (
-    <div className="plot-tooltip" data-testid={testId} style={{ left: leftCssPx, top: topCssPx, transform: `translate(${across}, ${down})` }}>
+    <div
+      className="plot-tooltip"
+      data-testid={testId}
+      style={{ left: leftCssPx, top: topCssPx, transform: `translate(${across}, ${down})` }}
+    >
       {children}
     </div>
   );

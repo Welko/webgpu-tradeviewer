@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <array>
 #include <cstdlib>
 #endif
 
@@ -18,17 +19,19 @@ std::optional<std::uint64_t> getProcessBytes()
 #elif defined(__linux__)
     // "<total pages> <resident pages> ...", read into the stack.
     const int file = open("/proc/self/statm", O_RDONLY);
-    if (file < 0) {
+    if (file < 0)
+    {
         return std::nullopt;
     }
-    char text[128] = {};
-    const ssize_t read = ::read(file, text, sizeof(text) - 1);
+    std::array<char, 128> text{};
+    const ssize_t read = ::read(file, text.data(), text.size() - 1);
     close(file);
-    if (read <= 0) {
+    if (read <= 0)
+    {
         return std::nullopt;
     }
     char* end = nullptr;
-    std::strtoull(text, &end, 10);
+    std::strtoull(text.data(), &end, 10);
     const std::uint64_t residentPages = std::strtoull(end, nullptr, 10);
     return residentPages * static_cast<std::uint64_t>(sysconf(_SC_PAGESIZE));
 #else
@@ -36,4 +39,4 @@ std::optional<std::uint64_t> getProcessBytes()
 #endif
 }
 
-} // namespace Core::Memory
+}  // namespace Core::Memory

@@ -28,7 +28,8 @@ std::unique_ptr<Viewer::App> createApp(const Viewer::Scene& scene)
     std::unique_ptr<Viewer::App> created;
     Viewer::App::create(params, [&](Viewer::App::Result result) {
         CHECK_MESSAGE(result, (result ? "" : result.error()));
-        if (result) {
+        if (result)
+        {
             created = std::move(*result);
         }
     });
@@ -44,12 +45,14 @@ std::optional<std::vector<std::uint8_t>> drawAndRead(Viewer::App& app)
     app.readPixels([&](std::expected<std::vector<std::uint8_t>, std::string> result) {
         done = true;
         CHECK_MESSAGE(result, (result ? "" : result.error()));
-        if (result) {
+        if (result)
+        {
             pixels = std::move(*result);
         }
     });
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (!done && std::chrono::steady_clock::now() < deadline) {
+    while (!done && std::chrono::steady_clock::now() < deadline)
+    {
         app.processEvents();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
@@ -61,7 +64,8 @@ std::optional<std::vector<std::uint8_t>> drawAndRead(Viewer::App& app)
 void checkNoGpuErrors(const Viewer::App& app)
 {
     const auto health = app.getGpuHealth();
-    for (const auto& error : health.errors) {
+    for (const auto& error : health.errors)
+    {
         FAIL_CHECK(error);
     }
     CHECK(health.errorCount == 0);
@@ -71,29 +75,34 @@ void checkNoGpuErrors(const Viewer::App& app)
 std::optional<Rendering> render(const Viewer::Scene& scene)
 {
     auto app = createApp(scene);
-    if (!app) {
+    if (!app)
+    {
         return std::nullopt;
     }
     auto patches = Viewer::Scene::show(scene, *app);
     auto pixels = drawAndRead(*app);
     checkNoGpuErrors(*app);
-    if (!pixels) {
+    if (!pixels)
+    {
         return std::nullopt;
     }
     return Rendering{ .pixels = std::move(*pixels), .patches = std::move(patches) };
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("Every scene's known pixels come out as expected, offscreen")
 {
-    for (const auto& scene : Viewer::Scene::getScenes()) {
+    for (const auto& scene : Viewer::Scene::getScenes())
+    {
         CAPTURE(scene.name);
         const auto rendering = render(scene);
-        if (!rendering) {
+        if (!rendering)
+        {
             continue;
         }
-        for (const auto& failure : Viewer::Scene::checkPatches(scene, rendering->patches, rendering->pixels)) {
+        for (const auto& failure : Viewer::Scene::checkPatches(scene, rendering->patches, rendering->pixels))
+        {
             FAIL_CHECK(failure);
         }
     }
@@ -103,7 +112,8 @@ TEST_CASE("Scenes are found by name")
 {
     CHECK(Viewer::Scene::find("opaque") != nullptr);
     CHECK(Viewer::Scene::find("nothing") == nullptr);
-    for (const auto& scene : Viewer::Scene::getScenes()) {
+    for (const auto& scene : Viewer::Scene::getScenes())
+    {
         CHECK(!scene.patches.empty());
     }
 }
@@ -113,7 +123,8 @@ TEST_CASE("The app's scenes know where their grid lines, ring and highlighted co
     const auto whats = [](const Viewer::Scene& scene) {
         std::vector<std::string> found;
         const auto rendering = render(scene);
-        for (const auto& patch : rendering ? rendering->patches : std::vector<Viewer::Scene::Patch>{}) {
+        for (const auto& patch : rendering ? rendering->patches : std::vector<Viewer::Scene::Patch>{})
+        {
             found.push_back(patch.what);
         }
         return found;
@@ -136,7 +147,8 @@ TEST_CASE("After the GPU is lost, the app restarts it and draws the same picture
 {
     const auto& scene = *Viewer::Scene::find("hour");
     auto app = createApp(scene);
-    if (!app) {
+    if (!app)
+    {
         return;
     }
     Viewer::Scene::show(scene, *app);
@@ -147,7 +159,8 @@ TEST_CASE("After the GPU is lost, the app restarts it and draws the same picture
     CHECK(app->loseGpu());
     // wgpu-native notices on the next call to the device, browsers on their own.
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (!woken && std::chrono::steady_clock::now() < deadline) {
+    while (!woken && std::chrono::steady_clock::now() < deadline)
+    {
         app->render();
         app->processEvents();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -164,7 +177,8 @@ TEST_CASE("After the GPU is lost, the app restarts it and draws the same picture
     checkNoGpuErrors(*app);
     CHECK(before);
     CHECK(after);
-    if (before && after) {
+    if (before && after)
+    {
         CHECK(*before == *after);
     }
 }

@@ -22,7 +22,7 @@ std::pair<std::unique_ptr<Client>, RecordingSink*> createEnabled()
     return { std::move(client), recording };
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("Without a sink, which means no consent, nothing is sent")
 {
@@ -34,13 +34,15 @@ TEST_CASE("Without a sink, which means no consent, nothing is sent")
 
 TEST_CASE("Every event carries the schema, the session, the platform and the build")
 {
-    if (!Core::Telemetry::Compiled) {
+    if (!Core::Telemetry::Compiled)
+    {
         return;
     }
     auto [client, sink] = createEnabled();
     client->send("data_loaded", { { .name = "rows", .value = std::int64_t{ 5 } } });
     CHECK(sink->events.size() == 1);
-    if (sink->events.empty()) {
+    if (sink->events.empty())
+    {
         return;
     }
     const auto& event = sink->events.front();
@@ -51,18 +53,21 @@ TEST_CASE("Every event carries the schema, the session, the platform and the bui
     CHECK(*event.find("rows") == Core::Telemetry::Value(std::int64_t{ 5 }));
     const auto* session = event.find("session");
     CHECK(session != nullptr);
-    if (session) {
+    if (session)
+    {
         CHECK(std::get<std::string>(*session).size() == 16);
     }
 }
 
 TEST_CASE("A session stops at its cap, counting what it held back")
 {
-    if (!Core::Telemetry::Compiled) {
+    if (!Core::Telemetry::Compiled)
+    {
         return;
     }
     auto [client, sink] = createEnabled();
-    for (std::size_t i = 0; i < Client::MaxEvents + 7; ++i) {
+    for (std::size_t i = 0; i < Client::MaxEvents + 7; ++i)
+    {
         client->send("view_summary", {});
     }
     CHECK(sink->events.size() == Client::MaxEvents);
@@ -71,7 +76,8 @@ TEST_CASE("A session stops at its cap, counting what it held back")
 
 TEST_CASE("Taking consent back stops sending at once, and giving it again starts a new session")
 {
-    if (!Core::Telemetry::Compiled) {
+    if (!Core::Telemetry::Compiled)
+    {
         return;
     }
     // The client owns its sink, and destroys it on revoking: this outlives it.

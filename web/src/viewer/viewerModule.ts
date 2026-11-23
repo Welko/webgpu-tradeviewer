@@ -221,7 +221,8 @@ export function loadModule(): Promise<MainModule> {
   watchForCrashes();
   modulePromise ??= createViewerModule({
     onAbort: (what: unknown) => {
-      stopModule(String(what ?? 'unknown reason').replace(/^Aborted\((.*)\)$/s, '$1') || 'unknown reason');
+      const message = typeof what === 'string' ? what.replace(/^Aborted\((.*)\)$/s, '$1') : '';
+      stopModule(message || 'unknown reason');
     },
   }).catch((error: unknown) => {
     // So that trying again downloads it again.
@@ -243,7 +244,11 @@ export function onModuleAbort(listener: (reason: string) => void): () => void {
  * The caller owns the result and must call `delete()` on it. `onError`, if
  * given, hears every error the viewer logs from then on.
  */
-export async function createViewer(selector: string, powerPreference: PowerPreference, onError?: (message: string) => void): Promise<Viewer> {
+export async function createViewer(
+  selector: string,
+  powerPreference: PowerPreference,
+  onError?: (message: string) => void,
+): Promise<Viewer> {
   if (!('gpu' in navigator)) {
     throw new Error('WebGPU is not available in this browser. Try a recent Chrome, Edge or Firefox.');
   }

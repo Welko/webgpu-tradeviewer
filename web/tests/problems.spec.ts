@@ -29,7 +29,9 @@ test('files that load but look odd warn, until other trades replace them', async
   await expect(page.getByRole('status')).toHaveCount(0);
 
   await open('seconds.csv', `${Header}1575201600,buy,7500,1\n`);
-  await expect(page.getByRole('status')).toHaveText("seconds.csv: These trades are dated around 1970. If that's wrong, their times may be in another unit");
+  await expect(page.getByRole('status')).toHaveText(
+    "seconds.csv: These trades are dated around 1970. If that's wrong, their times may be in another unit",
+  );
   await expect(page.getByTestId('trade-count')).toHaveText('1');
 
   // Refused: the trades on show stay, and so does what's odd about them.
@@ -101,7 +103,9 @@ test('a crash inside the wasm code starts the viewer over, and says so', async (
     // Uncaught, as in a frame callback.
     setTimeout(() => window.viewerTesting!.trap());
   });
-  await expect(page.getByRole('alert')).toHaveText(/^Something went wrong, and the viewer started over with the demo data/, { timeout: 30_000 });
+  await expect(page.getByRole('alert')).toHaveText(/^Something went wrong, and the viewer started over with the demo data/, {
+    timeout: 30_000,
+  });
   await expect(page.getByRole('alert')).toHaveCount(1);
   await expect(page.locator('[data-status]')).toHaveAttribute('data-status', 'ready');
   await expect.poll(() => page.evaluate(() => window.viewer?.tradeStats().count)).toBe(first);

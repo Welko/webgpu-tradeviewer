@@ -45,7 +45,8 @@ WGPUSurface createSurface(WGPUInstance instance, const Type::Target::Any& target
     return wgpuInstanceCreateSurface(instance, &descriptor);
 #elif defined(__linux__)
     WGPUSurfaceDescriptor descriptor{};
-    if (const auto* wayland = std::get_if<Type::Target::Wayland>(&target)) {
+    if (const auto* wayland = std::get_if<Type::Target::Wayland>(&target))
+    {
         WGPUSurfaceSourceWaylandSurface source{};
         source.chain.sType = WGPUSType_SurfaceSourceWaylandSurface;
         source.display = wayland->display;
@@ -53,7 +54,8 @@ WGPUSurface createSurface(WGPUInstance instance, const Type::Target::Any& target
         descriptor.nextInChain = &source.chain;
         return wgpuInstanceCreateSurface(instance, &descriptor);
     }
-    if (const auto* xlib = std::get_if<Type::Target::Xlib>(&target)) {
+    if (const auto* xlib = std::get_if<Type::Target::Xlib>(&target))
+    {
         WGPUSurfaceSourceXlibWindow source{};
         source.chain.sType = WGPUSType_SurfaceSourceXlibWindow;
         source.display = xlib->display;
@@ -67,7 +69,7 @@ WGPUSurface createSurface(WGPUInstance instance, const Type::Target::Any& target
 #endif
 }
 
-} // namespace
+}  // namespace
 
 RenderTarget::RenderTarget(const Context& context, Resource::Stats& resources) noexcept
     : mContext(&context),
@@ -78,7 +80,8 @@ RenderTarget::~RenderTarget()
 {
     // The handles release themselves afterwards; only the surface
     // configuration needs undoing first.
-    if (mSurface && mWidthPx > 0) {
+    if (mSurface && mWidthPx > 0)
+    {
         wgpuSurfaceUnconfigure(mSurface.get());
     }
 }
@@ -87,8 +90,10 @@ std::expected<RenderTarget::Prepared, std::string> RenderTarget::prepare(WGPUIns
 {
     Prepared prepared;
 #ifndef __EMSCRIPTEN__
-    if (const auto* size = std::get_if<Type::Target::Offscreen>(&target)) {
-        if (size->width == 0 || size->height == 0) {
+    if (const auto* size = std::get_if<Type::Target::Offscreen>(&target))
+    {
+        if (size->width == 0 || size->height == 0)
+        {
             return std::unexpected("An offscreen target needs a non-zero size");
         }
         prepared.mWidthPx = size->width;
@@ -97,7 +102,8 @@ std::expected<RenderTarget::Prepared, std::string> RenderTarget::prepare(WGPUIns
     }
 #endif
     prepared.mSurface = Handle(createSurface(instance, target));
-    if (!prepared.mSurface) {
+    if (!prepared.mSurface)
+    {
         return std::unexpected("Failed to create a WebGPU surface");
     }
     return prepared;
@@ -106,7 +112,8 @@ std::expected<RenderTarget::Prepared, std::string> RenderTarget::prepare(WGPUIns
 std::expected<RenderTarget, std::string> RenderTarget::create(Prepared&& prepared, const Context& context, Resource::Stats& resources)
 {
     RenderTarget target(context, resources);
-    if (!prepared.mSurface) {
+    if (!prepared.mSurface)
+    {
         // Offscreen: the size is known already, so the texture can exist now.
         target.mFormat = OffscreenFormat;
         target.mWidthPx = prepared.mWidthPx;
@@ -118,7 +125,8 @@ std::expected<RenderTarget, std::string> RenderTarget::create(Prepared&& prepare
     // An empty list means this adapter can't draw to the surface at all.
     WGPUSurfaceCapabilities capabilities{};
     if (wgpuSurfaceGetCapabilities(prepared.mSurface.get(), context.adapter.get(), &capabilities) != WGPUStatus_Success
-        || capabilities.formatCount == 0) {
+        || capabilities.formatCount == 0)
+    {
         return std::unexpected("The WebGPU surface reports no supported formats");
     }
     target.mSurface = std::move(prepared.mSurface);
@@ -136,11 +144,12 @@ std::expected<RenderTarget, std::string> RenderTarget::create(Prepared&& prepare
 
 void RenderTarget::configure()
 {
-    if (!mSurface) {
+    if (!mSurface)
+    {
         WGPUTextureDescriptor descriptor{};
         descriptor.usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc;
         descriptor.dimension = WGPUTextureDimension_2D;
-        descriptor.size = { mWidthPx, mHeightPx, 1 };
+        descriptor.size = { .width = mWidthPx, .height = mHeightPx, .depthOrArrayLayers = 1 };
         descriptor.format = mFormat;
         descriptor.mipLevelCount = 1;
         descriptor.sampleCount = 1;
@@ -162,7 +171,8 @@ void RenderTarget::configure()
 
 void RenderTarget::setSize(std::uint32_t widthPx, std::uint32_t heightPx)
 {
-    if (widthPx == 0 || heightPx == 0 || (widthPx == mWidthPx && heightPx == mHeightPx)) {
+    if (widthPx == 0 || heightPx == 0 || (widthPx == mWidthPx && heightPx == mHeightPx))
+    {
         return;
     }
     mWidthPx = widthPx;
@@ -176,7 +186,8 @@ std::optional<RenderTarget::Frame> RenderTarget::beginFrame(Type::FrameStats::Cp
         const Core::Profiling::Scope scope(times.acquireMs, timed);
         return acquire();
     }();
-    if (frame) {
+    if (frame)
+    {
         frame->encoder = Handle(wgpuDeviceCreateCommandEncoder(mContext->device.get(), nullptr));
     }
     return frame;
@@ -184,10 +195,12 @@ std::optional<RenderTarget::Frame> RenderTarget::beginFrame(Type::FrameStats::Cp
 
 std::optional<RenderTarget::Frame> RenderTarget::acquire()
 {
-    if (mWidthPx == 0 || mHeightPx == 0) {
+    if (mWidthPx == 0 || mHeightPx == 0)
+    {
         return std::nullopt;
     }
-    if (!mSurface) {
+    if (!mSurface)
+    {
         return Frame{ .texture = {}, .view = Handle(wgpuTextureCreateView(mOffscreen.get(), nullptr)), .encoder = {} };
     }
 
@@ -196,7 +209,8 @@ std::optional<RenderTarget::Frame> RenderTarget::acquire()
     // The surface owns the texture's memory, so it isn't tracked.
     Handle<WGPUTexture> texture(surfaceTexture.texture);
 
-    switch (surfaceTexture.status) {
+    switch (surfaceTexture.status)
+    {
     case WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal:
     case WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal:
         break;
@@ -215,18 +229,22 @@ std::optional<RenderTarget::Frame> RenderTarget::acquire()
 
 bool RenderTarget::readPixels(Readback::Callback onDone)
 {
-    if (mOffscreen) {
+    if (mOffscreen)
+    {
         Readback::texture(*mContext, mOffscreen.get(), mFormat, mWidthPx, mHeightPx, std::move(onDone));
         return false;
     }
-    if (!mReadable) {
+    if (!mReadable)
+    {
         onDone(std::unexpected("This surface's frames can't be copied back"));
         return false;
     }
-    if (!mCopied) {
+    if (!mCopied)
+    {
         mCopied = true;
         // Unconfigured until the first size is set, which then configures it so.
-        if (mWidthPx > 0) {
+        if (mWidthPx > 0)
+        {
             configure();
         }
     }
@@ -240,16 +258,18 @@ void RenderTarget::endFrame(const Frame& frame, Type::FrameStats::Cpu& times, bo
     const Handle commands(wgpuCommandEncoderFinish(frame.encoder.get(), nullptr));
     mContext->submit(commands.get());
     // Before presenting: afterwards the texture's contents are gone.
-    for (auto& onDone : std::exchange(mPendingReads, {})) {
+    for (auto& onDone : std::exchange(mPendingReads, {}))
+    {
         Readback::texture(*mContext, frame.texture.get(), mFormat, mWidthPx, mHeightPx, std::move(onDone));
     }
 #ifndef __EMSCRIPTEN__
     // The browser presents the canvas on its own, and offscreen there is
     // nothing to present.
-    if (mSurface) {
+    if (mSurface)
+    {
         wgpuSurfacePresent(mSurface.get());
     }
 #endif
 }
 
-} // namespace Gpu
+}  // namespace Gpu

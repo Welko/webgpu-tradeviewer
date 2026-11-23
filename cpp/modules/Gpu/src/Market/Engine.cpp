@@ -5,9 +5,9 @@
 #include "Gpu/Market/ColumnsPass.hpp"
 #include "Gpu/Market/TradesPass.hpp"
 #include "Gpu/Plot/Area.hpp"
-#include "Gpu/RenderTarget.hpp"
 #include "Gpu/Plot/GridPass.hpp"
 #include "Gpu/Profiler.hpp"
+#include "Gpu/RenderTarget.hpp"
 #include "Gpu/Resource.hpp"
 
 #include "Core/Profiling.hpp"
@@ -36,26 +36,22 @@ std::unexpected<std::string> tooManyTrades(std::size_t count, std::size_t max)
     return std::unexpected(std::format("{} trades are too many: at most {} fit on the GPU", count, max));
 }
 
-} // namespace
+}  // namespace
 
 /** Everything behind Engine. */
 struct Engine::Impl
 {
-    ~Impl();
-
-    /** Applies the parts of `next` that differ from `settings`, or all of it. */
-    void setSettings(const Settings& next, bool everything);
-
-    void render();
-
-    /** Frame timing: the profiler, and the frames waiting for its results. */
-    struct Profiling
+    /** The GPU and the count of what's on it, at one address: everything that draws refers to them. */
+    struct Device
     {
-        Profiler::StatsQueue statsQueue{ MaxWaitingFrames };
-        std::shared_ptr<Profiler> profiler;  // set once the device exists
-        std::variant<ProfilingOff, ProfilingOn> settings = ProfilingOff{};
-        std::minstd_rand random;  // picks them
-        std::uint64_t lastFrame = 0;  // frames drawn so far
+        Device() = default;
+        Device(const Device&) = delete;
+        Device& operator=(const Device&) = delete;
+        ~Device();
+
+        // Declared first so it is destroyed last, after every tracked handle.
+        Resource::Stats resources;
+        Context context;
     };
 
     /** In the order they draw. */
@@ -66,14 +62,29 @@ struct Engine::Impl
         ColumnsPass columns;  // instead of trades, while showColumns
     };
 
-    // Declared first so it is destroyed last, after every tracked handle.
-    Resource::Stats resources;
+    /** Draws to `target` on `gpu`, with at most `maxTrades`, or as many as fit. */
+    Impl(std::unique_ptr<Device> gpu, RenderTarget target, std::optional<std::size_t> maxTrades);
 
-    // Destroyed in reverse order: the passes, the render target, the profiler, then the context they use.
-    Context context;
+    /** Applies the parts of `next` that differ from `settings`, or all of it. */
+    void setSettings(const Settings& next, bool everything);
+
+    void render();
+
+    /** Frame timing: the profiler, and the frames waiting for its results. */
+    struct Profiling
+    {
+        Profiler::StatsQueue statsQueue{ MaxWaitingFrames };
+        std::shared_ptr<Profiler> profiler;
+        std::variant<ProfilingOff, ProfilingOn> settings = ProfilingOff{};
+        std::minstd_rand random;  // picks them
+        std::uint64_t lastFrame = 0;  // frames drawn so far
+    };
+
+    // Destroyed in reverse order: the passes, the render target, the profiler, then the device they use.
+    std::unique_ptr<Device> device;
     Profiling profiling;
-    std::optional<RenderTarget> renderTarget;  // set once the device exists
-    std::optional<Passes> passes;  // set with the render target, whose format they draw in
+    RenderTarget renderTarget;
+    Passes passes;  // in the render target's format
 
     Settings settings;  // as last set
     std::optional<std::size_t> maxTrades;  // Params::maxTrades
@@ -86,15 +97,15 @@ struct Engine::Impl
 
 void Engine::create(const Params& params, CreatedCallback onDone)
 {
-    auto impl = std::make_unique<Impl>();
-    impl->maxTrades = params.maxTrades;
     Handle instance(wgpuCreateInstance(nullptr));
-    if (!instance) {
+    if (!instance)
+    {
         onDone(std::unexpected("Failed to create a WebGPU instance"));
         return;
     }
     auto prepared = RenderTarget::prepare(instance.get(), params.target);
-    if (!prepared) {
+    if (!prepared)
+    {
         onDone(std::unexpected(std::move(prepared.error())));
         return;
     }
@@ -102,46 +113,55 @@ void Engine::create(const Params& params, CreatedCallback onDone)
     // Shared, because the callback must be copyable; freed even if it never runs.
     struct Pending
     {
-        std::unique_ptr<Impl> impl;
         RenderTarget::Prepared prepared;
+        std::optional<std::size_t> maxTrades;
         CreatedCallback onDone;
     };
     const WGPUSurface compatible = prepared->getSurface();  // null offscreen: any adapter
-    auto pending = std::make_shared<Pending>(std::move(impl), std::move(*prepared), std::move(onDone));
+    auto pending = std::make_shared<Pending>(std::move(*prepared), params.maxTrades, std::move(onDone));
 
     Context::create(std::move(instance), compatible, params.powerPreference, [pending](Context::Result context) {
-        auto impl = std::move(pending->impl);
         auto onDone = std::move(pending->onDone);
-        if (!context) {
+        if (!context)
+        {
             onDone(std::unexpected(std::move(context.error())));
             return;
         }
-        impl->context = std::move(*context);
-        auto renderTarget = RenderTarget::create(std::move(pending->prepared), impl->context, impl->resources);
-        if (!renderTarget) {
-            onDone(std::unexpected(std::move(renderTarget.error())));
+        auto device = std::make_unique<Impl::Device>();
+        device->context = std::move(*context);
+        auto target = RenderTarget::create(std::move(pending->prepared), device->context, device->resources);
+        if (!target)
+        {
+            onDone(std::unexpected(std::move(target.error())));
             return;
         }
-        impl->renderTarget.emplace(std::move(*renderTarget));
-        const WGPUTextureFormat format = impl->renderTarget->getFormat();
-        impl->passes.emplace(Impl::Passes{
-            .grid = Plot::GridPass(impl->context, impl->resources, format),
-            .trades = TradesPass(impl->context, impl->resources, format),
-            .columns = ColumnsPass(impl->context, impl->resources, format),
-        });
-        impl->setSettings(impl->settings, true);
-        impl->profiling.profiler = Profiler::create(impl->context,
-            [&statsQueue = impl->profiling.statsQueue](std::uint64_t frame, Profiler::Times times) {
-                statsQueue.setTimes(frame, std::move(times));
-            });
+        auto impl = std::make_unique<Impl>(std::move(device), std::move(*target), pending->maxTrades);
         onDone(std::unique_ptr<Engine>(new Engine(std::move(impl))));
     });
 }
 
-Engine::Impl::~Impl()
+Engine::Impl::Impl(std::unique_ptr<Device> gpu, RenderTarget target, std::optional<std::size_t> maxTrades)
+    : device(std::move(gpu)),
+      renderTarget(std::move(target)),
+      passes{
+          .grid = Plot::GridPass(device->context, device->resources, renderTarget.getFormat()),
+          .trades = TradesPass(device->context, device->resources, renderTarget.getFormat()),
+          .columns = ColumnsPass(device->context, device->resources, renderTarget.getFormat()),
+      },
+      maxTrades(maxTrades)
+{
+    profiling.profiler =
+        Profiler::create(device->context, [&statsQueue = profiling.statsQueue](std::uint64_t frame, Profiler::Times times) {
+            statsQueue.setTimes(frame, std::move(times));
+        });
+    setSettings(settings, true);
+}
+
+Engine::Impl::Device::~Device()
 {
     // Releasing the device loses it too, which isn't news.
-    if (context.health) {
+    if (context.health)
+    {
         context.health->released = true;
         context.health->onLost = nullptr;
     }
@@ -152,34 +172,42 @@ Engine::Impl::~Impl()
 void Engine::Impl::setSettings(const Settings& next, bool everything)
 {
     const auto changed = [&](auto member) { return everything || settings.*member != next.*member; };
-    renderTarget->setSize(next.widthPx, next.heightPx);
-    if (changed(&Settings::pixelRatio)) {
-        passes->trades.setPixelRatio(next.pixelRatio);
-        passes->columns.setPixelRatio(next.pixelRatio);
+    renderTarget.setSize(next.widthPx, next.heightPx);
+    if (changed(&Settings::pixelRatio))
+    {
+        passes.trades.setPixelRatio(next.pixelRatio);
+        passes.columns.setPixelRatio(next.pixelRatio);
     }
-    if (changed(&Settings::grid)) {
-        passes->grid.setGrid(next.grid);
+    if (changed(&Settings::grid))
+    {
+        passes.grid.setGrid(next.grid);
     }
-    if (changed(&Settings::view)) {
-        passes->trades.setView(next.view);
-        passes->columns.setView(next.view);
+    if (changed(&Settings::view))
+    {
+        passes.trades.setView(next.view);
+        passes.columns.setView(next.view);
     }
-    if (changed(&Settings::markerSizing)) {
-        passes->trades.setMarkerSizing(next.markerSizing);
+    if (changed(&Settings::markerSizing))
+    {
+        passes.trades.setMarkerSizing(next.markerSizing);
     }
-    if (changed(&Settings::theme)) {
-        passes->grid.setTheme(next.theme.plot);
-        passes->trades.setTheme(next.theme);
-        passes->columns.setTheme(next.theme);
+    if (changed(&Settings::theme))
+    {
+        passes.grid.setTheme(next.theme.plot);
+        passes.trades.setTheme(next.theme);
+        passes.columns.setTheme(next.theme);
     }
-    if (changed(&Settings::highlightedColumn)) {
-        passes->columns.setHighlight(next.highlightedColumn);
+    if (changed(&Settings::highlightedColumn))
+    {
+        passes.columns.setHighlight(next.highlightedColumn);
     }
-    if (changed(&Settings::highlightedTrade)) {
-        passes->trades.setHighlight(next.highlightedTrade);
+    if (changed(&Settings::highlightedTrade))
+    {
+        passes.trades.setHighlight(next.highlightedTrade);
     }
     // The insets are read as each frame is drawn.
-    if (everything || settings != next) {
+    if (everything || settings != next)
+    {
         settings = next;
         dirty = true;
     }
@@ -188,23 +216,29 @@ void Engine::Impl::setSettings(const Settings& next, bool everything)
 void Engine::Impl::render()
 {
     const auto* on = std::get_if<ProfilingOn>(&profiling.settings);
-    const bool timed = Core::Profiling::Compiled && on;
+    const bool timed = Core::Profiling::Compiled && on != nullptr;
     const bool timedOnGpu = timed && std::uniform_real_distribution(0.0, 1.0)(profiling.random) < on->gpuTimingProbability;
     Gpu::Type::FrameStats::Cpu cpu{};
-    const bool drawn = renderTarget->draw([&](WGPUCommandEncoder encoder, WGPUTextureView view) {
-        using Untimed = Gpu::Type::FrameStats::UntimedReason;
-        profiling.profiler->beginFrame(timedOnGpu ? std::nullopt : std::optional(timed ? Untimed::NotSampled : Untimed::ProfilingOff));
-        const Core::Profiling::Scope scope(cpu.encodeMs, timed);
-        const auto plot = Plot::Area::within(renderTarget->getWidthPx(), renderTarget->getHeightPx(), settings.insets);
-        passes->grid.encode(encoder, view, plot, *profiling.profiler);
-        if (showColumns) {
-            passes->columns.encode(encoder, view, plot, *profiling.profiler);
-        } else {
-            passes->trades.encode(encoder, view, plot, *profiling.profiler);
-        }
-        profiling.profiler->endPasses(encoder);
-    }, cpu, timed);
-    if (!drawn) {
+    const bool drawn = renderTarget.draw(
+        [&](WGPUCommandEncoder encoder, WGPUTextureView view) {
+            using Untimed = Gpu::Type::FrameStats::UntimedReason;
+            profiling.profiler->beginFrame(timedOnGpu ? std::nullopt : std::optional(timed ? Untimed::NotSampled : Untimed::ProfilingOff));
+            const Core::Profiling::Scope scope(cpu.encodeMs, timed);
+            const auto plot = Plot::Area::within(renderTarget.getWidthPx(), renderTarget.getHeightPx(), settings.insets);
+            passes.grid.encode(encoder, view, plot, *profiling.profiler);
+            if (showColumns)
+            {
+                passes.columns.encode(encoder, view, plot, *profiling.profiler);
+            }
+            else
+            {
+                passes.trades.encode(encoder, view, plot, *profiling.profiler);
+            }
+            profiling.profiler->endPasses(encoder);
+        },
+        cpu, timed);
+    if (!drawn)
+    {
         // Skipped frames stay needed.
         return;
     }
@@ -214,9 +248,9 @@ void Engine::Impl::render()
         .frame = ++profiling.lastFrame,
         .cpu = timed ? std::optional(cpu) : std::nullopt,
         .gpu = std::unexpected(Gpu::Type::FrameStats::UntimedReason::Undefined),
-        .buffers = resources.getCount(Resource::Kind::Buffer),
-        .textures = resources.getCount(Resource::Kind::Texture),
-        .gpuBytes = resources.getTotalBytes(),
+        .buffers = device->resources.getCount(Resource::Kind::Buffer),
+        .textures = device->resources.getCount(Resource::Kind::Texture),
+        .gpuBytes = device->resources.getTotalBytes(),
     });
     profiling.profiler->endFrame(profiling.lastFrame);
 }
@@ -231,7 +265,7 @@ Engine::~Engine() = default;
 
 const Gpu::Type::Info& Engine::getInfo() const
 {
-    return mImpl->context.info;
+    return mImpl->device->context.info;
 }
 
 void Engine::setSettings(const Settings& settings)
@@ -242,27 +276,30 @@ void Engine::setSettings(const Settings& settings)
 void Engine::setColumns(const std::optional<Type::Columns>& columns)
 {
     mImpl->showColumns = columns.has_value();
-    if (columns) {
-        mImpl->passes->columns.setColumns(*columns);
+    if (columns)
+    {
+        mImpl->passes.columns.setColumns(*columns);
     }
     mImpl->dirty = true;
 }
 
 std::size_t Engine::getMaxTrades() const
 {
-    return std::min(mImpl->passes->trades.getMaxCount(), mImpl->maxTrades.value_or(std::numeric_limits<std::size_t>::max()));
+    return std::min(mImpl->passes.trades.getMaxCount(), mImpl->maxTrades.value_or(std::numeric_limits<std::size_t>::max()));
 }
 
 std::expected<void, std::string> Engine::setTrades(const Core::Data::Trades& trades)
 {
-    if (trades.size() > getMaxTrades()) {
+    if (trades.size() > getMaxTrades())
+    {
         return tooManyTrades(trades.size(), getMaxTrades());
     }
-    auto& pass = mImpl->passes->trades;
+    auto& pass = mImpl->passes.trades;
     pass.clear();
     mImpl->dirty = true;
     // Can't fail below getMaxTrades(), but the buffer has the last word.
-    if (auto stored = pass.reserve(trades.size()).and_then([&] { return pass.append(trades); }); !stored) {
+    if (auto stored = pass.reserve(trades.size()).and_then([&] { return pass.append(trades); }); !stored)
+    {
         pass.clear();
         return std::unexpected(std::format("Failed to upload {} trades: {}", trades.size(), stored.error()));
     }
@@ -271,11 +308,13 @@ std::expected<void, std::string> Engine::setTrades(const Core::Data::Trades& tra
 
 std::expected<void, std::string> Engine::appendTrades(const Core::Data::Trades& trades)
 {
-    const std::size_t total = mImpl->passes->trades.getCount() + trades.size();
-    if (total > getMaxTrades()) {
+    const std::size_t total = mImpl->passes.trades.getCount() + trades.size();
+    if (total > getMaxTrades())
+    {
         return tooManyTrades(total, getMaxTrades());
     }
-    if (auto appended = mImpl->passes->trades.append(trades); !appended) {
+    if (auto appended = mImpl->passes.trades.append(trades); !appended)
+    {
         return std::unexpected(std::format("Failed to upload {} trades: {}", trades.size(), appended.error()));
     }
     mImpl->dirty = true;
@@ -285,7 +324,7 @@ std::expected<void, std::string> Engine::appendTrades(const Core::Data::Trades& 
 void Engine::reserveTrades(std::size_t count)
 {
     // Can't fail: no more than the buffer takes.
-    [[maybe_unused]] const auto reserved = mImpl->passes->trades.reserve(std::min(count, getMaxTrades()));
+    [[maybe_unused]] const auto reserved = mImpl->passes.trades.reserve(std::min(count, getMaxTrades()));
 }
 
 void Engine::update(double nowMs)
@@ -316,13 +355,14 @@ void Engine::setStatsCallback(const StatsCallback& onStats)
 #ifndef __EMSCRIPTEN__
 void Engine::processEvents()
 {
-    wgpuInstanceProcessEvents(mImpl->context.instance.get());
+    wgpuInstanceProcessEvents(mImpl->device->context.instance.get());
 }
 #endif
 
 void Engine::readPixels(PixelsCallback onDone)
 {
-    if (mImpl->renderTarget->readPixels(std::move(onDone))) {
+    if (mImpl->renderTarget.readPixels(std::move(onDone)))
+    {
         mImpl->dirty = true;
     }
 }
@@ -331,22 +371,22 @@ void Engine::readPixels(PixelsCallback onDone)
 
 const Gpu::Type::Health& Engine::getHealth() const
 {
-    return *mImpl->context.health;
+    return *mImpl->device->context.health;
 }
 
 void Engine::setLostCallback(std::function<void()> onLost)
 {
-    mImpl->context.health->onLost = std::move(onLost);
+    mImpl->device->context.health->onLost = std::move(onLost);
 }
 
 void Engine::loseDevice()
 {
-    wgpuDeviceDestroy(mImpl->context.device.get());
+    wgpuDeviceDestroy(mImpl->device->context.device.get());
 }
 
 std::uint64_t Engine::getGpuBytes() const
 {
-    return mImpl->resources.getTotalBytes();
+    return mImpl->device->resources.getTotalBytes();
 }
 
-} // namespace Gpu::Market
+}  // namespace Gpu::Market

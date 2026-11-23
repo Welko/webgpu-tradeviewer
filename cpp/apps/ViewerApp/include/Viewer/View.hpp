@@ -30,4 +30,4 @@ private:
     Core::Data::TradeStats mStats{};
 };
 
-} // namespace Viewer
+}  // namespace Viewer

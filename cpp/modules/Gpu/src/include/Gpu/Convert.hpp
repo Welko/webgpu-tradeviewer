@@ -15,19 +15,23 @@ namespace FromWgpu {
 /** Handles null data, WGPU_STRLEN (null-terminated) and explicit lengths. */
 inline std::string_view stringView(WGPUStringView view) noexcept
 {
-    if (view.length == 0) {
+    if (view.length == 0)
+    {
         return std::string_view{};
     }
 
-    if (view.length == WGPU_STRLEN) {
-        if (view.data == nullptr) {
+    if (view.length == WGPU_STRLEN)
+    {
+        if (view.data == nullptr)
+        {
             return std::string_view{};
         }
         return view.data;
     }
 
     // Invalid per spec.
-    if (view.data == nullptr) {
+    if (view.data == nullptr)
+    {
         return std::string_view{};
     }
 
@@ -38,16 +42,26 @@ inline std::string_view backend(WGPUBackendType type)
 {
     switch (type)
     {
-    case WGPUBackendType_Undefined: return "Undefined";
-    case WGPUBackendType_Null: return "Null";
-    case WGPUBackendType_WebGPU: return "WebGPU";
-    case WGPUBackendType_Vulkan: return "Vulkan";
-    case WGPUBackendType_D3D11: return "D3D11";
-    case WGPUBackendType_D3D12: return "D3D12";
-    case WGPUBackendType_OpenGL: return "OpenGL";
-    case WGPUBackendType_OpenGLES: return "OpenGLES";
-    case WGPUBackendType_Metal: return "Metal";
-    case WGPUBackendType_Force32: return "Force32";
+    case WGPUBackendType_Undefined:
+        return "Undefined";
+    case WGPUBackendType_Null:
+        return "Null";
+    case WGPUBackendType_WebGPU:
+        return "WebGPU";
+    case WGPUBackendType_Vulkan:
+        return "Vulkan";
+    case WGPUBackendType_D3D11:
+        return "D3D11";
+    case WGPUBackendType_D3D12:
+        return "D3D12";
+    case WGPUBackendType_OpenGL:
+        return "OpenGL";
+    case WGPUBackendType_OpenGLES:
+        return "OpenGLES";
+    case WGPUBackendType_Metal:
+        return "Metal";
+    case WGPUBackendType_Force32:
+        return "Force32";
     }
     Core::Log::error("Unknown WGPUBackendType {}", static_cast<std::underlying_type_t<WGPUBackendType>>(type));
     return "Unknown";
@@ -57,17 +71,22 @@ inline std::string_view adapter(WGPUAdapterType type)
 {
     switch (type)
     {
-    case WGPUAdapterType_Unknown: return "Unknown";
-    case WGPUAdapterType_DiscreteGPU: return "DiscreteGPU";
-    case WGPUAdapterType_IntegratedGPU: return "IntegratedGPU";
-    case WGPUAdapterType_CPU: return "CPU";
-    case WGPUAdapterType_Force32: return "Force32";
+    case WGPUAdapterType_Unknown:
+        return "Unknown";
+    case WGPUAdapterType_DiscreteGPU:
+        return "DiscreteGPU";
+    case WGPUAdapterType_IntegratedGPU:
+        return "IntegratedGPU";
+    case WGPUAdapterType_CPU:
+        return "CPU";
+    case WGPUAdapterType_Force32:
+        return "Force32";
     }
     Core::Log::error("Unknown WGPUAdapterType {}", static_cast<std::underlying_type_t<WGPUAdapterType>>(type));
     return "Unknown";
 }
 
-} // namespace FromWgpu
+}  // namespace FromWgpu
 
 namespace ToWgpu {
 
@@ -81,13 +100,16 @@ inline WGPUPowerPreference powerPreference(Type::PowerPreference preference) noe
 {
     switch (preference)
     {
-    case Type::PowerPreference::LowPower: return WGPUPowerPreference_LowPower;
-    case Type::PowerPreference::HighPerformance: return WGPUPowerPreference_HighPerformance;
-    case Type::PowerPreference::Default: break;
+    case Type::PowerPreference::LowPower:
+        return WGPUPowerPreference_LowPower;
+    case Type::PowerPreference::HighPerformance:
+        return WGPUPowerPreference_HighPerformance;
+    case Type::PowerPreference::Default:
+        break;
     }
     return WGPUPowerPreference_Undefined;
 }
 
-} // namespace ToWgpu
+}  // namespace ToWgpu
 
-} // namespace Gpu::Convert
+}  // namespace Gpu::Convert

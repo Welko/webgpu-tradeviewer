@@ -14,11 +14,11 @@ namespace {
 constexpr std::size_t MaxRestartsPerWindow = 3;
 constexpr double RestartWindowMs = 60'000.0;
 
-} // namespace
+}  // namespace
 
 GpuSession::GpuSession(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market::Engine::Params params, SetUpCallback onSetUp) noexcept
     : mEngine(std::move(engine)),
-      mParams(std::move(params)),
+      mParams(params),
       mOnSetUp(std::move(onSetUp)),
       mInfo(mEngine->getInfo())
 {
@@ -27,15 +27,17 @@ GpuSession::GpuSession(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market:
 
 void GpuSession::restartIfLost(double nowMs)
 {
-    if (!mEngine || !mEngine->getHealth().lost) {
+    if (!mEngine || !mEngine->getHealth().lost)
+    {
         return;
     }
     // The old engine goes first: a window or canvas takes one surface at a time.
     mEngine.reset();
     std::erase_if(mRestartTimesMs, [&](double timeMs) { return nowMs - timeMs >= RestartWindowMs; });
-    if (mRestartTimesMs.size() >= MaxRestartsPerWindow) {
-        const std::string reason = std::format("The GPU was lost {} times in a minute, so the viewer stopped restarting it",
-                                               mRestartTimesMs.size() + 1);
+    if (mRestartTimesMs.size() >= MaxRestartsPerWindow)
+    {
+        const std::string reason =
+            std::format("The GPU was lost {} times in a minute, so the viewer stopped restarting it", mRestartTimesMs.size() + 1);
         Core::Log::error("{}", reason);
         mGpu = Failed{ .reason = reason };
         return;
@@ -45,13 +47,17 @@ void GpuSession::restartIfLost(double nowMs)
     mGpu = Restarting{};
     // Natively, this calls back before returning; on the web, later.
     Gpu::Market::Engine::create(mParams, [this, alive = std::weak_ptr(mAlive)](Gpu::Market::Engine::CreatedResult result) {
-        if (alive.expired()) {
+        if (alive.expired())
+        {
             return;  // the session is gone
         }
-        if (!result) {
+        if (!result)
+        {
             Core::Log::error("The GPU couldn't restart: {}", result.error());
             mGpu = Failed{ .reason = std::move(result.error()) };
-        } else {
+        }
+        else
+        {
             mEngine = std::move(*result);
             mGpu = Working{};
             mInfo = mEngine->getInfo();
@@ -59,7 +65,8 @@ void GpuSession::restartIfLost(double nowMs)
             setUp();
             Core::Log::info("The GPU is back: {} · {} · {}", mInfo.device, mInfo.backend, mInfo.adapter);
         }
-        if (mOnWake) {
+        if (mOnWake)
+        {
             mOnWake();
         }
     });
@@ -70,15 +77,18 @@ void GpuSession::setUp()
     // The engine doesn't outlive the session, so neither does its callback.
     mEngine->setLostCallback([this] {
         // restartIfLost() restarts it, outside the engine's own calls.
-        if (mOnWake) {
+        if (mOnWake)
+        {
             mOnWake();
         }
     });
     mEngine->setProfiling(mProfiling);
-    if (mOnStats) {
+    if (mOnStats)
+    {
         mEngine->setStatsCallback(mOnStats);
     }
-    if (auto set = mOnSetUp(*mEngine); !set) {
+    if (auto set = mOnSetUp(*mEngine); !set)
+    {
         Core::Log::error("{}", set.error());
         mGpu = Failed{ .reason = std::move(set.error()) };
     }
@@ -94,7 +104,8 @@ GpuSession::Health GpuSession::getHealth() const
         .errors = {},
         .errorCount = 0,
     };
-    if (mEngine) {
+    if (mEngine)
+    {
         const auto& device = mEngine->getHealth();
         health.errors = device.errors;
         health.errorCount = device.errorCount;
@@ -110,7 +121,8 @@ void GpuSession::setWakeCallback(std::function<void()> onWake)
 void GpuSession::setProfiling(std::variant<Gpu::Market::Engine::ProfilingOff, Gpu::Market::Engine::ProfilingOn> profiling)
 {
     mProfiling = profiling;
-    if (mEngine) {
+    if (mEngine)
+    {
         mEngine->setProfiling(profiling);
     }
 }
@@ -118,9 +130,10 @@ void GpuSession::setProfiling(std::variant<Gpu::Market::Engine::ProfilingOff, Gp
 void GpuSession::setStatsCallback(Gpu::Market::Engine::StatsCallback onStats)
 {
     mOnStats = std::move(onStats);
-    if (mEngine) {
+    if (mEngine)
+    {
         mEngine->setStatsCallback(mOnStats);
     }
 }
 
-} // namespace Viewer
+}  // namespace Viewer

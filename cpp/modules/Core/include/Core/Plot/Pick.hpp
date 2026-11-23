@@ -56,12 +56,12 @@ struct PickRule
  * Ties go to the later trade, which is drawn on top. Nothing outside the plot.
  */
 template<typename MarkerRadius>
-[[nodiscard]] std::optional<std::size_t> pickTrade(const Data::Trades& trades, IndexRange visible, const Mapping& plot,
-                                                   double pointerX, double pointerY, const PickRule& rule,
-                                                   MarkerRadius markerRadius)
+[[nodiscard]] std::optional<std::size_t> pickTrade(const Data::Trades& trades, IndexRange visible, const Mapping& plot, double pointerX,
+                                                   double pointerY, const PickRule& rule, MarkerRadius markerRadius)
 {
-    if (!(plot.width > 0.0 && plot.height > 0.0 && plot.time.getLengthUs() > 0 && plot.price.high > plot.price.low)
-        || pointerX < 0.0 || pointerY < 0.0 || pointerX > plot.width || pointerY > plot.height) {
+    if (!(plot.width > 0.0 && plot.height > 0.0 && plot.time.getLengthUs() > 0 && plot.price.high > plot.price.low) || pointerX < 0.0
+        || pointerY < 0.0 || pointerX > plot.width || pointerY > plot.height)
+    {
         return std::nullopt;
     }
 
@@ -79,17 +79,21 @@ template<typename MarkerRadius>
     std::optional<std::size_t> nearest;
     double nearestSquared = rule.pickRadius * rule.pickRadius;
     std::optional<std::size_t> under;
-    for (std::size_t i = first; i < last; ++i) {
+    for (std::size_t i = first; i < last; ++i)
+    {
         const double dx = plot.getX(trades.timeUs[i]) - pointerX;
         const double dy = plot.getY(trades.price[i]) - pointerY;
         const double squared = dx * dx + dy * dy;
-        if (squared <= nearestSquared) {
+        if (squared <= nearestSquared)
+        {
             nearest = i;
             nearestSquared = squared;
         }
-        if (!nearest) {
+        if (!nearest)
+        {
             const double radius = markerRadius(trades.amount[i]);
-            if (squared <= radius * radius) {
+            if (squared <= radius * radius)
+            {
                 under = i;
             }
         }
@@ -110,8 +114,7 @@ struct ColumnBar
  * line through its center from its highest to its lowest price, at least
  * `minHeight` pixels long.
  */
-[[nodiscard]] inline ColumnBar getColumnBar(const Data::ColumnSummary& column, std::size_t across, const Mapping& plot,
-                                            double minHeight)
+[[nodiscard]] inline ColumnBar getColumnBar(const Data::ColumnSummary& column, std::size_t across, const Mapping& plot, double minHeight)
 {
     double top = plot.getY(column.price.high);
     double bottom = plot.getY(column.price.low);
@@ -130,21 +133,24 @@ struct ColumnBar
  * the plot.
  */
 [[nodiscard]] inline std::optional<std::size_t> pickColumn(std::span<const Data::ColumnSummary> columns, std::size_t across,
-                                                           const Mapping& plot, double pointerX, double pointerY,
-                                                           double pickRadius, double minHeight)
+                                                           const Mapping& plot, double pointerX, double pointerY, double pickRadius,
+                                                           double minHeight)
 {
-    if (across == 0 || !(plot.width > 0.0 && plot.height > 0.0 && plot.price.high > plot.price.low) || pointerX < 0.0
-        || pointerY < 0.0 || pointerX > plot.width || pointerY > plot.height) {
+    if (across == 0 || !(plot.width > 0.0 && plot.height > 0.0 && plot.price.high > plot.price.low) || pointerX < 0.0 || pointerY < 0.0
+        || pointerX > plot.width || pointerY > plot.height)
+    {
         return std::nullopt;
     }
     std::optional<std::size_t> nearest;
     double nearestSquared = pickRadius * pickRadius;
-    for (std::size_t i = 0; i < columns.size(); ++i) {
+    for (std::size_t i = 0; i < columns.size(); ++i)
+    {
         const ColumnBar bar = getColumnBar(columns[i], across, plot, minHeight);
         const double dx = bar.centerX - pointerX;
         const double dy = pointerY < bar.top ? bar.top - pointerY : (pointerY > bar.bottom ? pointerY - bar.bottom : 0.0);
         const double squared = dx * dx + dy * dy;
-        if (squared <= nearestSquared) {
+        if (squared <= nearestSquared)
+        {
             nearest = i;
             nearestSquared = squared;
         }
@@ -152,4 +158,4 @@ struct ColumnBar
     return nearest;
 }
 
-} // namespace Core::Plot
+}  // namespace Core::Plot

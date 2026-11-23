@@ -12,7 +12,7 @@ using Core::Data::findSymbolIn;
 using Core::Data::Instrument;
 using Core::Data::parseSymbol;
 
-} // namespace
+}  // namespace
 
 TEST_CASE("A symbol splits at its separator, or else before the longest quote asset it ends with")
 {

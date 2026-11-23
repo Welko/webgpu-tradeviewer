@@ -18,7 +18,7 @@ constexpr std::uint32_t BytesPerPixel = 4;
 // Texture-to-buffer copies need each row padded to 256 bytes.
 constexpr std::uint32_t RowAlignment = 256;
 
-} // namespace
+}  // namespace
 
 void map(WGPUBuffer buffer, std::uint64_t size, Callback onDone)
 {
@@ -33,49 +33,54 @@ void map(WGPUBuffer buffer, std::uint64_t size, Callback onDone)
             std::ignore = userdata2;
 
             const std::unique_ptr<Mapping> mapping(static_cast<Mapping*>(userdata1));
-            if (status != WGPUMapAsyncStatus_Success) {
-                mapping->onDone(std::unexpected(
-                    std::format("Failed to read back from the GPU: {}", Convert::FromWgpu::stringView(message))));
+            if (status != WGPUMapAsyncStatus_Success)
+            {
+                mapping->onDone(
+                    std::unexpected(std::format("Failed to read back from the GPU: {}", Convert::FromWgpu::stringView(message))));
                 return;
             }
 
-            const auto* mapped = static_cast<const std::uint8_t*>(
-                wgpuBufferGetConstMappedRange(mapping->buffer.get(), 0, mapping->size));
+            const auto* mapped = static_cast<const std::uint8_t*>(wgpuBufferGetConstMappedRange(mapping->buffer.get(), 0, mapping->size));
 
             Bytes bytes(mapped, mapped + mapping->size);
 
             wgpuBufferUnmap(mapping->buffer.get());
-            
+
             mapping->onDone(std::move(bytes));
         }
     };
 
     wgpuBufferAddRef(buffer);  // our own reference, released with the mapping
+    // NOLINTBEGIN(clang-analyzer-cplusplus.NewDeleteLeaks): onMapped() takes the mapping back.
     auto mapping = std::make_unique<Mapping>(Mapping{
         .buffer = Handle(buffer),
         .size = static_cast<std::size_t>(size),
         .onDone = std::move(onDone),
     });
 
-    wgpuBufferMapAsync(buffer, WGPUMapMode_Read, 0, static_cast<std::size_t>(size), WGPUBufferMapCallbackInfo {
-        .nextInChain = nullptr,
-        .mode = WGPUCallbackMode_AllowSpontaneous,
-        .callback = Mapping::onMapped,
-        .userdata1 = mapping.release(),
-        .userdata2 = nullptr,
-    });
+    wgpuBufferMapAsync(buffer, WGPUMapMode_Read, 0, static_cast<std::size_t>(size),
+                       WGPUBufferMapCallbackInfo{
+                           .nextInChain = nullptr,
+                           .mode = WGPUCallbackMode_AllowSpontaneous,
+                           .callback = Mapping::onMapped,
+                           .userdata1 = mapping.release(),
+                           .userdata2 = nullptr,
+                       });
 }
+// NOLINTEND(clang-analyzer-cplusplus.NewDeleteLeaks)
 
 void texture(const Context& context, WGPUTexture texture, WGPUTextureFormat format, std::uint32_t width, std::uint32_t height,
              Callback onDone)
 {
-    if (!texture || width == 0 || height == 0) {
+    if (!texture || width == 0 || height == 0)
+    {
         onDone(std::unexpected("There is no texture to read back"));
         return;
     }
     // The sRGB formats store the same bytes; only how shaders read them differs.
     const bool bgra = format == WGPUTextureFormat_BGRA8Unorm || format == WGPUTextureFormat_BGRA8UnormSrgb;
-    if (!bgra && format != WGPUTextureFormat_RGBA8Unorm && format != WGPUTextureFormat_RGBA8UnormSrgb) {
+    if (!bgra && format != WGPUTextureFormat_RGBA8Unorm && format != WGPUTextureFormat_RGBA8UnormSrgb)
+    {
         onDone(std::unexpected(std::format("Can't read back texture format {}", static_cast<int>(format))));
         return;
     }
@@ -105,23 +110,27 @@ void texture(const Context& context, WGPUTexture texture, WGPUTextureFormat form
     context.submit(commands.get());
 
     // The copy's rows are padded; strip the padding once the bytes arrive, and put red first.
-    map(staging->get(), size, [staging, rowBytes, bytesPerRow, height, bgra, onDone = std::move(onDone)](std::expected<Bytes, std::string> padded) {
-        if (!padded) {
-            onDone(std::unexpected(std::move(padded.error())));
-            return;
-        }
-        Bytes bytes(std::size_t{ rowBytes } * height);
-        for (std::uint32_t row = 0; row < height; ++row) {
-            std::memcpy(bytes.data() + std::size_t{ row } * rowBytes,
-                        padded->data() + std::size_t{ row } * bytesPerRow, rowBytes);
-        }
-        if (bgra) {
-            for (std::size_t i = 0; i + 3 < bytes.size(); i += BytesPerPixel) {
-                std::swap(bytes[i], bytes[i + 2]);
+    map(staging->get(), size,
+        [staging, rowBytes, bytesPerRow, height, bgra, onDone = std::move(onDone)](std::expected<Bytes, std::string> padded) {
+            if (!padded)
+            {
+                onDone(std::unexpected(std::move(padded.error())));
+                return;
             }
-        }
-        onDone(std::move(bytes));
-    });
+            Bytes bytes(std::size_t{ rowBytes } * height);
+            for (std::uint32_t row = 0; row < height; ++row)
+            {
+                std::memcpy(bytes.data() + std::size_t{ row } * rowBytes, padded->data() + std::size_t{ row } * bytesPerRow, rowBytes);
+            }
+            if (bgra)
+            {
+                for (std::size_t i = 0; i + 3 < bytes.size(); i += BytesPerPixel)
+                {
+                    std::swap(bytes[i], bytes[i + 2]);
+                }
+            }
+            onDone(std::move(bytes));
+        });
 }
 
-} // namespace Gpu::Readback
+}  // namespace Gpu::Readback

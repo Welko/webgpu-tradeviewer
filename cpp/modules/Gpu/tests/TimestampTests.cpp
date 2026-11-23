@@ -16,7 +16,8 @@ TEST_CASE("GPU timestamps count in ticks of the device's length")
     // Nanoseconds already, as browsers report.
     const auto nanoseconds = Gpu::Profiler::toGpuTimes(passes, timestamps, 1.0);
     CHECK(nanoseconds.passes.size() == 2);
-    if (nanoseconds.passes.size() == 2) {
+    if (nanoseconds.passes.size() == 2)
+    {
         CHECK(nanoseconds.passes[0].name == "grid");
         CHECK(nanoseconds.passes[0].gpuMs == doctest::Approx(0.0003));
         CHECK(nanoseconds.passes[1].gpuMs == doctest::Approx(0.9996));
@@ -25,7 +26,8 @@ TEST_CASE("GPU timestamps count in ticks of the device's length")
 
     // Intel's Skylake GPUs tick every 83.33 ns.
     const auto ticks = Gpu::Profiler::toGpuTimes(passes, timestamps, 83.3333);
-    if (ticks.passes.size() == 2) {
+    if (ticks.passes.size() == 2)
+    {
         CHECK(ticks.passes[0].gpuMs == doctest::Approx(0.025));
         CHECK(ticks.passes[1].gpuMs == doctest::Approx(83.3));
     }

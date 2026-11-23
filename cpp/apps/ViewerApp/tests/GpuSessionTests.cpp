@@ -20,8 +20,10 @@ std::unique_ptr<Viewer::GpuSession> createSession()
     std::unique_ptr<Viewer::GpuSession> session;
     Engine::create(Params, [&](Engine::CreatedResult result) {
         CHECK_MESSAGE(result, (result ? "" : result.error()));
-        if (result) {
-            session = std::make_unique<Viewer::GpuSession>(std::move(*result), Params, [](Engine&) -> std::expected<void, std::string> { return {}; });
+        if (result)
+        {
+            session = std::make_unique<Viewer::GpuSession>(std::move(*result), Params,
+                                                           [](Engine&) -> std::expected<void, std::string> { return {}; });
         }
     });
     return session;
@@ -32,12 +34,14 @@ void lose(Viewer::GpuSession& session)
 {
     auto* engine = session.getEngine();
     CHECK(engine != nullptr);
-    if (!engine) {
+    if (!engine)
+    {
         return;
     }
     engine->loseDevice();
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (!engine->getHealth().lost && std::chrono::steady_clock::now() < deadline) {
+    while (!engine->getHealth().lost && std::chrono::steady_clock::now() < deadline)
+    {
         engine->render();
         engine->processEvents();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -45,17 +49,19 @@ void lose(Viewer::GpuSession& session)
     CHECK(engine->getHealth().lost);
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("The GPU comes back when lost now and then, and not when it keeps being lost")
 {
     const auto session = createSession();
-    if (!session) {
+    if (!session)
+    {
         return;
     }
     // Far apart, however many times.
     double nowMs = 0.0;
-    for (std::size_t restarts = 1; restarts <= 5; ++restarts) {
+    for (std::size_t restarts = 1; restarts <= 5; ++restarts)
+    {
         lose(*session);
         nowMs += 30'000.0;
         session->restartIfLost(nowMs);
@@ -66,7 +72,8 @@ TEST_CASE("The GPU comes back when lost now and then, and not when it keeps bein
 
     // Close together: three restarts in the minute, and no fourth.
     nowMs += 120'000.0;
-    for (int restart = 0; restart < 3; ++restart) {
+    for (int restart = 0; restart < 3; ++restart)
+    {
         lose(*session);
         nowMs += 1'000.0;
         session->restartIfLost(nowMs);

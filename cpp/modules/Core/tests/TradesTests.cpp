@@ -9,8 +9,8 @@
 
 namespace {
 
-using Core::Data::PreprocessedTrades;
 using Core::IndexRange;
+using Core::Data::PreprocessedTrades;
 using Core::Data::Trades;
 
 constexpr std::int64_t NoonUs = 1'575'201'600'000'000;  // 2019-12-01 12:00 UTC
@@ -19,7 +19,8 @@ constexpr std::int64_t NoonUs = 1'575'201'600'000'000;  // 2019-12-01 12:00 UTC
 Trades tradesAt(std::initializer_list<std::int64_t> times)
 {
     Trades trades;
-    for (const auto timeUs : times) {
+    for (const auto timeUs : times)
+    {
         trades.timeUs.push_back(timeUs);
         trades.price.push_back(100.0 + static_cast<double>(trades.price.size()));
         trades.amount.push_back(1.0);
@@ -28,7 +29,7 @@ Trades tradesAt(std::initializer_list<std::int64_t> times)
     return trades;
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("A time range holds its start but not its end")
 {
@@ -47,9 +48,10 @@ TEST_CASE("The price range covers only the given trades")
     trades.price = { 50.0, 120.0, 80.0, 10.0 };
     const PreprocessedTrades preprocessed(std::move(trades));
 
-    const auto middle = preprocessed.getPriceRange({ 1, 3 });
+    const auto middle = preprocessed.getPriceRange({ .first = 1, .last = 3 });
     CHECK(middle);
-    if (middle) {
+    if (middle)
+    {
         CHECK(middle->low == 80.0);
         CHECK(middle->high == 120.0);
     }
@@ -77,7 +79,8 @@ TEST_CASE("Amount percentiles are the amounts that far up the sorted trades")
 {
     // 1 to 1000, shuffled.
     Trades trades;
-    for (std::size_t i = 0; i < 1000; ++i) {
+    for (std::size_t i = 0; i < 1000; ++i)
+    {
         trades.timeUs.push_back(NoonUs + static_cast<std::int64_t>(i));
         trades.price.push_back(100.0);
         trades.amount.push_back(static_cast<double>((i * 337) % 1000 + 1));

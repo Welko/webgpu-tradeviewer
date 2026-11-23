@@ -45,7 +45,10 @@ export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTrade
       setInstrument(viewer.instrument() as Instrument);
       setMemory(viewer.memoryStats() as MemoryStats | null);
       onTradesChanged();
-      setNotices('file-warnings', warnings.map((warning) => ({ severity: 'warning', message: `${what}: ${warning}` })));
+      setNotices(
+        'file-warnings',
+        warnings.map((warning) => ({ severity: 'warning', message: `${what}: ${warning}` })),
+      );
     } catch (error) {
       setNotices('file', [{ severity: 'error', message: `${what}: ${error instanceof Error ? error.message : String(error)}` }]);
     }
@@ -123,24 +126,19 @@ export function DataPanel({ viewer, onTradesChanged }: { viewer: Viewer; onTrade
         <summary>Using real data</summary>
         <ol>
           <li>
-            Download the brief's trades file from Tardis: <a href={TardisUrl}>BTCUSDT.csv.gz</a> (6.7 MB, Binance
-            BTC/USDT, 1 December 2019). Other days and symbols work too.
+            Download the brief's trades file from Tardis: <a href={TardisUrl}>BTCUSDT.csv.gz</a> (6.7 MB, Binance BTC/USDT, 1 December
+            2019). Other days and symbols work too.
           </li>
           <li>Drop it here or open it. It's read in your browser and never uploaded.</li>
         </ol>
         <p>
-          <strong>Why it isn't hosted here:</strong> Tardis's{' '}
-          <a href="https://docs.tardis.dev/legal/terms-of-service">terms of service</a> don't allow making their data
-          available to others (clause 9.2), so this site can't serve it.
+          <strong>Why it isn't hosted here:</strong> Tardis's <a href="https://docs.tardis.dev/legal/terms-of-service">terms of service</a>{' '}
+          don't allow making their data available to others (clause 9.2), so this site can't serve it.
         </p>
         <p>
-          <strong>The Binance sample</strong> is the same day from{' '}
-          <a href="https://data.binance.vision">Binance's public data</a>, which your browser downloads straight from{' '}
-          <a href={BinanceSampleUrl}>data.binance.vision</a>. It's provided by Binance under{' '}
-          <a href="https://github.com/binance/binance-public-data/blob/master/TERMS_AND_CONDITIONS.md">
-            non-commercial terms
-          </a>
-          .
+          <strong>The Binance sample</strong> is the same day from <a href="https://data.binance.vision">Binance's public data</a>, which
+          your browser downloads straight from <a href={BinanceSampleUrl}>data.binance.vision</a>. It's provided by Binance under{' '}
+          <a href="https://github.com/binance/binance-public-data/blob/master/TERMS_AND_CONDITIONS.md">non-commercial terms</a>.
         </p>
       </details>
       <TelemetryConsent />

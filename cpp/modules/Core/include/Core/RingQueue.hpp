@@ -25,7 +25,8 @@ public:
     std::optional<T> pushBack(T item)
     {
         std::optional<T> evicted;
-        if (size() == capacity()) {
+        if (size() == capacity())
+        {
             evicted = popFront();
         }
         mItems[(mOldest + mSize) % mItems.size()] = std::move(item);
@@ -73,4 +74,4 @@ private:
     std::size_t mSize = 0;
 };
 
-} // namespace Core
+}  // namespace Core

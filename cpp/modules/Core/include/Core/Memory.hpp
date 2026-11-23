@@ -13,4 +13,4 @@ namespace Core::Memory {
  */
 [[nodiscard]] std::optional<std::uint64_t> getProcessBytes();
 
-} // namespace Core::Memory
+}  // namespace Core::Memory

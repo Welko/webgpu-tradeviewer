@@ -62,7 +62,6 @@ std::array<float, 3> toGpu(Gpu::Type::Color color)
     return { color.red, color.green, color.blue };
 }
 
-
 /** The uniforms, for both pipelines; WebGPU's derived layouts would differ per pipeline. */
 Handle<WGPUBindGroupLayout> createBindGroupLayout(WGPUDevice device)
 {
@@ -113,8 +112,7 @@ Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat f
 
     // Premultiplied alpha.
     WGPUBlendState blend{};
-    blend.color = { .operation = WGPUBlendOperation_Add, .srcFactor = WGPUBlendFactor_One,
-                    .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha };
+    blend.color = { .operation = WGPUBlendOperation_Add, .srcFactor = WGPUBlendFactor_One, .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha };
     blend.alpha = blend.color;
 
     WGPUColorTargetState target{};
@@ -146,7 +144,7 @@ Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat f
     return Handle(wgpuDeviceCreateRenderPipeline(device, &descriptor));
 }
 
-} // namespace
+}  // namespace
 
 TradesPass::TradesPass(const Context& context, Resource::Stats& stats, WGPUTextureFormat format)
     : mContext(&context),
@@ -197,7 +195,8 @@ void TradesPass::clear()
 std::expected<void, std::string> TradesPass::append(const Core::Data::Trades& trades)
 {
     std::vector<GpuTrade> packed(trades.size());
-    for (std::size_t i = 0; i < trades.size(); ++i) {
+    for (std::size_t i = 0; i < trades.size(); ++i)
+    {
         const auto timeUs = static_cast<std::uint64_t>(trades.timeUs[i]);
         packed[i] = {
             .timeHigh = static_cast<std::uint32_t>(timeUs >> 32),
@@ -254,14 +253,16 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot
     const std::size_t uploaded = mTrades.size() / sizeof(GpuTrade);
     const std::size_t first = std::min(mView.trades.first, uploaded);
     const std::size_t count = std::min(mView.trades.last, uploaded) - first;
-    if (count > 0 && !plot.empty() && mView.time.getLengthUs() > 0 && mView.price.high > mView.price.low) {
+    if (count > 0 && !plot.empty() && mView.time.getLengthUs() > 0 && mView.price.high > mView.price.low)
+    {
         plot.apply(pass.get());
         wgpuRenderPassEncoderSetPipeline(pass.get(), mPipeline.get());
         wgpuRenderPassEncoderSetBindGroup(pass.get(), 0, mBindGroup.get(), 0, nullptr);
         wgpuRenderPassEncoderSetVertexBuffer(pass.get(), 0, mTrades.get(), 0, mTrades.size());
         wgpuRenderPassEncoderDraw(pass.get(), 3, static_cast<std::uint32_t>(count), 0, static_cast<std::uint32_t>(first));
         // On top of every trade.
-        if (mHighlight && *mHighlight < uploaded) {
+        if (mHighlight && *mHighlight < uploaded)
+        {
             wgpuRenderPassEncoderSetPipeline(pass.get(), mRingPipeline.get());
             wgpuRenderPassEncoderDraw(pass.get(), 3, 1, 0, static_cast<std::uint32_t>(*mHighlight));
         }
@@ -269,4 +270,4 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot
     wgpuRenderPassEncoderEnd(pass.get());
 }
 
-} // namespace Gpu::Market
+}  // namespace Gpu::Market

@@ -14,7 +14,7 @@ namespace Gpu {
  * tracked handle reports its kind and size to a Resource::Stats, which must
  * outlive it.
  */
-template <typename T>
+template<typename T>
 class Handle
 {
 public:
@@ -31,7 +31,10 @@ private:
      * Whether T can be tracked. A function, so it's evaluated only once
      * Traits is defined; declared before the requires-clause that uses it.
      */
-    static constexpr bool trackable() { return requires { Traits::Kind; }; }
+    static constexpr bool trackable()
+    {
+        return requires { Traits::Kind; };
+    }
 
 public:
     Handle() = default;
@@ -48,15 +51,13 @@ public:
           mStats(raw ? &stats : nullptr),
           mBytes(raw ? bytes : 0)
     {
-        if (mStats) {
+        if (mStats)
+        {
             mStats->add(Traits::Kind, mBytes);
         }
     }
 
-    ~Handle()
-    {
-        reset();
-    }
+    ~Handle() { reset(); }
 
     Handle(const Handle&) = delete;
     Handle& operator=(const Handle&) = delete;
@@ -69,7 +70,8 @@ public:
 
     Handle& operator=(Handle&& other) noexcept
     {
-        if (this != &other) {
+        if (this != &other)
+        {
             reset();
             mRaw = std::exchange(other.mRaw, nullptr);
             mStats = std::exchange(other.mStats, nullptr);
@@ -85,11 +87,14 @@ public:
     /** Releases the object now, if there is one, and becomes empty. */
     void reset() noexcept
     {
-        if (!mRaw) {
+        if (!mRaw)
+        {
             return;
         }
-        if constexpr (trackable()) {
-            if (mStats) {
+        if constexpr (trackable())
+        {
+            if (mStats)
+            {
                 mStats->remove(Traits::Kind, mBytes);
             }
         }
@@ -106,20 +111,26 @@ private:
 };
 
 // Objects that hold no significant GPU memory of their own: never tracked.
-#define GPU_HANDLE_TRAITS(Type, Release)                          \
-    template <>                                                   \
-    struct Handle<Type>::Traits                                   \
-    {                                                             \
-        static void release(Type raw) noexcept { Release(raw); }  \
+#define GPU_HANDLE_TRAITS(Type, Release)                                                                                                   \
+    template<>                                                                                                                             \
+    struct Handle<Type>::Traits                                                                                                            \
+    {                                                                                                                                      \
+        static void release(Type raw) noexcept                                                                                             \
+        {                                                                                                                                  \
+            Release(raw);                                                                                                                  \
+        }                                                                                                                                  \
     };
 
 // Objects whose memory Resource::Stats can track, per handle.
-#define GPU_TRACKED_HANDLE_TRAITS(Type, Release, KindValue)       \
-    template <>                                                   \
-    struct Handle<Type>::Traits                                   \
-    {                                                             \
-        static constexpr Resource::Kind Kind = KindValue;         \
-        static void release(Type raw) noexcept { Release(raw); }  \
+#define GPU_TRACKED_HANDLE_TRAITS(Type, Release, KindValue)                                                                                \
+    template<>                                                                                                                             \
+    struct Handle<Type>::Traits                                                                                                            \
+    {                                                                                                                                      \
+        static constexpr Resource::Kind Kind = KindValue;                                                                                  \
+        static void release(Type raw) noexcept                                                                                             \
+        {                                                                                                                                  \
+            Release(raw);                                                                                                                  \
+        }                                                                                                                                  \
     };
 
 GPU_HANDLE_TRAITS(WGPUInstance, wgpuInstanceRelease)
@@ -144,4 +155,4 @@ GPU_TRACKED_HANDLE_TRAITS(WGPUQuerySet, wgpuQuerySetRelease, Resource::Kind::Que
 #undef GPU_HANDLE_TRAITS
 #undef GPU_TRACKED_HANDLE_TRAITS
 
-} // namespace Gpu
+}  // namespace Gpu
