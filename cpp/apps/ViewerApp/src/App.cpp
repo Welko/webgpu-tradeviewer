@@ -2,8 +2,7 @@
 
 #include "Core/Data/Synthetic.hpp"
 #include "Gpu/Market/Style.hpp"
-
-#include "Core/Log.hpp"
+#include "Gpu/Plot/Type.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -103,7 +102,7 @@ std::expected<void, std::string> App::setTrades(Core::Data::Trades&& trades)
         }
     }
     mData = Core::Data::PreprocessedTrades(std::move(trades));
-    mMarkerSizing = Gpu::Market::Style::fitMarkerSizing(mMarkerSizing.scale, mData.getTrades());
+    mMarkerSizing = Core::Plot::fitMarkerSizing(mMarkerSizing.scale, mData.getTrades());
     // No price range from the old trades.
     // Without trades, the time range stays.
     const auto time = getInitialView().value_or(mView.getTimeRange());
@@ -138,7 +137,7 @@ void App::setPixelRatio(float ratio)
     syncSettings();
 }
 
-void App::setPlotInsets(Gpu::Plot::Type::Insets insets)
+void App::setPlotInsets(Core::Plot::Insets insets)
 {
     mLayout.insets = insets;
     updateAxes();
@@ -208,7 +207,7 @@ void App::setTheme(const Gpu::Market::Type::Theme& theme)
     syncSettings();
 }
 
-void App::setMarkerScale(Gpu::Market::Type::MarkerScale scale)
+void App::setMarkerScale(Core::Plot::MarkerScale scale)
 {
     mMarkerSizing.scale = scale;
     updatePick();

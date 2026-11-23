@@ -3,8 +3,8 @@
 #include "Core/Data/Columns.hpp"
 #include "Core/Data/PreprocessedTrades.hpp"
 #include "Core/Data/Trades.hpp"
+#include "Core/Plot/Sizes.hpp"
 #include "Core/Range.hpp"
-#include "Gpu/Market/Style.hpp"
 #include "Viewer/Layout.hpp"
 #include "Viewer/Summaries.hpp"
 #include "Viewer/View.hpp"
@@ -53,7 +53,7 @@ public:
 
     void clear();
     void update(const Core::Data::PreprocessedTrades& data, const View& view, const Summaries& summaries, const Layout& layout,
-                const Gpu::Market::Style::MarkerSizing& markerSizing);
+                const Core::Plot::MarkerSizing& markerSizing);
 
 private:
     bool mOnSurface = false;

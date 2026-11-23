@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Gpu/Market/Style.hpp"
 #include "Gpu/Market/Type.hpp"
 #include "Gpu/Plot/Type.hpp"
 #include "Gpu/Type.hpp"
 
 #include "Core/Data/Trades.hpp"
+#include "Core/Plot/Sizes.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -56,13 +56,13 @@ public:
         /** Physical pixels per CSS or window pixel, which marker sizes are given in. */
         float pixelRatio = 1.0f;
         /** Space to leave around the plot for axis labels. */
-        Plot::Type::Insets insets{};
+        Core::Plot::Insets insets{};
         /** Where to draw grid lines, usually at the axis ticks. */
         Plot::Type::Grid grid{};
         /** What part of the trades to show. */
         Type::View view{};
         /** How a trade's amount becomes its marker's size. */
-        Style::MarkerSizing markerSizing{};
+        Core::Plot::MarkerSizing markerSizing{};
         /** The colors of everything drawn. */
         Type::Theme theme{};
         /** The column, by position in those set with setColumns(), to draw in the cursor color. */

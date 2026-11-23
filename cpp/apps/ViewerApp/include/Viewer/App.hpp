@@ -2,12 +2,11 @@
 
 #include "Core/Data/PreprocessedTrades.hpp"
 #include "Core/Data/Trades.hpp"
+#include "Core/Plot/Sizes.hpp"
 #include "Core/Range.hpp"
 
 #include "Gpu/Market/Engine.hpp"
-#include "Gpu/Market/Style.hpp"
 #include "Gpu/Market/Type.hpp"
-#include "Gpu/Plot/Type.hpp"
 #include "Gpu/Type.hpp"
 
 #include "Viewer/Axes.hpp"
@@ -72,7 +71,7 @@ public:
     // Layout
     void setSize(std::uint32_t widthPx, std::uint32_t heightPx);
     void setPixelRatio(float ratio);
-    void setPlotInsets(Gpu::Plot::Type::Insets insets);
+    void setPlotInsets(Core::Plot::Insets insets);
 
     // View
     [[nodiscard]] const View& getView() const { return mView; }
@@ -89,9 +88,9 @@ public:
 
     // Style
     void setTheme(const Gpu::Market::Type::Theme& theme);
-    void setMarkerScale(Gpu::Market::Type::MarkerScale scale);
+    void setMarkerScale(Core::Plot::MarkerScale scale);
     [[nodiscard]] Gpu::Market::Type::Legend getLegend() const;
-    [[nodiscard]] const Gpu::Market::Style::MarkerSizing& getMarkerSizing() const { return mMarkerSizing; }
+    [[nodiscard]] const Core::Plot::MarkerSizing& getMarkerSizing() const { return mMarkerSizing; }
 
     // Pointer
     [[nodiscard]] const Pointer& getPointer() const { return mPointer; }
@@ -143,7 +142,7 @@ private:
     Axes mAxes;
     Summaries mSummaries;
     Gpu::Market::Type::Theme mTheme{};
-    Gpu::Market::Style::MarkerSizing mMarkerSizing{};
+    Core::Plot::MarkerSizing mMarkerSizing{};
     Pointer mPointer;
     Telemetry mTelemetry;
     bool mProfiling = false;  // asked for every frame, not only telemetry's sample

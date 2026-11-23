@@ -306,9 +306,9 @@ Gpu::Type::PowerPreference powerPreference(const std::string& value)
     return Gpu::Type::PowerPreference::Default;
 }
 
-Gpu::Market::Type::MarkerScale markerScale(const std::string& value)
+Core::Plot::MarkerScale markerScale(const std::string& value)
 {
-    return value == "log" ? Gpu::Market::Type::MarkerScale::Log : Gpu::Market::Type::MarkerScale::Area;
+    return value == "log" ? Core::Plot::MarkerScale::Log : Core::Plot::MarkerScale::Area;
 }
 
 Gpu::Market::Type::Theme theme(const val& theme)

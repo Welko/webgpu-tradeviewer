@@ -2,7 +2,7 @@
 
 #include "Viewer/App.hpp"
 
-#include "Gpu/Plot/Type.hpp"
+#include "Core/Plot/Sizes.hpp"
 
 #include <array>
 #include <cstdint>
@@ -38,7 +38,7 @@ struct Scene
     std::string_view description;
     std::uint32_t widthPx;
     std::uint32_t heightPx;
-    Gpu::Plot::Type::Insets insets;
+    Core::Plot::Insets insets;
     /** Known whatever the data: the margins, and what the scene placed itself. */
     std::vector<Patch> patches;
     /** Sets the trades, colors, view and pointer, after show() sets the size. */

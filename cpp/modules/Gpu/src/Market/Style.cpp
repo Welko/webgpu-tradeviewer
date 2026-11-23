@@ -8,8 +8,6 @@ namespace Gpu::Market::Style {
 
 namespace {
 
-constexpr double MarkerFitMinAmount = 1e-30;
-
 /** The nearest of 1, 2 and 5 times a power of ten to `amount`, by ratio, for a legend. */
 double roundNicely(double amount)
 {
@@ -25,23 +23,24 @@ double roundNicely(double amount)
     return nearest;
 }
 
-/** The amount that `sizing` draws with `radiusCssPx`, from MarkerMinRadiusCssPx to MarkerMaxRadiusCssPx. */
-double getAmountAt(float radiusCssPx, const MarkerSizing& sizing)
+/** The amount that `sizing` draws with `radiusCssPx`, from Core::Plot::MarkerMinRadiusCssPx to Core::Plot::MarkerMaxRadiusCssPx. */
+double getAmountAt(float radiusCssPx, const Core::Plot::MarkerSizing& sizing)
 {
-    if (sizing.scale == Type::MarkerScale::Area)
+    if (sizing.scale == Core::Plot::MarkerScale::Area)
     {
-        const double ratio = static_cast<double>(radiusCssPx) / MarkerMaxRadiusCssPx;
+        const double ratio = static_cast<double>(radiusCssPx) / Core::Plot::MarkerMaxRadiusCssPx;
         return sizing.highAmount * ratio * ratio;
     }
-    const double along = static_cast<double>(radiusCssPx - MarkerMinRadiusCssPx) / (MarkerMaxRadiusCssPx - MarkerMinRadiusCssPx);
+    const double along = static_cast<double>(radiusCssPx - Core::Plot::MarkerMinRadiusCssPx)
+                         / (Core::Plot::MarkerMaxRadiusCssPx - Core::Plot::MarkerMinRadiusCssPx);
     return sizing.lowAmount * std::pow(sizing.highAmount / sizing.lowAmount, along);
 }
 
 /** Round amounts for a legend to show between `smallest` and `largest`, smallest first. */
-std::vector<double> getReferences(const MarkerSizing& sizing, double smallest, double largest)
+std::vector<double> getReferences(const Core::Plot::MarkerSizing& sizing, double smallest, double largest)
 {
     std::vector<double> references;
-    if (sizing.scale == Type::MarkerScale::Area)
+    if (sizing.scale == Core::Plot::MarkerScale::Area)
     {
         // Each four times the one before, so twice its radius.
         for (const double share : { 1.0 / 64.0, 1.0 / 16.0, 1.0 / 4.0 })
@@ -75,47 +74,14 @@ std::vector<double> getReferences(const MarkerSizing& sizing, double smallest, d
 
 }  // namespace
 
-float MarkerSizing::getRadiusCssPx(double amount) const
-{
-    if (!(amount > 0.0))
-    {
-        return MarkerMinRadiusCssPx;
-    }
-    double radiusCssPx = 0.0;
-    if (scale == Type::MarkerScale::Area)
-    {
-        radiusCssPx = MarkerMaxRadiusCssPx * std::sqrt(amount / highAmount);
-    }
-    else
-    {
-        const double along = std::log2(amount / lowAmount) / std::log2(highAmount / lowAmount);
-        radiusCssPx = std::lerp(static_cast<double>(MarkerMinRadiusCssPx), static_cast<double>(MarkerMaxRadiusCssPx), along);
-    }
-    return static_cast<float>(
-        std::clamp(radiusCssPx, static_cast<double>(MarkerMinRadiusCssPx), static_cast<double>(MarkerMaxRadiusCssPx)));
-}
-
-MarkerSizing fitMarkerSizing(Type::MarkerScale scale, const Core::Data::Trades& trades)
-{
-    if (trades.empty())
-    {
-        return { .scale = scale };
-    }
-    const auto amounts = Core::Data::getAmountPercentiles(trades, MarkerFitLowShare, MarkerFitHighShare);
-    // Within what the shader's 32-bit floats can hold, ratio included, and at
-    // least a tenfold span, so the log scale has room even for a single amount.
-    const double high = std::max(amounts.high, MarkerFitMinAmount);
-    const double lowest = std::max(high * MarkerFitMinAmount, MarkerFitMinAmount / 10.0);
-    return { .scale = scale, .lowAmount = std::clamp(amounts.low, lowest, high / 10.0), .highAmount = high };
-}
-
-Type::Legend getLegend(const MarkerSizing& sizing, const Type::Theme& theme)
+Type::Legend getLegend(const Core::Plot::MarkerSizing& sizing, const Type::Theme& theme)
 {
     Type::Legend legend{ .buy = theme.buy, .sell = theme.sell, .opacity = theme.markerOpacity, .sizes = {} };
-    const double smallest = getAmountAt(MarkerMinRadiusCssPx, sizing);
-    const double largest = getAmountAt(MarkerMaxRadiusCssPx, sizing);
+    const double smallest = getAmountAt(Core::Plot::MarkerMinRadiusCssPx, sizing);
+    const double largest = getAmountAt(Core::Plot::MarkerMaxRadiusCssPx, sizing);
 
-    legend.sizes.push_back({ .amount = smallest, .radiusCssPx = MarkerMinRadiusCssPx, .bound = Type::LegendSize::Bound::AtMost });
+    legend.sizes.push_back(
+        { .amount = smallest, .radiusCssPx = Core::Plot::MarkerMinRadiusCssPx, .bound = Type::LegendSize::Bound::AtMost });
     for (const double amount : getReferences(sizing, smallest, largest))
     {
         legend.sizes.push_back({
@@ -124,7 +90,8 @@ Type::Legend getLegend(const MarkerSizing& sizing, const Type::Theme& theme)
             .bound = Type::LegendSize::Bound::Exact,
         });
     }
-    legend.sizes.push_back({ .amount = largest, .radiusCssPx = MarkerMaxRadiusCssPx, .bound = Type::LegendSize::Bound::AtLeast });
+    legend.sizes.push_back(
+        { .amount = largest, .radiusCssPx = Core::Plot::MarkerMaxRadiusCssPx, .bound = Type::LegendSize::Bound::AtLeast });
     return legend;
 }
 

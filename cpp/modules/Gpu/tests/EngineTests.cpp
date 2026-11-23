@@ -242,7 +242,7 @@ TEST_CASE("Only the view's trades are drawn")
 
 namespace {
 
-using Gpu::Market::Type::MarkerScale;
+using Core::Plot::MarkerScale;
 using Gpu::Market::Type::Theme;
 namespace Style = Gpu::Market::Style;
 

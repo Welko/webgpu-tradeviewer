@@ -10,13 +10,6 @@
 
 namespace Gpu::Market::Type {
 
-/** How a trade's marker size shows its amount. */
-enum class MarkerScale : std::uint8_t
-{
-    Area,  ///< Area proportional to the amount.
-    Log,  ///< Radius growing with the amount's logarithm, which separates small trades better.
-};
-
 /** Colors of the plot and the trades. */
 struct Theme
 {

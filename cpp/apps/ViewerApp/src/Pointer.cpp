@@ -30,7 +30,7 @@ void Pointer::clear()
 }
 
 void Pointer::update(const Core::Data::PreprocessedTrades& data, const View& view, const Summaries& summaries, const Layout& layout,
-                     const Gpu::Market::Style::MarkerSizing& markerSizing)
+                     const Core::Plot::MarkerSizing& markerSizing)
 {
     mPicked = std::monostate{};
     mColumnPosition.reset();
@@ -47,7 +47,7 @@ void Pointer::update(const Core::Data::PreprocessedTrades& data, const View& vie
     if (across > 0)
     {
         const auto& columns = summaries.getColumns();
-        const double minHeightPx = Gpu::Market::Style::ColumnMinHeightCssPx * ratio;
+        const double minHeightPx = Core::Plot::ColumnMinHeightCssPx * ratio;
         mColumnPosition = Core::Plot::pickColumn(columns, across, plot, pointerXPx, pointerYPx, PickRadiusCssPx * ratio, minHeightPx);
         if (!mColumnPosition)
         {
@@ -69,8 +69,7 @@ void Pointer::update(const Core::Data::PreprocessedTrades& data, const View& vie
         return;
     }
 
-    const Core::Plot::PickRule rule{ .pickRadius = PickRadiusCssPx * ratio,
-                                     .maxMarkerRadius = Gpu::Market::Style::MarkerMaxRadiusCssPx * ratio };
+    const Core::Plot::PickRule rule{ .pickRadius = PickRadiusCssPx * ratio, .maxMarkerRadius = Core::Plot::MarkerMaxRadiusCssPx * ratio };
     const auto& trades = data.getTrades();
     const auto i = Core::Plot::pickTrade(trades, view.getTrades(), plot, pointerXPx, pointerYPx, rule,
                                          [&](double amount) { return markerSizing.getRadiusCssPx(amount) * ratio; });

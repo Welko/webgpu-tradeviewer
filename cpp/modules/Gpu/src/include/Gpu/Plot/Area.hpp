@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Gpu/Plot/Type.hpp"
+#include "Core/Plot/Sizes.hpp"
 
 #include <webgpu/webgpu.h>
 
@@ -17,7 +17,7 @@ struct Area
     std::uint32_t height;
 
     /** A `width` × `height` frame less `insets`; empty if they leave no room. */
-    static Area within(std::uint32_t width, std::uint32_t height, Type::Insets insets)
+    static Area within(std::uint32_t width, std::uint32_t height, Core::Plot::Insets insets)
     {
         if (insets.left + insets.right >= width || insets.top + insets.bottom >= height)
         {

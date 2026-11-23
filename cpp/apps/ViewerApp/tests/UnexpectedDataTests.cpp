@@ -4,7 +4,7 @@
 #include "Viewer/App.hpp"
 
 #include "Core/Data/TradeParser.hpp"
-#include "Gpu/Market/Style.hpp"
+#include "Core/Plot/Sizes.hpp"
 
 #include <doctest/doctest.h>
 
@@ -151,8 +151,8 @@ void checkShown(const Viewer::App& app)
         CAPTURE(size.amount);
         CHECK(std::isfinite(size.amount));
         CHECK(size.amount > last);
-        CHECK(size.radiusCssPx >= Gpu::Market::Style::MarkerMinRadiusCssPx);
-        CHECK(size.radiusCssPx <= Gpu::Market::Style::MarkerMaxRadiusCssPx);
+        CHECK(size.radiusCssPx >= Core::Plot::MarkerMinRadiusCssPx);
+        CHECK(size.radiusCssPx <= Core::Plot::MarkerMaxRadiusCssPx);
         last = size.amount;
     }
     const auto stats = app.getView().getStats();
@@ -258,7 +258,7 @@ TEST_CASE("Odd but valid trades draw, and can be zoomed, panned and pointed at")
         const auto set = app->setTrades(std::move(parsed->trades));
         CHECK_MESSAGE(set, (set ? "" : set.error()));
 
-        for (const auto scale : { Gpu::Market::Type::MarkerScale::Area, Gpu::Market::Type::MarkerScale::Log })
+        for (const auto scale : { Core::Plot::MarkerScale::Area, Core::Plot::MarkerScale::Log })
         {
             CAPTURE(scale);
             app->setMarkerScale(scale);

@@ -102,7 +102,7 @@ namespace Convert::FromWeb {
 [[nodiscard]] Gpu::Type::PowerPreference powerPreference(const std::string& value);
 
 /** "area" or "log". */
-[[nodiscard]] Gpu::Market::Type::MarkerScale markerScale(const std::string& value);
+[[nodiscard]] Core::Plot::MarkerScale markerScale(const std::string& value);
 
 /** From { background, grid, buy, sell, cursor, markerOpacity }, each color a { red, green, blue } from 0 to 1. */
 [[nodiscard]] Gpu::Market::Type::Theme theme(const val& theme);

@@ -79,7 +79,7 @@ void logLegend(const App& app)
         sizes += std::format("{}{}{:.4g} {} {:.3g} px", sizes.empty() ? "" : ", ", getBoundPrefix(size.bound), size.amount,
                              app.getInstrument().base, size.radiusCssPx);
     }
-    const bool byArea = app.getMarkerSizing().scale == Gpu::Market::Type::MarkerScale::Area;
+    const bool byArea = app.getMarkerSizing().scale == Core::Plot::MarkerScale::Area;
     Core::Log::info("Buys green, sells red; marker radius by {}: {}", byArea ? "area" : "log", sizes);
 }
 

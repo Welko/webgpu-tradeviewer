@@ -22,3 +22,6 @@ web/tsconfig.tsbuildinfo
 # Image-test renderings and their comparison report (see tools/compare-renderings.mjs)
 renderings/
 tools/node_modules/
+
+# Local design notes, never committed
+design/

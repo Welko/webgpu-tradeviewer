@@ -174,7 +174,7 @@ void ColumnsPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plo
         .plotHeightPx = static_cast<float>(plot.height),
         .pixelRatio = mPixelRatio,
         .minOpacity = Style::ColumnMinOpacity,
-        .minHeightCssPx = Style::ColumnMinHeightCssPx,
+        .minHeightCssPx = Core::Plot::ColumnMinHeightCssPx,
         .highlight = mHighlight ? static_cast<std::uint32_t>(*mHighlight) : std::numeric_limits<std::uint32_t>::max(),
         .padding0 = {},
         .buyColor = toGpu(mTheme.buy),

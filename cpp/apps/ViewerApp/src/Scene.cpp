@@ -47,7 +47,7 @@ std::array<std::uint8_t, 4> over(Rgb color, Rgb background, float opacity)
  * The margins left for axis labels, right and below the plot, which nothing
  * is drawn in: all background.
  */
-std::vector<Scene::Patch> margins(std::uint32_t widthPx, std::uint32_t heightPx, Gpu::Plot::Type::Insets insets,
+std::vector<Scene::Patch> margins(std::uint32_t widthPx, std::uint32_t heightPx, Core::Plot::Insets insets,
                                   std::array<std::uint8_t, 4> background, int tolerance)
 {
     return {
@@ -78,7 +78,7 @@ std::array<std::uint8_t, 4> toBytes(Gpu::Type::Color color)
 // The app's look: synthetic trades in the default colors.
 
 // Room for the axis labels, as the web app leaves it at a pixel ratio of 1.
-constexpr Gpu::Plot::Type::Insets AppInsets{ .left = 0, .top = 0, .right = 64, .bottom = 22 };
+constexpr Core::Plot::Insets AppInsets{ .left = 0, .top = 0, .right = 64, .bottom = 22 };
 constexpr std::uint32_t AppWidthPx = 960;
 constexpr std::uint32_t AppHeightPx = 540;
 constexpr std::uint32_t AppPlotWidthPx = AppWidthPx - AppInsets.right;
@@ -213,7 +213,7 @@ constexpr float BlendedOpacity = 0.5f;
 // 12:45 of the 12:00–13:00 view, both at mid-height, so their centers are at
 // (90, 90) and (270, 90). Both are large enough for the largest marker, 16
 // pixels across.
-constexpr Gpu::Plot::Type::Insets ColorInsets{ .left = 0, .top = 0, .right = 40, .bottom = 20 };
+constexpr Core::Plot::Insets ColorInsets{ .left = 0, .top = 0, .right = 40, .bottom = 20 };
 constexpr std::uint32_t ColorWidthPx = 400;
 constexpr std::uint32_t ColorHeightPx = 200;
 constexpr std::uint32_t BuyXPx = 90;
@@ -343,7 +343,7 @@ std::vector<Scene::Patch> Scene::show(const Scene& scene, App& app)
     app.setPixelRatio(1.0f);
     app.setPlotInsets(scene.insets);
     app.setSummariesAllowed(true);
-    app.setMarkerScale(Gpu::Market::Type::MarkerScale::Area);
+    app.setMarkerScale(Core::Plot::MarkerScale::Area);
     app.setTheme({});
     app.clearPointer();
     scene.setUp(app);

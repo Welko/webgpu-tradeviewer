@@ -58,7 +58,7 @@ struct Window::State
             }
             break;
         case GLFW_KEY_M: {
-            using Gpu::Market::Type::MarkerScale;
+            using Core::Plot::MarkerScale;
             app->setMarkerScale(app->getMarkerSizing().scale == MarkerScale::Area ? MarkerScale::Log : MarkerScale::Area);
             logLegend(*app);
             break;

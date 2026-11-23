@@ -7,6 +7,7 @@ add_library(Core STATIC
     src/Data/TradeParser.cpp
     src/Memory.cpp
     src/Plot/Axis.cpp
+    src/Plot/Sizes.cpp
 )
 viewer_setup_target(Core)
 
