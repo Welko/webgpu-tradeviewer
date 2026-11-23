@@ -27,20 +27,20 @@ EM_JS_DEPS(GpuContext, "$stringToNewUTF8");
  * Returns a malloc'd UTF-8 string, or 0. Chrome masks gl.RENDERER as "WebKit WebGL".
  * The context is left to the garbage collector: loseContext() would log "WebGL context was lost".
  */
+// clang-format off: JavaScript, which clang-format would break (=== becomes == =).
 EM_JS(char*, gpuQueryWebglRenderer, (), {
     const gl = document.createElement("canvas").getContext("webgl");
-    if (!gl)
-    {
+    if (!gl) {
         return 0;
     }
     let renderer = gl.getParameter(gl.RENDERER);
-    if (renderer == = "WebKit WebGL")
-    {
+    if (renderer === "WebKit WebGL") {
         const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
         renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : null;
     }
-    return (typeof renderer == = "string" && renderer != = "") ? stringToNewUTF8(renderer) : 0;
+    return (typeof renderer === "string" && renderer !== "") ? stringToNewUTF8(renderer) : 0;
 });
+// clang-format on
 #endif
 
 namespace Gpu {
