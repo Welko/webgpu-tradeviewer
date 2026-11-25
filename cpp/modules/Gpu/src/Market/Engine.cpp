@@ -71,18 +71,18 @@ struct Engine::Impl
     void render();
 
     /** Frame timing: the profiler, and the frames waiting for its results. */
-    struct Profiling
+    struct Timing
     {
         Profiler::StatsQueue statsQueue{ MaxWaitingFrames };
         std::shared_ptr<Profiler> profiler;
-        std::variant<ProfilingOff, ProfilingOn> settings = ProfilingOff{};
+        Profiling settings = ProfilingOff{};
         std::minstd_rand random;  // picks them
         std::uint64_t lastFrame = 0;  // frames drawn so far
     };
 
     // Destroyed in reverse order: the passes, the render target, the profiler, then the device they use.
     std::unique_ptr<Device> device;
-    Profiling profiling;
+    Timing timing;
     RenderTarget renderTarget;
     Passes passes;  // in the render target's format
 
@@ -150,10 +150,9 @@ Engine::Impl::Impl(std::unique_ptr<Device> gpu, RenderTarget target, std::option
       },
       maxTrades(maxTrades)
 {
-    profiling.profiler =
-        Profiler::create(device->context, [&statsQueue = profiling.statsQueue](std::uint64_t frame, Profiler::Times times) {
-            statsQueue.setTimes(frame, std::move(times));
-        });
+    timing.profiler = Profiler::create(device->context, [&statsQueue = timing.statsQueue](std::uint64_t frame, Profiler::Times times) {
+        statsQueue.setTimes(frame, std::move(times));
+    });
     setSettings(settings, true);
 }
 
@@ -215,26 +214,26 @@ void Engine::Impl::setSettings(const Settings& next, bool everything)
 
 void Engine::Impl::render()
 {
-    const auto* on = std::get_if<ProfilingOn>(&profiling.settings);
+    const auto* on = std::get_if<ProfilingOn>(&timing.settings);
     const bool timed = Core::Profiling::Compiled && on != nullptr;
-    const bool timedOnGpu = timed && std::uniform_real_distribution(0.0, 1.0)(profiling.random) < on->gpuTimingProbability;
+    const bool timedOnGpu = timed && std::uniform_real_distribution(0.0, 1.0)(timing.random) < on->gpuTimingProbability;
     Gpu::Type::FrameStats::Cpu cpu{};
     const bool drawn = renderTarget.draw(
         [&](WGPUCommandEncoder encoder, WGPUTextureView view) {
             using Untimed = Gpu::Type::FrameStats::UntimedReason;
-            profiling.profiler->beginFrame(timedOnGpu ? std::nullopt : std::optional(timed ? Untimed::NotSampled : Untimed::ProfilingOff));
+            timing.profiler->beginFrame(timedOnGpu ? std::nullopt : std::optional(timed ? Untimed::NotSampled : Untimed::ProfilingOff));
             const Core::Profiling::Scope scope(cpu.encodeMs, timed);
             const auto plot = Plot::Area::within(renderTarget.getWidthPx(), renderTarget.getHeightPx(), settings.insets);
-            passes.grid.encode(encoder, view, plot, *profiling.profiler);
+            passes.grid.encode(encoder, view, plot, *timing.profiler);
             if (showColumns)
             {
-                passes.columns.encode(encoder, view, plot, *profiling.profiler);
+                passes.columns.encode(encoder, view, plot, *timing.profiler);
             }
             else
             {
-                passes.trades.encode(encoder, view, plot, *profiling.profiler);
+                passes.trades.encode(encoder, view, plot, *timing.profiler);
             }
-            profiling.profiler->endPasses(encoder);
+            timing.profiler->endPasses(encoder);
         },
         cpu, timed);
     if (!drawn)
@@ -244,15 +243,15 @@ void Engine::Impl::render()
     }
     dirty = false;
 
-    profiling.statsQueue.push({
-        .frame = ++profiling.lastFrame,
+    timing.statsQueue.push({
+        .frame = ++timing.lastFrame,
         .cpu = timed ? std::optional(cpu) : std::nullopt,
         .gpu = std::unexpected(Gpu::Type::FrameStats::UntimedReason::Undefined),
         .buffers = device->resources.getCount(Resource::Kind::Buffer),
         .textures = device->resources.getCount(Resource::Kind::Texture),
         .gpuBytes = device->resources.getTotalBytes(),
     });
-    profiling.profiler->endFrame(profiling.lastFrame);
+    timing.profiler->endFrame(timing.lastFrame);
 }
 
 // Public interface
@@ -342,14 +341,14 @@ void Engine::render()
     mImpl->render();
 }
 
-void Engine::setProfiling(std::variant<ProfilingOff, ProfilingOn> profiling)
+void Engine::setProfiling(Profiling profiling)
 {
-    mImpl->profiling.settings = profiling;
+    mImpl->timing.settings = profiling;
 }
 
 void Engine::setStatsCallback(const StatsCallback& onStats)
 {
-    mImpl->profiling.statsQueue.setCallback(onStats);
+    mImpl->timing.statsQueue.setCallback(onStats);
 }
 
 #ifndef __EMSCRIPTEN__

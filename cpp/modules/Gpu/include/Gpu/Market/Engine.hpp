@@ -128,7 +128,8 @@ public:
     {
         double gpuTimingProbability = 1.0;
     };
-    void setProfiling(std::variant<ProfilingOff, ProfilingOn> profiling);
+    using Profiling = std::variant<ProfilingOff, ProfilingOn>;
+    void setProfiling(Profiling profiling);
 
     /**
      * Calls `onStats` once for each frame, in order, once its GPU times are

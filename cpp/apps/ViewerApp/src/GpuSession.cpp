@@ -118,7 +118,7 @@ void GpuSession::setWakeCallback(std::function<void()> onWake)
     mOnWake = std::move(onWake);
 }
 
-void GpuSession::setProfiling(std::variant<Gpu::Market::Engine::ProfilingOff, Gpu::Market::Engine::ProfilingOn> profiling)
+void GpuSession::setProfiling(Gpu::Market::Engine::Profiling profiling)
 {
     mProfiling = profiling;
     if (mEngine)
