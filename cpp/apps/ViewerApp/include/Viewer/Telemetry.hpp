@@ -14,7 +14,7 @@
 namespace Viewer {
 
 /**
- * What the viewer reports, and when: the event catalog of design/telemetry.md.
+ * What the viewer reports, and when (see Telemetry in README.md).
  * App tells it what happens; it sums that up and sends a summary a minute,
  * only while the user agrees. Nothing it sends holds market data: counts,
  * sizes and times only.

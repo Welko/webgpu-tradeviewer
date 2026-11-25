@@ -14,12 +14,13 @@ cpp/
                        Core/Data/       trades, their CSV parser (Tardis and Binance), exact totals,
                                         the price tree, column summaries, synthetic trades
                        Core/Plot/       where trades go on screen, without a GPU: axis ticks and
-                                        their labels, picking
+                                        their labels, picking, and the sizes drawing and picking
+                                        share (markers, summary bars, the space around the plot)
   modules/Gpu        WebGPU rendering and compute. Public API is Gpu::Market::Engine (a
-                     facade with no WebGPU types) and Gpu::Market::Style (marker sizes,
-                     summary bars and the legend, no GPU needed). Context (device, surface...) and the
+                     facade with no WebGPU types) and Gpu::Market::Style (the summary
+                     bars' opacity and the legend, no GPU needed). Context (device, surface...) and the
                      passes are internal (src/include): Gpu::Plot (plot area, grid) is
-                     generic, Gpu::Market (trades) is about markets. Design: design/gpu.md
+                     generic, Gpu::Market (trades) is about markets
   apps/ViewerApp     the viewer:
                        App.cpp          ViewerAppLib: the platform-independent part
                                         (view state, input, engine), shared with BenchmarkApp
@@ -321,9 +322,9 @@ Picking runs on the CPU in double precision. Trades are sorted by time, so a bin
 
 ### Legend
 
-The web toolbar has a legend: the buy and sell colors, and marker sizes for a few amounts on the chosen scale. Sizes stay between 1.5 and 16 pixels, so the legend's first and last sizes stand for every smaller (≤) or larger (≥) amount too. Both scales are fitted to the file's amounts when it loads (`Gpu::Market::Style::fitMarkerSizing`), so any market gets the full range of sizes: sorted by size, the largest marker goes to the trade 99.9% of the way up, so a few extreme trades don't shrink all the others. The area scale's radius grows with the square root of the amount from there, and the log scale runs from the trade 1% of the way up to that largest marker. On the brief's day that's up to 5.9 BTC, from 0.052 BTC on the area scale and 0.00002 BTC on the log scale. Natively, the log shows the same legend at startup and whenever `M` changes the scale.
+The web toolbar has a legend: the buy and sell colors, and marker sizes for a few amounts on the chosen scale. Sizes stay between 1.5 and 16 pixels, so the legend's first and last sizes stand for every smaller (≤) or larger (≥) amount too. Both scales are fitted to the file's amounts when it loads (`Core::Plot::fitMarkerSizing`), so any market gets the full range of sizes: sorted by size, the largest marker goes to the trade 99.9% of the way up, so a few extreme trades don't shrink all the others. The area scale's radius grows with the square root of the amount from there, and the log scale runs from the trade 1% of the way up to that largest marker. On the brief's day that's up to 5.9 BTC, from 0.052 BTC on the area scale and 0.00002 BTC on the log scale. Natively, the log shows the same legend at startup and whenever `M` changes the scale.
 
-The sizes are set in one place, `Gpu/Market/Style.hpp`, and the colors in the theme (below). The trades shader gets both as uniforms, and the legend is built from the same values, so the two can't drift apart. A GPU test draws one trade of each legend amount and measures it: its diameter matches the legend to within a pixel, at pixel ratios 1 and 2, and its color matches the legend's color at its opacity.
+The sizes are set in one place, `Core/Plot/Sizes.hpp`, and the colors in the theme (below). The trades shader gets both as uniforms, and the legend is built from the same values, so the two can't drift apart. A GPU test draws one trade of each legend amount and measures it: its diameter matches the legend to within a pixel, at pixel ratios 1 and 2, and its color matches the legend's color at its opacity.
 
 ### Colors
 

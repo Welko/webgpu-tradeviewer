@@ -2,7 +2,7 @@
 // One instance per trade; layouts must match GpuTrade and Uniforms in TradesPass.cpp.
 // A second pipeline rings the highlighted trade, with the same placement.
 
-// How markers look: colors from the theme, sizes from Gpu/Market/Style.hpp.
+// How markers look: colors from the theme, sizes from Core/Plot/Sizes.hpp.
 struct Markers {
     buyColor: vec3f,
     opacity: f32,
@@ -11,7 +11,7 @@ struct Markers {
     // Radii in CSS or window pixels.
     minRadiusCssPx: f32,
     maxRadiusCssPx: f32,
-    // Fitted to the trades (Style::MarkerSizing): the area scale reaches
+    // Fitted to the trades (Core::Plot::MarkerSizing): the area scale reaches
     // maxRadiusCssPx at highAmount; the log scale grows from minRadiusCssPx
     // at lowAmount to maxRadiusCssPx at highAmount.
     lowAmount: f32,
@@ -54,7 +54,7 @@ fn sinceStartUs(time: vec2u) -> f32 {
     return f32(high) * 4294967296.0 + f32(low);
 }
 
-/** In physical pixels. Style::MarkerSizing::getRadiusCssPx() computes the same in CSS or window pixels. */
+/** In physical pixels. Core::Plot::MarkerSizing::getRadiusCssPx() computes the same in CSS or window pixels. */
 fn markerRadiusPx(amount: f32) -> f32 {
     let markers = view.markers;
     var radiusCssPx: f32;

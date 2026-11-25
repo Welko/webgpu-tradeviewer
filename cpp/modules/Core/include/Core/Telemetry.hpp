@@ -17,7 +17,7 @@
 
 /**
  * Anonymous usage and performance events, sent only while the user agrees
- * (see design/telemetry.md). Knows nothing about markets or where events go:
+ * (see Telemetry in README.md). Knows nothing about markets or where events go:
  * a Sink takes them there.
  */
 namespace Core::Telemetry {

@@ -1,8 +1,9 @@
 #include "Gpu/Market/TradesPass.hpp"
 
 #include "Gpu/Convert.hpp"
-#include "Gpu/Market/Style.hpp"
 #include "Gpu/Shaders/TradesPass.hpp"
+
+#include "Core/Plot/Sizes.hpp"
 
 #include <algorithm>
 #include <array>

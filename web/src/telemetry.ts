@@ -1,5 +1,5 @@
 /**
- * Anonymous telemetry (see design/telemetry.md): nothing is sent, and PostHog
+ * Anonymous telemetry (see Telemetry in README.md): nothing is sent, and PostHog
  * isn't even loaded, until the user agrees. The viewer builds the events
  * (Viewer::Telemetry); this hands them to PostHog, adds the page's own
  * errors and how loading files went, and remembers the user's choice.

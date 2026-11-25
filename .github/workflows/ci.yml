@@ -256,7 +256,7 @@ jobs:
 
       # Builds the wasm module, type-checks, and writes the site to docs/.
       # Only main's site, the one published, can send telemetry, and only
-      # after its users agree (see design/telemetry.md).
+      # after its users agree (see Telemetry in README.md).
       - name: Build
         working-directory: web
         env:
