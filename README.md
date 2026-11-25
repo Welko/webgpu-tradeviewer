@@ -24,6 +24,8 @@ cpp/
   apps/ViewerApp     the viewer:
                        App.cpp          ViewerAppLib: the platform-independent part
                                         (view state, input, engine), shared with BenchmarkApp
+                       View.cpp, ...    ViewerParts: App's parts (View, Axes, Summaries,
+                                        Pointer), Core only, so tested without a GPU
                        Scene.cpp        the image tests' scenes, drawn alike on every platform
                        Native/          the native app: Main (the loop), Options (the command line),
                                         Window (GLFW, input), Report (the title and the log), Snapshot

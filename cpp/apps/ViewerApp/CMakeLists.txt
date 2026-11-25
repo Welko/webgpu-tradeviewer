@@ -1,12 +1,17 @@
+# App's parts (view, axes, summaries, pointer): Core only, no GPU, so they're
+# tested on every platform, in Node too.
+add_library(ViewerParts STATIC src/Axes.cpp src/Layout.cpp src/Pointer.cpp src/Summaries.cpp src/View.cpp)
+viewer_setup_target(ViewerParts)
+target_include_directories(ViewerParts PUBLIC include)
+target_link_libraries(ViewerParts PUBLIC Core)
+
 # The viewer without its platform (view state, input, engine), so BenchmarkApp
 # can drive the same code.
-add_library(ViewerAppLib STATIC src/App.cpp src/Axes.cpp src/GpuSession.cpp src/Layout.cpp src/Pointer.cpp src/Scene.cpp src/Summaries.cpp
-                                 src/Telemetry.cpp src/View.cpp)
+add_library(ViewerAppLib STATIC src/App.cpp src/GpuSession.cpp src/Scene.cpp src/Telemetry.cpp)
 viewer_setup_target(ViewerAppLib)
 # What telemetry says it is.
 target_compile_definitions(ViewerAppLib PRIVATE TRADEVIEWER_BUILD="${TRADEVIEWER_BUILD}" TRADEVIEWER_VERSION="${PROJECT_VERSION}")
-target_include_directories(ViewerAppLib PUBLIC include)
-target_link_libraries(ViewerAppLib PUBLIC Core Gpu)
+target_link_libraries(ViewerAppLib PUBLIC ViewerParts Gpu)
 
 add_executable(ViewerApp)
 viewer_setup_target(ViewerApp)
@@ -86,6 +91,6 @@ else()
     endif()
 
     target_copy_webgpu_binaries(ViewerApp)
-
-    add_subdirectory(tests)
 endif()
+
+add_subdirectory(tests)

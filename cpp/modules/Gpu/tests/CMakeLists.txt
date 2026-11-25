@@ -15,7 +15,11 @@ target_copy_webgpu_binaries(GpuTests)
 # them on lavapipe; they fail rather than skip without a GPU.
 if(NOT EMSCRIPTEN)
     viewer_add_test(GpuDeviceTests
-        EngineTests.cpp
+        EngineDrawingTests.cpp
+        EngineMemoryTests.cpp
+        EngineOffscreenTests.cpp
+        EngineProfilingTests.cpp
+        EngineTesting.cpp
         GrowableBufferTests.cpp
         ProfilerTests.cpp
     )
