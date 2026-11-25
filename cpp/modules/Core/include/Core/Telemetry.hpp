@@ -27,6 +27,7 @@ inline constexpr bool Compiled = TRADEVIEWER_TELEMETRY != 0;
 
 using Value = std::variant<bool, std::int64_t, double, std::string>;
 
+/** One named value an event carries. */
 struct Property
 {
     std::string name;
@@ -35,6 +36,7 @@ struct Property
     bool operator==(const Property&) const = default;
 };
 
+/** Something that happened, as the analytics service receives it: a name and its properties. */
 struct Event
 {
     std::string name;
@@ -59,6 +61,8 @@ class Sink
 {
 public:
     virtual ~Sink() = default;
+
+    /** Called by Client for each event it lets through: after consent, within its limits. */
     virtual void send(const Event& event) = 0;
 };
 

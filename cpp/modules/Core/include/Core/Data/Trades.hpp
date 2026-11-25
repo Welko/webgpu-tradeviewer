@@ -67,6 +67,7 @@ struct TradeStats
     double totalAmount;
 };
 
+/** The stats of all of `trades`, its total exact (added up in whole amount steps). */
 inline TradeStats getStats(const Trades& trades)
 {
     if (trades.empty())

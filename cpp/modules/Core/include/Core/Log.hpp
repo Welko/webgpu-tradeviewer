@@ -26,6 +26,7 @@ void log(std::ostream& os, std::string_view level, std::format_string<Args...> f
     os << level << ": " << std::format(fmt, std::forward<Args>(args)...) << std::endl;
 }
 
+/** Logs at that level, to stdout for info and stderr otherwise. error() also calls onError. */
 template<typename... Args>
 void info(std::format_string<Args...> fmt, Args&&... args)
 {

@@ -138,6 +138,12 @@ cd web && npm run format     # reformats the web code
 
 Both clang tools are version 20, as on CI's Ubuntu 24.04: other versions format differently, and clang-tidy 18 can't read GCC 13's `std::expected`. clang-tidy reads the native build's `compile_commands.json`, so `Web/`, built only by Emscripten, isn't checked.
 
+Doc comments (`/** */` before a declaration, `///<` after an enum value):
+
+- **A module's public API** (`Core/include`, `Gpu/include`): every class and function has one, saying what the name can't: units, edge cases, who owns what.
+- **Everything else** (`src/include`, App and its parts, Native, Web): a class gets one line saying what it is; a function or member gets one only for what its name can't say (a unit, a contract, a reason).
+- **Never a comment that restates the name.** Comments inside functions say why, not what.
+
 The built site has smoke tests in a real browser ([Playwright](https://playwright.dev), Chromium with WebGPU on its software renderer, SwiftShader). They need Node 20 or newer:
 
 ```bash

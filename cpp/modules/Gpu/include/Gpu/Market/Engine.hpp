@@ -83,6 +83,7 @@ public:
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
+    /** The GPU the engine runs on. */
     [[nodiscard]] const Gpu::Type::Info& getInfo() const;
 
     /** Shows `settings` from the next frame on. Only the parts that changed cost anything. Settings' defaults until called. */
@@ -126,9 +127,12 @@ public:
     {};
     struct ProfilingOn
     {
+        /** The share of frames, from 0 to 1, also timed on the GPU. Every frame is timed on the CPU. */
         double gpuTimingProbability = 1.0;
     };
     using Profiling = std::variant<ProfilingOff, ProfilingOn>;
+
+    /** Times frames from the next one on, as setStatsCallback reports them. Off until called. */
     void setProfiling(Profiling profiling);
 
     /**

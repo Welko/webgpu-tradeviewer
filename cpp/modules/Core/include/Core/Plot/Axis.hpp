@@ -12,6 +12,7 @@
  */
 namespace Core::Plot::Axis {
 
+/** Where a grid line goes, and the label it gets. */
 struct Tick
 {
     /** Along the axis: 0 at the start (left, bottom), 1 at the end. */

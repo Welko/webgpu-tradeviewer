@@ -20,6 +20,7 @@ struct Color
     bool operator==(const Color&) const = default;
 };
 
+/** The GPU and graphics API in use, as the adapter reports them; any of them may be empty. */
 struct Info
 {
     std::string vendor;
