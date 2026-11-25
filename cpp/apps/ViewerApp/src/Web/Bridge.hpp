@@ -50,7 +50,7 @@ public:
     [[nodiscard]] val getAxes() const;
     /** What markers look like at the current marker scale, for a legend (see Convert::ToWeb::legend()). */
     [[nodiscard]] val getLegend() const;
-    /** While the view shows column summaries, { across, withTrades }: the columns, and those with trades. Otherwise null. */
+    /** While the view shows column summaries, { columnCount, withTrades }: the columns, and those with trades. Otherwise null. */
     [[nodiscard]] val getSummaries() const;
     [[nodiscard]] TradeStats getTradeStats() const;
     [[nodiscard]] val getInstrument() const;

@@ -125,12 +125,12 @@ val Bridge::getSummaries() const
     return withApp(
         [](const App& app) {
             const auto& summaries = app.getSummaries();
-            if (summaries.getNumColumns() == 0)
+            if (summaries.getColumnCount() == 0)
             {
                 return val::null();
             }
             val result = val::object();
-            result.set("across", summaries.getNumColumns());
+            result.set("columnCount", summaries.getColumnCount());
             result.set("withTrades", static_cast<double>(summaries.getColumns().size()));
             return result;
         },

@@ -110,18 +110,19 @@ struct ColumnBar
 };
 
 /**
- * Column `column.index` of the `across` that split the plot, as a vertical
+ * Column `column.index` of the `columnCount` that split the plot, as a vertical
  * line through its center from its highest to its lowest price, at least
  * `minHeight` pixels long.
  */
-[[nodiscard]] inline ColumnBar getColumnBar(const Data::ColumnSummary& column, std::size_t across, const Mapping& plot, double minHeight)
+[[nodiscard]] inline ColumnBar getColumnBar(const Data::ColumnSummary& column, std::size_t columnCount, const Mapping& plot,
+                                            double minHeight)
 {
     double top = plot.getY(column.price.high);
     double bottom = plot.getY(column.price.low);
     const double grow = std::max(0.0, minHeight - (bottom - top)) / 2.0;
     top -= grow;
     bottom += grow;
-    const double centerX = (static_cast<double>(column.index) + 0.5) * plot.width / static_cast<double>(across);
+    const double centerX = (static_cast<double>(column.index) + 0.5) * plot.width / static_cast<double>(columnCount);
     return { .centerX = centerX, .top = top, .bottom = bottom };
 }
 
@@ -129,14 +130,14 @@ struct ColumnBar
  * The column summary the pointer at (`pointerX`, `pointerY`) points at, by its
  * position in `columns`: the one whose bar (see getColumnBar) is nearest, by
  * straight-line distance on screen, within `pickRadius`. Ties go to the later
- * column. `columns` holds only those with trades, of the `across` that split
+ * column. `columns` holds only those with trades, of the `columnCount` that split
  * the plot.
  */
-[[nodiscard]] inline std::optional<std::size_t> pickColumn(std::span<const Data::ColumnSummary> columns, std::size_t across,
+[[nodiscard]] inline std::optional<std::size_t> pickColumn(std::span<const Data::ColumnSummary> columns, std::size_t columnCount,
                                                            const Mapping& plot, double pointerX, double pointerY, double pickRadius,
                                                            double minHeight)
 {
-    if (across == 0 || !(plot.width > 0.0 && plot.height > 0.0 && plot.price.high > plot.price.low) || pointerX < 0.0 || pointerY < 0.0
+    if (columnCount == 0 || !(plot.width > 0.0 && plot.height > 0.0 && plot.price.high > plot.price.low) || pointerX < 0.0 || pointerY < 0.0
         || pointerX > plot.width || pointerY > plot.height)
     {
         return std::nullopt;
@@ -145,7 +146,7 @@ struct ColumnBar
     double nearestSquared = pickRadius * pickRadius;
     for (std::size_t i = 0; i < columns.size(); ++i)
     {
-        const ColumnBar bar = getColumnBar(columns[i], across, plot, minHeight);
+        const ColumnBar bar = getColumnBar(columns[i], columnCount, plot, minHeight);
         const double dx = bar.centerX - pointerX;
         const double dy = pointerY < bar.top ? bar.top - pointerY : (pointerY > bar.bottom ? pointerY - bar.bottom : 0.0);
         const double squared = dx * dx + dy * dy;

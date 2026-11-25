@@ -74,7 +74,7 @@ export interface PickedColumn {
 /** What Viewer.summaries() returns while the view is crowded enough to show column summaries. */
 export interface Summaries {
   /** Columns across the plot, one per CSS pixel. */
-  across: number;
+  columnCount: number;
   /** Those with trades: the bars drawn. */
   withTrades: number;
 }

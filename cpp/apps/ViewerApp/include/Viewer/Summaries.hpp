@@ -15,7 +15,7 @@ namespace Viewer {
 class Summaries
 {
 public:
-    [[nodiscard]] std::uint32_t getNumColumns() const { return mAcross; }
+    [[nodiscard]] std::uint32_t getColumnCount() const { return mColumnCount; }
     [[nodiscard]] const std::vector<Core::Data::ColumnSummary>& getColumns() const { return mColumns; }
     [[nodiscard]] std::size_t getBytes() const;
 
@@ -27,7 +27,7 @@ public:
 private:
     bool mAllowed = true;
     double mThreshold = 32.0;
-    std::uint32_t mAcross = 0;
+    std::uint32_t mColumnCount = 0;
     std::vector<Core::Data::ColumnSummary> mColumns;
 };
 

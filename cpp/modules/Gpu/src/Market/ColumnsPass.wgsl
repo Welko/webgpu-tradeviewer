@@ -5,7 +5,7 @@
 // One instance per column; layouts must match GpuColumn and Uniforms in ColumnsPass.cpp.
 
 struct View {
-    across: f32,  // columns splitting the plot, some without trades
+    columnCount: f32,  // columns splitting the plot, some without trades
     priceLow: f32,
     priceSpan: f32,
     plotWidthPx: f32,
@@ -37,7 +37,7 @@ fn vertexMain(column: Column, @builtin(vertex_index) corner: u32, @builtin(insta
                         vec2f(0.0, 1.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0));
     let unit = corners[corner];
     // Pixels from the plot's bottom left corner.
-    let xPx = (f32(column.index) + unit.x) * view.plotWidthPx / view.across;
+    let xPx = (f32(column.index) + unit.x) * view.plotWidthPx / view.columnCount;
     var lowPx = (column.price.x - view.priceLow) / view.priceSpan * view.plotHeightPx;
     var highPx = (column.price.y - view.priceLow) / view.priceSpan * view.plotHeightPx;
     let growPx = max(0.0, view.minHeightCssPx * view.pixelRatio - (highPx - lowPx)) / 2.0;

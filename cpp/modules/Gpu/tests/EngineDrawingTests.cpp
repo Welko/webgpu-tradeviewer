@@ -238,7 +238,7 @@ TEST_CASE("Columns are drawn instead of trades, as bars over their price range, 
     engine->setSettings({ .view = viewOf({ .first = 0, .last = 1 }) });
     // 10 columns of 10 pixels. Prices 99 to 101 fill the height, top down.
     engine->setColumns(Gpu::Market::Type::Columns{
-        .across = 10,
+        .columnCount = 10,
         .columns = {
             { .index = 2, .price = { .low = 99.5, .high = 100.5 }, .buyAmount = 2.0, .sellAmount = 0.0 },  // rows 25 to 75
             { .index = 7, .price = { .low = 100.0, .high = 100.0 }, .buyAmount = 0.0, .sellAmount = 2.0 },  // 2 pixels around row 50

@@ -43,21 +43,21 @@ void Pointer::update(const Core::Data::PreprocessedTrades& data, const View& vie
     const auto plot = view.getMapping(layout);
     const double pointerXPx = mXPx - layout.insets.left;
     const double pointerYPx = mYPx - layout.insets.top;
-    const auto across = summaries.getNumColumns();
-    if (across > 0)
+    const auto columnCount = summaries.getColumnCount();
+    if (columnCount > 0)
     {
         const auto& columns = summaries.getColumns();
         const double minHeightPx = Core::Plot::ColumnMinHeightCssPx * ratio;
-        mColumnPosition = Core::Plot::pickColumn(columns, across, plot, pointerXPx, pointerYPx, PickRadiusCssPx * ratio, minHeightPx);
+        mColumnPosition = Core::Plot::pickColumn(columns, columnCount, plot, pointerXPx, pointerYPx, PickRadiusCssPx * ratio, minHeightPx);
         if (!mColumnPosition)
         {
             return;
         }
         const auto& column = columns[*mColumnPosition];
-        const auto bar = Core::Plot::getColumnBar(column, across, plot, minHeightPx);
+        const auto bar = Core::Plot::getColumnBar(column, columnCount, plot, minHeightPx);
         const auto time = view.getTimeRange();
         const std::int64_t length = time.getLengthUs();
-        const auto count = static_cast<std::int64_t>(across);
+        const auto count = static_cast<std::int64_t>(columnCount);
         const auto index = static_cast<std::int64_t>(column.index);
         mPicked = Picked::Column{
             .summary = column,

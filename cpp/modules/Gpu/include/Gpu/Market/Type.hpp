@@ -52,7 +52,7 @@ struct Legend
 /** The trades in one column of the plot, summed up, to draw as a bar instead of their markers. */
 struct Column
 {
-    std::uint32_t index;  // of Columns::across, from the plot's left
+    std::uint32_t index;  // of Columns::columnCount, from the plot's left
     Core::ValueRange price;  // lowest and highest traded
     double buyAmount;
     double sellAmount;
@@ -62,13 +62,13 @@ struct Column
 
 /**
  * Summaries to draw instead of the view's trades. The plot is split into
- * `across` columns of equal width, which places each one; only those with
- * trades are listed, so `columns.size()` can be smaller than `across`, with
+ * `columnCount` columns of equal width, which places each one; only those with
+ * trades are listed, so `columns.size()` can be smaller than `columnCount`, with
  * gaps where nothing traded.
  */
 struct Columns
 {
-    std::uint32_t across = 0;
+    std::uint32_t columnCount = 0;
     std::vector<Column> columns;  // in any order
 
     bool operator==(const Columns&) const = default;

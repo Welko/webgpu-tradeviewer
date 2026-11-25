@@ -61,7 +61,7 @@ std::string getWindowTitle(const App& app)
     const auto view = app.getView().getTimeRange();
     const auto stats = app.getView().getStats();
     return std::format("Trade Viewer · {} to {} UTC · {} trades, {}{}", formatUtc(view.startUs), formatUtc(view.endUs), stats.count,
-                       amount(stats.totalAmount), app.getSummaries().getNumColumns() > 0 ? " · summarized: one bar per pixel column" : "");
+                       amount(stats.totalAmount), app.getSummaries().getColumnCount() > 0 ? " · summarized: one bar per pixel column" : "");
 }
 
 void logTrades(const App& app, bool loaded)

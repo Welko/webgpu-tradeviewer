@@ -126,8 +126,8 @@ TEST_CASE("Over column summaries, the pointer picks the column it's on, and the 
 {
     // 1000 trades a microsecond apart, across 20 columns of 50 µs.
     auto parts = Parts(1000, 1, makeLayout(20));
-    CHECK(parts.summaries.getNumColumns() == 20);
-    if (!(parts.summaries.getNumColumns() == 20))
+    CHECK(parts.summaries.getColumnCount() == 20);
+    if (!(parts.summaries.getColumnCount() == 20))
     {
         return;
     }

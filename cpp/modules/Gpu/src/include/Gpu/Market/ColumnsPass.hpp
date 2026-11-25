@@ -49,7 +49,7 @@ private:
     Handle<WGPUBindGroup> mBindGroup;
     GrowableBuffer mColumns;
 
-    std::uint32_t mAcross = 0;  // columns splitting the plot
+    std::uint32_t mColumnCount = 0;  // columns splitting the plot
     Type::View mView{};
     Type::Theme mTheme;
     float mPixelRatio = 1.0f;

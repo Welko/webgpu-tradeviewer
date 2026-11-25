@@ -40,12 +40,12 @@ Gpu::Plot::Type::Grid grid(const Axes& axes)
 /** The summaries' columns as the engine takes them, or none while trades show. */
 std::optional<Gpu::Market::Type::Columns> columns(const Summaries& summaries)
 {
-    const auto across = summaries.getNumColumns();
-    if (across == 0)
+    const auto columnCount = summaries.getColumnCount();
+    if (columnCount == 0)
     {
         return std::nullopt;
     }
-    Gpu::Market::Type::Columns columns{ .across = across, .columns = {} };
+    Gpu::Market::Type::Columns columns{ .columnCount = columnCount, .columns = {} };
     columns.columns.reserve(summaries.getColumns().size());
     for (const auto& column : summaries.getColumns())
     {
@@ -308,7 +308,7 @@ void App::render()
     if (auto* engine = mGpu.getEngine())
     {
         engine->render();
-        mTelemetry.recordFrame(mSummaries.getNumColumns() > 0, mView.getTrades().size());
+        mTelemetry.recordFrame(mSummaries.getColumnCount() > 0, mView.getTrades().size());
     }
 }
 

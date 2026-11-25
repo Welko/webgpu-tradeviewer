@@ -31,7 +31,7 @@ struct GpuColumn
 /** The shader's View uniform (ColumnsPass.wgsl). */
 struct Uniforms
 {
-    float across;
+    float columnCount;
     float priceLow;
     float priceSpan;
     float plotWidthPx;
@@ -137,7 +137,7 @@ ColumnsPass::ColumnsPass(const Context& context, Resource::Stats& stats, WGPUTex
 
 void ColumnsPass::setColumns(const Type::Columns& columns)
 {
-    mAcross = columns.across;
+    mColumnCount = columns.columnCount;
     double largest = 0.0;
     for (const auto& column : columns.columns)
     {
@@ -160,14 +160,14 @@ void ColumnsPass::setColumns(const Type::Columns& columns)
     if (auto appended = mColumns.append(std::as_bytes(std::span(packed))); !appended)
     {
         Core::Log::error("Failed to upload {} column summaries: {}", packed.size(), appended.error());
-        mAcross = 0;
+        mColumnCount = 0;
     }
 }
 
 void ColumnsPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot::Area plot, Profiler& profiler)
 {
     const Uniforms uniforms{
-        .across = static_cast<float>(mAcross),
+        .columnCount = static_cast<float>(mColumnCount),
         .priceLow = static_cast<float>(mView.price.low),
         .priceSpan = static_cast<float>(mView.price.high - mView.price.low),
         .plotWidthPx = static_cast<float>(plot.width),
@@ -200,7 +200,7 @@ void ColumnsPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plo
     const Handle pass(wgpuCommandEncoderBeginRenderPass(encoder, &descriptor));
 
     const auto count = static_cast<std::uint32_t>(mColumns.size() / sizeof(GpuColumn));
-    if (count > 0 && mAcross > 0 && !plot.empty() && mView.price.high > mView.price.low)
+    if (count > 0 && mColumnCount > 0 && !plot.empty() && mView.price.high > mView.price.low)
     {
         plot.apply(pass.get());
         wgpuRenderPassEncoderSetPipeline(pass.get(), mPipeline.get());

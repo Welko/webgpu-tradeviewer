@@ -52,7 +52,7 @@ TEST_CASE("A view with more than 32 trades per pixel column on average shows col
     }
     // The hour holds about 17,900 synthetic trades: 45 per column.
     CHECK(app->getView().getStats().count > 32 * WidthPx);
-    CHECK(app->getSummaries().getNumColumns() == WidthPx);
+    CHECK(app->getSummaries().getColumnCount() == WidthPx);
 
     // Every trade in view is in exactly one column.
     std::size_t count = 0;
@@ -65,7 +65,7 @@ TEST_CASE("A view with more than 32 trades per pixel column on average shows col
     // A minute holds about 300.
     app->zoomAt(WidthPx / 2.0, 1.0 / 60.0);
     CHECK(app->getView().getStats().count < 32 * WidthPx);
-    CHECK(app->getSummaries().getNumColumns() == 0);
+    CHECK(app->getSummaries().getColumnCount() == 0);
     CHECK(app->getSummaries().getColumns().empty());
 }
 
@@ -77,14 +77,14 @@ TEST_CASE("The threshold can be set, and summaries turned off")
         return;
     }
     app->setSummaryThreshold(1000.0);
-    CHECK(app->getSummaries().getNumColumns() == 0);
+    CHECK(app->getSummaries().getColumnCount() == 0);
     app->setView(Core::getUtcDay(app->getTrades().timeUs.front()));
-    CHECK(app->getSummaries().getNumColumns() == WidthPx);  // over 1000 per column
+    CHECK(app->getSummaries().getColumnCount() == WidthPx);  // over 1000 per column
 
     app->setSummariesAllowed(false);
-    CHECK(app->getSummaries().getNumColumns() == 0);
+    CHECK(app->getSummaries().getColumnCount() == 0);
     app->setSummariesAllowed(true);
-    CHECK(app->getSummaries().getNumColumns() == WidthPx);
+    CHECK(app->getSummaries().getColumnCount() == WidthPx);
 }
 
 TEST_CASE("While summaries show, the pointer picks columns, not trades")

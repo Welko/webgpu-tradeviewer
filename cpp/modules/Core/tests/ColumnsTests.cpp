@@ -159,16 +159,16 @@ TEST_CASE("Columns account for every trade in view, whatever the count")
     const Core::TimeRange view{ .startUs = NoonUs, .endUs = NoonUs + 3'600'000'000 };
     const PreprocessedTrades preprocessed(Core::Data::generateSyntheticTrades(view.startUs - 60'000'000, view.endUs + 60'000'000, 2));
     const auto inView = Core::Data::getTradesIn(preprocessed.getTrades(), view);
-    for (const std::size_t across : { 1, 3, 1000, 1601 })
+    for (const std::size_t columnCount : { 1, 3, 1000, 1601 })
     {
-        CAPTURE(across);
-        const auto columns = Core::Data::summarizeColumns(preprocessed, view, across);
+        CAPTURE(columnCount);
+        const auto columns = Core::Data::summarizeColumns(preprocessed, view, columnCount);
         std::size_t next = inView.first;
         std::int64_t units = 0;
         for (const auto& column : columns)
         {
             CHECK(column.trades.first == next);
-            CHECK(column.index < across);
+            CHECK(column.index < columnCount);
             next = column.trades.last;
             const auto& instrument = preprocessed.getTrades().instrument;
             units += instrument.toAmountUnits(column.buyAmount) + instrument.toAmountUnits(column.sellAmount);

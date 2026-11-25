@@ -45,11 +45,11 @@ TEST_CASE("Past 32 trades per CSS px column on average, columns summarize the vi
     Viewer::Summaries summaries;
 
     CHECK_FALSE(summaries.update(data, view, makeLayout(30)));
-    CHECK(summaries.getNumColumns() == 0);
+    CHECK(summaries.getColumnCount() == 0);
     CHECK(summaries.getColumns().empty());
 
     CHECK(summaries.update(data, view, makeLayout(29)));
-    CHECK(summaries.getNumColumns() == 29);
+    CHECK(summaries.getColumnCount() == 29);
     const auto expected = Core::Data::summarizeColumns(data, view.getTimeRange(), 29);
     CHECK(summaries.getColumns().size() == expected.size());
     if (!(summaries.getColumns().size() == expected.size()))
@@ -70,7 +70,7 @@ TEST_CASE("Columns are a CSS px wide, so a pixel ratio of 2 halves how many ther
     Viewer::Summaries summaries;
 
     CHECK(summaries.update(data, view, makeLayout(40, 2.0f)));
-    CHECK(summaries.getNumColumns() == 20);
+    CHECK(summaries.getColumnCount() == 20);
 }
 
 TEST_CASE("update says whether there are new columns, or columns no longer")
@@ -84,7 +84,7 @@ TEST_CASE("update says whether there are new columns, or columns no longer")
 
     // 1000 trades are fewer than 32 per column across 40.
     CHECK(summaries.update(data, view, makeLayout(40)));
-    CHECK(summaries.getNumColumns() == 0);
+    CHECK(summaries.getColumnCount() == 0);
     CHECK(summaries.getColumns().empty());
     CHECK_FALSE(summaries.update(data, view, makeLayout(40)));
 }
@@ -98,7 +98,7 @@ TEST_CASE("Summaries can be turned off, and their threshold moved")
 
     summaries.setAllowed(false);
     CHECK_FALSE(summaries.update(data, view, layout));
-    CHECK(summaries.getNumColumns() == 0);
+    CHECK(summaries.getColumnCount() == 0);
 
     // 50 trades per column.
     summaries.setAllowed(true);
@@ -106,7 +106,7 @@ TEST_CASE("Summaries can be turned off, and their threshold moved")
     CHECK_FALSE(summaries.update(data, view, layout));
     summaries.setThreshold(49.0);
     CHECK(summaries.update(data, view, layout));
-    CHECK(summaries.getNumColumns() == 20);
+    CHECK(summaries.getColumnCount() == 20);
 }
 
 TEST_CASE("Without room for a plot, there are no columns")
@@ -116,7 +116,7 @@ TEST_CASE("Without room for a plot, there are no columns")
     Viewer::Summaries summaries;
 
     CHECK_FALSE(summaries.update(data, view, makeLayout(0)));
-    CHECK(summaries.getNumColumns() == 0);
+    CHECK(summaries.getColumnCount() == 0);
 }
 
 TEST_CASE("Summaries count the memory their columns hold")

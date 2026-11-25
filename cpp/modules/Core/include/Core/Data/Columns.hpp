@@ -20,16 +20,16 @@ struct ColumnSummary
 };
 
 /**
- * The trades in `view`, split by time into `across` columns of equal length,
+ * The trades in `view`, split by time into `columnCount` columns of equal length,
  * each summed up: price range, and amount and count by side. Column i holds
- * the trades in [start + i·length / across, start + (i + 1)·length / across),
+ * the trades in [start + i·length / columnCount, start + (i + 1)·length / columnCount),
  * whole microseconds, so each trade is in exactly one.
  *
- * Only columns with trades are returned, so there can be fewer than `across`,
- * with gaps in their indices where nothing traded. Reads O(across · log n)
+ * Only columns with trades are returned, so there can be fewer than `columnCount`,
+ * with gaps in their indices where nothing traded. Reads O(columnCount · log n)
  * entries, and at most 30 prices per column, however many trades the
  * columns hold.
  */
-[[nodiscard]] std::vector<ColumnSummary> summarizeColumns(const PreprocessedTrades& trades, TimeRange view, std::size_t across);
+[[nodiscard]] std::vector<ColumnSummary> summarizeColumns(const PreprocessedTrades& trades, TimeRange view, std::size_t columnCount);
 
 }  // namespace Core::Data
