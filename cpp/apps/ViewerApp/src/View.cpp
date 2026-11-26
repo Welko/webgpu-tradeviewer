@@ -9,7 +9,7 @@ namespace {
 
 // How far the time range can zoom.
 constexpr std::int64_t MinViewUs = 1'000;
-constexpr std::int64_t MaxViewUs = 7 * 86'400'000'000;
+constexpr std::int64_t MaxViewUs = 7 * Core::DayUs;
 
 // Space above and below the visible trades, as a share of their price range.
 constexpr double PricePadding = 0.05;

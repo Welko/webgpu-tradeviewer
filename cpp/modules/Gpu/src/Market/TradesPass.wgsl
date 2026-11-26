@@ -103,9 +103,10 @@ fn fragmentMain(marker: Marker) -> @location(0) vec4f {
 }
 
 // The ring around the highlighted trade, in CSS or window pixels: a gap
-// outside its marker, then the ring.
-const RingGapCssPx = 1.5;
-const RingWidthCssPx = 2.0;
+// outside its marker, then the ring. Set from Core/Plot/Sizes.hpp when the
+// ring's pipeline is created.
+override RingGapCssPx: f32;
+override RingWidthCssPx: f32;
 
 @vertex
 fn ringVertex(trade: Trade, @builtin(vertex_index) corner: u32) -> Marker {

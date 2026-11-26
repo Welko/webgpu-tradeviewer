@@ -1,9 +1,17 @@
+// What only test pages use: faults for the browser tests, the image tests'
+// scenes, and the benchmark's settings.
+
 #include "Web/Bridge.hpp"
+#include "Web/Convert.hpp"
+
+#include "Viewer/Benchmark.hpp"
+#include "Viewer/Scene.hpp"
 
 #include "Core/Log.hpp"
 
 #include <emscripten/bind.h>
 #include <emscripten/heap.h>
+#include <emscripten/val.h>
 
 #include <cstdlib>
 #include <string>
@@ -43,6 +51,22 @@ struct Testing
 
 }  // namespace Viewer::Web
 
+namespace {
+
+/** How web/src/benchmark.ts measures, as BenchmarkApp does. */
+Viewer::BenchmarkSettings getBenchmarkSettings()
+{
+    return Viewer::Benchmark;
+}
+
+/** The image tests' scenes (see Viewer::Web::Convert::ToWeb::scenes()). */
+emscripten::val getScenes()
+{
+    return Viewer::Web::Convert::ToWeb::scenes(Viewer::Scene::getScenes());
+}
+
+}  // namespace
+
 EMSCRIPTEN_BINDINGS(Testing)
 {
     using Viewer::Web::Testing;
@@ -52,4 +76,13 @@ EMSCRIPTEN_BINDINGS(Testing)
         .class_function("trap", &Testing::trap)
         .class_function("logError", &Testing::logError)
         .class_function("exhaustMemory", &Testing::exhaustMemory);
+
+    emscripten::value_object<Viewer::BenchmarkSettings>("BenchmarkSettings")
+        .field("widthPx", &Viewer::BenchmarkSettings::widthPx)
+        .field("heightPx", &Viewer::BenchmarkSettings::heightPx)
+        .field("warmUpRuns", &Viewer::BenchmarkSettings::warmUpRuns)
+        .field("measuredRuns", &Viewer::BenchmarkSettings::measuredRuns);
+
+    emscripten::function("benchmarkSettings", &getBenchmarkSettings);
+    emscripten::function("scenes", &getScenes);
 }

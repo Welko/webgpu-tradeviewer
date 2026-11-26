@@ -11,7 +11,7 @@ namespace {
 using Core::Plot::Axis::Tick;
 
 constexpr std::int64_t DayStartUs = 1'575'158'400'000'000;  // 2019-12-01 00:00 UTC
-constexpr std::int64_t NoonUs = DayStartUs + 12 * 3'600'000'000LL;
+constexpr std::int64_t NoonUs = DayStartUs + 12 * Core::HourUs;
 
 std::vector<std::string> labelsOf(const std::vector<Tick>& ticks)
 {
@@ -28,7 +28,7 @@ std::vector<std::string> labelsOf(const std::vector<Tick>& ticks)
 
 TEST_CASE("Time ticks fall on round times, without the range's end")
 {
-    const auto ticks = Core::Plot::Axis::getTimeTicks({ .startUs = NoonUs, .endUs = NoonUs + 3'600'000'000 }, 6);
+    const auto ticks = Core::Plot::Axis::getTimeTicks({ .startUs = NoonUs, .endUs = NoonUs + Core::HourUs }, 6);
     CHECK(labelsOf(ticks) == std::vector<std::string>{ "12:00", "12:10", "12:20", "12:30", "12:40", "12:50" });
     CHECK(ticks.size() == 6);
     if (ticks.size() == 6)
@@ -40,9 +40,9 @@ TEST_CASE("Time ticks fall on round times, without the range's end")
 
 TEST_CASE("Time labels show the precision their step needs, and the date at midnight")
 {
-    CHECK(labelsOf(Core::Plot::Axis::getTimeTicks({ DayStartUs, DayStartUs + 86'400'000'000 }, 4))
+    CHECK(labelsOf(Core::Plot::Axis::getTimeTicks({ DayStartUs, DayStartUs + Core::DayUs }, 4))
           == std::vector<std::string>{ "2019-12-01", "06:00", "12:00", "18:00" });
-    CHECK(labelsOf(Core::Plot::Axis::getTimeTicks({ NoonUs, NoonUs + 60'000'000 }, 4))
+    CHECK(labelsOf(Core::Plot::Axis::getTimeTicks({ NoonUs, NoonUs + Core::MinuteUs }, 4))
           == std::vector<std::string>{ "12:00:00", "12:00:15", "12:00:30", "12:00:45" });
     CHECK(labelsOf(Core::Plot::Axis::getTimeTicks({ NoonUs, NoonUs + 1'000'000 }, 2))
           == std::vector<std::string>{ "12:00:00.000", "12:00:00.500" });
@@ -50,7 +50,7 @@ TEST_CASE("Time labels show the precision their step needs, and the date at midn
     CHECK(labelsOf(Core::Plot::Axis::getTimeTicks({ NoonUs + 1, NoonUs + 10 }, 5))
           == std::vector<std::string>{ "12:00:00.000002", "12:00:00.000004", "12:00:00.000006", "12:00:00.000008" });
     // Past the table of steps: whole days.
-    CHECK(Core::Plot::Axis::getTimeTicks({ DayStartUs, DayStartUs + 10 * 86'400'000'000 }, 4).size() == 4);
+    CHECK(Core::Plot::Axis::getTimeTicks({ DayStartUs, DayStartUs + 10 * Core::DayUs }, 4).size() == 4);
 }
 
 TEST_CASE("Price ticks step by 1, 2 or 5 times a power of ten")

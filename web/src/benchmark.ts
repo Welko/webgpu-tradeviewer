@@ -13,13 +13,8 @@
  */
 import { getElement } from './dom';
 import { describeGpu, type GpuInfo } from './viewer/gpuInfo';
-import { createViewer, type LoadResult, type MemoryStats, type Viewer } from './viewer/viewerModule';
+import { createViewer, loadModule, type BenchmarkSettings, type LoadResult, type MemoryStats, type Viewer } from './viewer/viewerModule';
 
-// Task 3's viewport, at a pixel ratio of 1, as natively.
-const WidthPx = 1600;
-const HeightPx = 900;
-const WarmUpUpdates = 10;
-const MeasuredUpdates = 60;
 // What the table says instead of frame times, which BenchmarkApp measures natively.
 const NotMeasured = 'not measured: no GPU in CI';
 
@@ -129,12 +124,12 @@ async function loadTrades(viewer: Viewer, url: string): Promise<{ loadMs: number
 }
 
 /** How long showing a view takes on the CPU, each time: finding its trades, the axes, any summaries. */
-function measureUpdates(viewer: Viewer, benchmark: Case): number[] {
+function measureUpdates(viewer: Viewer, benchmark: Case, settings: BenchmarkSettings): number[] {
   const times: number[] = [];
-  for (let update = 0; update < WarmUpUpdates + MeasuredUpdates; update++) {
+  for (let update = 0; update < settings.warmUpRuns + settings.measuredRuns; update++) {
     const start = performance.now();
     benchmark.show(viewer);
-    if (update >= WarmUpUpdates) {
+    if (update >= settings.warmUpRuns) {
       times.push(performance.now() - start);
     }
   }
@@ -142,14 +137,16 @@ function measureUpdates(viewer: Viewer, benchmark: Case): number[] {
 }
 
 /** 12:00–13:00, zoomed by `factor` around the middle. */
-function zoomFromHour(viewer: Viewer, factor: number) {
+function zoomFromHour(viewer: Viewer, settings: BenchmarkSettings, factor: number) {
   viewer.resetView();
-  viewer.zoomAt(WidthPx / 2, factor);
+  viewer.zoomAt(settings.widthPx / 2, factor);
 }
 
 async function run(): Promise<BenchmarkResult> {
   const viewer = await createViewer('#benchmark', 'default');
-  viewer.resize(WidthPx, HeightPx);
+  // BenchmarkApp's, from the C++ (Viewer/Benchmark.hpp), so the two tables read side by side.
+  const settings = (await loadModule()).benchmarkSettings();
+  viewer.resize(settings.widthPx, settings.heightPx);
   viewer.setPixelRatio(1);
   const gpu = describeGpu(viewer.info() as GpuInfo);
 
@@ -172,18 +169,18 @@ async function run(): Promise<BenchmarkResult> {
     { name: 'Whole day, every trade', key: 'day_every_trade', show: show(false, (v) => v.showDay()) },
     { name: 'Whole day', key: 'day', show: show(true, (v) => v.showDay()) },
     { name: '12:00–13:00', key: 'hour', show: show(true, (v) => v.resetView()) },
-    { name: '1 minute', key: 'minute', show: show(true, (v) => zoomFromHour(v, 1 / 60)) },
-    { name: '1 second', key: 'second', show: show(true, (v) => zoomFromHour(v, 1 / 3600)) },
+    { name: '1 minute', key: 'minute', show: show(true, (v) => zoomFromHour(v, settings, 1 / 60)) },
+    { name: '1 second', key: 'second', show: show(true, (v) => zoomFromHour(v, settings, 1 / 3600)) },
   ];
   const rows = [
-    `GPU: ${gpu}. ${WidthPx} × ${HeightPx} pixels; ${MeasuredUpdates} updates per view after ${WarmUpUpdates} to warm up, ` +
+    `GPU: ${gpu}. ${settings.widthPx} × ${settings.heightPx} pixels; ${settings.measuredRuns} updates per view after ${settings.warmUpRuns} to warm up, ` +
       'nothing drawn. Milliseconds: median (95th percentile).',
     '',
     '| View | Trades in view | View update (CPU) | Frame (CPU) | Frame (GPU) |',
     '|---|--:|--:|--:|--:|',
   ];
   for (const benchmark of cases) {
-    const times = measureUpdates(viewer, benchmark);
+    const times = measureUpdates(viewer, benchmark, settings);
     const median = getPercentile(times, 0.5);
     metrics.push({
       key: `${benchmark.key}_update_ms`,

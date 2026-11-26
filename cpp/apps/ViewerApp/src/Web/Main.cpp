@@ -1,11 +1,9 @@
 // The wasm module's start and what it exports to JavaScript: the `Viewer`
-// class (Bridge.hpp) and a few functions. The test hooks are bound in
-// Testing.cpp.
+// class (Bridge.hpp) and a few functions. What only test pages use is bound
+// in Testing.cpp.
 
 #include "Web/Bridge.hpp"
 #include "Web/Convert.hpp"
-
-#include "Viewer/Scene.hpp"
 
 #include "Core/Log.hpp"
 
@@ -42,12 +40,6 @@ const bool OutOfMemoryHandled = [] {
 void setErrorListener(emscripten::val onError)
 {
     Core::Log::onError = [onError](const std::string& message) { onError(message); };
-}
-
-/** The image tests' scenes (see Viewer::Web::Convert::ToWeb::scenes()). */
-emscripten::val getScenes()
-{
-    return Viewer::Web::Convert::ToWeb::scenes(Viewer::Scene::getScenes());
 }
 
 }  // namespace
@@ -118,6 +110,5 @@ EMSCRIPTEN_BINDINGS(Viewer)
         .function("setProfiling", &Bridge::setProfiling)
         .function("setStatsCallback", &Bridge::setStatsCallback);
 
-    emscripten::function("scenes", &getScenes);
     emscripten::function("setErrorListener", &setErrorListener);
 }

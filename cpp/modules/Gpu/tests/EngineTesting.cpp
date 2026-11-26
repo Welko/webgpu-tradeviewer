@@ -3,6 +3,7 @@
 #include <doctest/doctest.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <expected>
 #include <string>
@@ -67,11 +68,19 @@ bool waitForStats(Engine& engine, const std::vector<FrameStats>& reported, std::
     return reported.size() == count;
 }
 
+Rgba getDefaultBackground()
+{
+    const auto toByte = [](float channel) { return static_cast<int>(std::lround(channel * 255.0f)); };
+    const auto color = Gpu::Market::Type::Theme{}.plot.background;
+    return { .red = toByte(color.red), .green = toByte(color.green), .blue = toByte(color.blue), .alpha = 255 };
+}
+
 bool isBackground(const Pixels& pixels)
 {
     for (std::size_t i = 0; i + 3 < pixels.size(); i += 4)
     {
-        if (std::abs(pixels[i] - 18) > 1 || std::abs(pixels[i + 1] - 20) > 1 || std::abs(pixels[i + 2] - 26) > 1 || pixels[i + 3] != 255)
+        if (!isBackground(Rgba{ .red = pixels[i], .green = pixels[i + 1], .blue = pixels[i + 2], .alpha = pixels[i + 3] })
+            || pixels[i + 3] != 255)
         {
             return false;
         }
@@ -97,7 +106,10 @@ bool isSell(Rgba pixel)
 
 bool isBackground(Rgba pixel)
 {
-    return std::abs(pixel.red - 18) <= 1 && std::abs(pixel.green - 20) <= 1 && std::abs(pixel.blue - 26) <= 1;
+    // Off by 1 where a channel falls halfway between two bytes.
+    const Rgba background = getDefaultBackground();
+    return std::abs(pixel.red - background.red) <= 1 && std::abs(pixel.green - background.green) <= 1
+           && std::abs(pixel.blue - background.blue) <= 1;
 }
 
 bool isGridLine(Rgba pixel)

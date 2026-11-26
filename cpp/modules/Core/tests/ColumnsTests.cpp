@@ -49,7 +49,7 @@ TEST_CASE("The price tree gives the same range as reading every trade")
     for (const std::size_t size : { 0, 1, 2, 7, 15, 16, 17, 31, 32, 33, 64, 1000 })
     {
         CAPTURE(size);
-        const auto day = Core::Data::generateSyntheticTrades(NoonUs, NoonUs + 3'600'000'000, 1);
+        const auto day = Core::Data::generateSyntheticTrades(NoonUs, NoonUs + Core::HourUs, 1);
         Trades trades;
         for (std::size_t i = 0; i < size && i < day.size(); ++i)
         {
@@ -156,8 +156,9 @@ TEST_CASE("Columns split the view by time, each trade in exactly one, empty ones
 
 TEST_CASE("Columns account for every trade in view, whatever the count")
 {
-    const Core::TimeRange view{ .startUs = NoonUs, .endUs = NoonUs + 3'600'000'000 };
-    const PreprocessedTrades preprocessed(Core::Data::generateSyntheticTrades(view.startUs - 60'000'000, view.endUs + 60'000'000, 2));
+    const Core::TimeRange view{ .startUs = NoonUs, .endUs = NoonUs + Core::HourUs };
+    const PreprocessedTrades preprocessed(
+        Core::Data::generateSyntheticTrades(view.startUs - Core::MinuteUs, view.endUs + Core::MinuteUs, 2));
     const auto inView = Core::Data::getTradesIn(preprocessed.getTrades(), view);
     for (const std::size_t columnCount : { 1, 3, 1000, 1601 })
     {

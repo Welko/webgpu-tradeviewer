@@ -2,6 +2,8 @@
 
 #include "Gpu/Market/Style.hpp"
 
+#include "Core/Plot/Sizes.hpp"
+
 #include <doctest/doctest.h>
 
 #include <cmath>
@@ -94,7 +96,7 @@ using Core::Plot::MarkerScale;
 using Gpu::Market::Type::Theme;
 namespace Style = Gpu::Market::Style;
 
-constexpr Rgba BackgroundColor{ .red = 18, .green = 20, .blue = 26, .alpha = 255 };
+const Rgba BackgroundColor = getDefaultBackground();
 const Theme DefaultTheme;
 
 /** One trade of `amount`, drawn alone in the middle of a 100 × 100 engine, with `settings` otherwise, its scale aside. */
@@ -191,15 +193,18 @@ TEST_CASE("The highlighted trade gets a ring in the cursor color, just outside i
     {
         return;
     }
-    // A marker of radius 6 centered at (50, 50): by default, the area scale
-    // reaches 16 at 1, so 9/64 gets 16 × 3/8. The ring runs from
-    // 7.5 to 9.5 pixels out.
-    const auto plain = drawOne(*engine, 9.0 / 64.0, Side::Buy, MarkerScale::Area, 1.0f);
+    // A marker centered at (50, 50), 6 pixels in radius by default. The pixel
+    // whose center is in the middle of the ring, and one well past it.
+    constexpr double Amount = 9.0 / 64.0;
+    const double ringInnerPx = Core::Plot::MarkerSizing{}.getRadiusCssPx(Amount) + Core::Plot::RingGapCssPx;
+    const auto ringXPx = static_cast<std::uint32_t>(50.0 + ringInnerPx + (Core::Plot::RingWidthCssPx / 2.0) - 0.5);
+    const auto pastRingXPx = static_cast<std::uint32_t>(50.0 + ringInnerPx + Core::Plot::RingWidthCssPx + 2.5);
+    const auto plain = drawOne(*engine, Amount, Side::Buy, MarkerScale::Area, 1.0f);
     if (!plain)
     {
         return;
     }
-    CHECK(isBackground(pixelAt(*plain, 100, 58, 50)));
+    CHECK(isBackground(pixelAt(*plain, 100, ringXPx, 50)));
 
     engine->setSettings({ .view = viewOf({ .first = 0, .last = 1 }), .highlightedTrade = 0 });
     engine->render();
@@ -208,12 +213,12 @@ TEST_CASE("The highlighted trade gets a ring in the cursor color, just outside i
     {
         return;
     }
-    const Rgba ring = pixelAt(*ringed, 100, 58, 50);
+    const Rgba ring = pixelAt(*ringed, 100, ringXPx, 50);
     CHECK(ring.red >= 250);
     CHECK(ring.green >= 250);
     CHECK(ring.blue >= 250);
     CHECK(isBuy(pixelAt(*ringed, 100, 52, 50)));  // the marker itself is unchanged
-    CHECK(isBackground(pixelAt(*ringed, 100, 62, 50)));
+    CHECK(isBackground(pixelAt(*ringed, 100, pastRingXPx, 50)));
 
     engine->setSettings({ .view = viewOf({ .first = 0, .last = 1 }) });
     engine->render();
@@ -222,7 +227,7 @@ TEST_CASE("The highlighted trade gets a ring in the cursor color, just outside i
     {
         return;
     }
-    CHECK(isBackground(pixelAt(*cleared, 100, 58, 50)));
+    CHECK(isBackground(pixelAt(*cleared, 100, ringXPx, 50)));
 }
 
 TEST_CASE("Columns are drawn instead of trades, as bars over their price range, colored by side")

@@ -15,6 +15,9 @@ namespace Viewer {
 class Summaries
 {
 public:
+    /** Trades per column, on average, past which columns summarize the view. */
+    static constexpr double DefaultThreshold = 32.0;
+
     [[nodiscard]] std::uint32_t getColumnCount() const { return mColumnCount; }
     [[nodiscard]] const std::vector<Core::Data::ColumnSummary>& getColumns() const { return mColumns; }
     [[nodiscard]] std::size_t getBytes() const;
@@ -26,7 +29,7 @@ public:
 
 private:
     bool mAllowed = true;
-    double mThreshold = 32.0;
+    double mThreshold = DefaultThreshold;
     std::uint32_t mColumnCount = 0;
     std::vector<Core::Data::ColumnSummary> mColumns;
 };

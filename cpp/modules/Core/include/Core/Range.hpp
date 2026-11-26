@@ -7,6 +7,13 @@
 /** Intervals of time, values and positions. */
 namespace Core {
 
+// Lengths of time in microseconds, the unit times count in.
+inline constexpr std::int64_t MillisecondUs = 1'000;
+inline constexpr std::int64_t SecondUs = 1'000 * MillisecondUs;
+inline constexpr std::int64_t MinuteUs = 60 * SecondUs;
+inline constexpr std::int64_t HourUs = 60 * MinuteUs;
+inline constexpr std::int64_t DayUs = 24 * HourUs;
+
 /** A time interval [startUs, endUs): start inclusive, end exclusive. */
 struct TimeRange
 {
@@ -42,7 +49,6 @@ struct TimeRange
 /** The UTC day, midnight to midnight, that `timeUs` (since 1970) falls in. */
 [[nodiscard]] inline TimeRange getUtcDay(std::int64_t timeUs)
 {
-    constexpr std::int64_t DayUs = 86'400'000'000;
     // Rounded down, also before 1970.
     const std::int64_t startUs = (timeUs >= 0 ? timeUs : timeUs - DayUs + 1) / DayUs * DayUs;
     return { .startUs = startUs, .endUs = startUs + DayUs };

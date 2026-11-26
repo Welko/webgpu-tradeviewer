@@ -25,39 +25,6 @@ struct GpuTrade
     std::uint32_t side;  // 0 buy, 1 sell
 };
 
-/** The shader's Markers uniform (TradesPass.wgsl). */
-struct GpuMarkers
-{
-    std::array<float, 3> buyColor;
-    float opacity;
-    std::array<float, 3> sellColor;
-    std::uint32_t scale;  // 0 area, 1 log
-    float minRadiusCssPx;
-    float maxRadiusCssPx;
-    float lowAmount;
-    float highAmount;
-    std::array<float, 3> cursorColor;
-    float padding;  // uniform structs are sized in 16-byte steps
-};
-// The size WGSL's layout rules give Markers in TradesPass.wgsl, which this must match field for field.
-static_assert(sizeof(GpuMarkers) == 64);
-
-/** The shader's View uniform (TradesPass.wgsl). */
-struct Uniforms
-{
-    std::uint32_t startHigh;
-    std::uint32_t startLow;
-    float lengthUs;
-    float priceLow;
-    float priceSpan;
-    float plotWidthPx;
-    float plotHeightPx;
-    float pixelRatio;
-    GpuMarkers markers;
-};
-// The size WGSL's layout rules give View in TradesPass.wgsl, which this must match field for field.
-static_assert(sizeof(Uniforms) == 96);
-
 std::array<float, 3> toGpu(Gpu::Type::Color color)
 {
     return { color.red, color.green, color.blue };
@@ -70,7 +37,7 @@ Handle<WGPUBindGroupLayout> createBindGroupLayout(WGPUDevice device)
     entry.binding = 0;
     entry.visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
     entry.buffer.type = WGPUBufferBindingType_Uniform;
-    entry.buffer.minBindingSize = sizeof(Uniforms);
+    entry.buffer.minBindingSize = sizeof(TradesPass::Uniforms);
     WGPUBindGroupLayoutDescriptor descriptor{};
     descriptor.entryCount = 1;
     descriptor.entries = &entry;
@@ -87,9 +54,10 @@ Handle<WGPUShaderModule> createShaderModule(WGPUDevice device)
     return Handle(wgpuDeviceCreateShaderModule(device, &descriptor));
 }
 
-/** Draws each trade instance with the shader's `vertexEntry` and `fragmentEntry`. */
+/** Draws each trade instance with the shader's `vertexEntry` and `fragmentEntry`, given the shader's overrides `constants`. */
 Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat format, WGPUShaderModule module,
-                                          WGPUBindGroupLayout bindGroupLayout, const char* vertexEntry, const char* fragmentEntry)
+                                          WGPUBindGroupLayout bindGroupLayout, const char* vertexEntry, const char* fragmentEntry,
+                                          std::span<const WGPUConstantEntry> constants = {})
 {
     std::array<WGPUVertexAttribute, 4> attributes{};
     attributes[0].format = WGPUVertexFormat_Uint32x2;
@@ -126,6 +94,8 @@ Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat f
     fragment.entryPoint = Convert::ToWgpu::stringView(fragmentEntry);
     fragment.targetCount = 1;
     fragment.targets = &target;
+    fragment.constantCount = constants.size();
+    fragment.constants = constants.data();
 
     WGPUPipelineLayoutDescriptor layoutDescriptor{};
     layoutDescriptor.bindGroupLayoutCount = 1;
@@ -138,6 +108,8 @@ Handle<WGPURenderPipeline> createPipeline(WGPUDevice device, WGPUTextureFormat f
     descriptor.vertex.entryPoint = Convert::ToWgpu::stringView(vertexEntry);
     descriptor.vertex.bufferCount = 1;
     descriptor.vertex.buffers = &trades;
+    descriptor.vertex.constantCount = constants.size();
+    descriptor.vertex.constants = constants.data();
     descriptor.primitive.topology = WGPUPrimitiveTopology_TriangleList;
     descriptor.multisample.count = 1;
     descriptor.multisample.mask = ~0u;
@@ -155,7 +127,14 @@ TradesPass::TradesPass(const Context& context, Resource::Stats& stats, WGPUTextu
     const auto layout = createBindGroupLayout(device);
     const auto module = createShaderModule(device);
     mPipeline = createPipeline(device, format, module.get(), layout.get(), "vertexMain", "fragmentMain");
-    mRingPipeline = createPipeline(device, format, module.get(), layout.get(), "ringVertex", "ringFragment");
+    const auto constant = [](const char* key, float value) {
+        return WGPUConstantEntry{ .nextInChain = nullptr, .key = Convert::ToWgpu::stringView(key), .value = value };
+    };
+    const std::array ringSizes{
+        constant("RingGapCssPx", Core::Plot::RingGapCssPx),
+        constant("RingWidthCssPx", Core::Plot::RingWidthCssPx),
+    };
+    mRingPipeline = createPipeline(device, format, module.get(), layout.get(), "ringVertex", "ringFragment", ringSizes);
 
     WGPUBufferDescriptor uniformsDescriptor{};
     uniformsDescriptor.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
@@ -210,6 +189,22 @@ std::expected<void, std::string> TradesPass::append(const Core::Data::Trades& tr
     return mTrades.append(std::as_bytes(std::span(packed)));
 }
 
+TradesPass::GpuMarkers TradesPass::toGpuMarkers(const Type::Theme& theme, const Core::Plot::MarkerSizing& sizing)
+{
+    return {
+        .buyColor = toGpu(theme.buy),
+        .opacity = theme.markerOpacity,
+        .sellColor = toGpu(theme.sell),
+        .scale = sizing.scale == Core::Plot::MarkerScale::Area ? 0u : 1u,
+        .minRadiusCssPx = Core::Plot::MarkerMinRadiusCssPx,
+        .maxRadiusCssPx = Core::Plot::MarkerMaxRadiusCssPx,
+        .lowAmount = static_cast<float>(sizing.lowAmount),
+        .highAmount = static_cast<float>(sizing.highAmount),
+        .cursorColor = toGpu(theme.cursor),
+        .padding = 0.0f,
+    };
+}
+
 void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot::Area plot, Profiler& profiler)
 {
     const auto startUs = static_cast<std::uint64_t>(mView.time.startUs);
@@ -222,18 +217,7 @@ void TradesPass::encode(WGPUCommandEncoder encoder, WGPUTextureView target, Plot
         .plotWidthPx = static_cast<float>(plot.width),
         .plotHeightPx = static_cast<float>(plot.height),
         .pixelRatio = mPixelRatio,
-        .markers = {
-            .buyColor = toGpu(mTheme.buy),
-            .opacity = mTheme.markerOpacity,
-            .sellColor = toGpu(mTheme.sell),
-            .scale = mMarkerSizing.scale == Core::Plot::MarkerScale::Area ? 0u : 1u,
-            .minRadiusCssPx = Core::Plot::MarkerMinRadiusCssPx,
-            .maxRadiusCssPx = Core::Plot::MarkerMaxRadiusCssPx,
-            .lowAmount = static_cast<float>(mMarkerSizing.lowAmount),
-            .highAmount = static_cast<float>(mMarkerSizing.highAmount),
-            .cursorColor = toGpu(mTheme.cursor),
-            .padding = 0.0f,
-        },
+        .markers = toGpuMarkers(mTheme, mMarkerSizing),
     };
     wgpuQueueWriteBuffer(mContext->queue.get(), mUniforms.get(), 0, &uniforms, sizeof(uniforms));
 

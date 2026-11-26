@@ -1,3 +1,5 @@
+#include "DeviceTesting.hpp"
+
 #include "Gpu/Context.hpp"
 #include "Gpu/Profiler.hpp"
 
@@ -16,12 +18,9 @@
 
 namespace {
 
+using DeviceTesting::createContext;
 using Gpu::Profiler;
 using UntimedReason = Gpu::Type::FrameStats::UntimedReason;
-
-// The profiler's private limits.
-constexpr std::size_t Slots = 3;
-constexpr std::uint32_t MaxPasses = 8;
 
 /** A frame's GPU times, as the profiler reported them. */
 struct Reported
@@ -29,21 +28,6 @@ struct Reported
     std::uint64_t frame;
     Profiler::Times times;
 };
-
-/** Nothing, with a failed check, if no device could be created. */
-std::optional<Gpu::Context> createContext()
-{
-    std::optional<Gpu::Context> context;
-    Gpu::Handle instance(wgpuCreateInstance(nullptr));
-    Gpu::Context::create(std::move(instance), nullptr, Gpu::Type::PowerPreference::Default, [&](Gpu::Context::Result result) {
-        CHECK_MESSAGE(result, (result ? "" : result.error()));
-        if (result)
-        {
-            context = std::move(*result);
-        }
-    });
-    return context;
-}
 
 /** A profiler that adds each frame it reports to `reported`. */
 std::shared_ptr<Profiler> createProfiler(const Gpu::Context& context, std::vector<Reported>& reported)
@@ -129,7 +113,7 @@ TEST_CASE("An unfinished frame is dropped, freeing its slot")
     const Gpu::Handle encoder(wgpuDeviceCreateCommandEncoder(context->device.get(), nullptr));
 
     // Otherwise the slots would run out. Every other frame ends its passes first.
-    for (std::size_t frame = 0; frame < 2 * Slots; ++frame)
+    for (std::size_t frame = 0; frame < 2 * Profiler::NumSlots; ++frame)
     {
         profiler->beginFrame(std::nullopt);
         CHECK(profiler->measurePass("pass"));
@@ -251,11 +235,11 @@ TEST_CASE("A timed frame without passes is reported right away, with zero time")
     }
 
     // Its slot is free right away: otherwise the next frames would fill them all.
-    for (std::uint64_t frame = 2; frame <= Slots; ++frame)
+    for (std::uint64_t frame = 2; frame <= Profiler::NumSlots; ++frame)
     {
         draw(*profiler, *context, frame, false);
     }
-    CHECK(draw(*profiler, *context, Slots + 1, true));
+    CHECK(draw(*profiler, *context, Profiler::NumSlots + 1, true));
 }
 
 TEST_CASE("Times that arrive after the profiler is gone are dropped")
@@ -308,7 +292,7 @@ TEST_CASE("Each pass is timed with timestamps of its own, up to a limit")
     const Gpu::Handle encoder(wgpuDeviceCreateCommandEncoder(context->device.get(), nullptr));
 
     profiler->beginFrame(std::nullopt);
-    for (std::uint32_t pass = 0; pass < MaxPasses; ++pass)
+    for (std::uint32_t pass = 0; pass < Profiler::MaxPasses; ++pass)
     {
         const auto* timestampWrites = profiler->measurePass("pass " + std::to_string(pass));
         CHECK(timestampWrites);
@@ -339,7 +323,7 @@ TEST_CASE("Each pass is timed with timestamps of its own, up to a limit")
     {
         return;
     }
-    CHECK(times->passes.size() == MaxPasses);
+    CHECK(times->passes.size() == Profiler::MaxPasses);
     double totalMs = 0.0;
     for (std::size_t pass = 0; pass < times->passes.size(); ++pass)
     {

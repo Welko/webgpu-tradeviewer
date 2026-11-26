@@ -13,6 +13,7 @@
 
 #include <webgpu/webgpu.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -34,6 +35,38 @@ namespace Gpu::Market {
 class TradesPass
 {
 public:
+    /** The shader's Markers uniform (TradesPass.wgsl). */
+    struct GpuMarkers
+    {
+        std::array<float, 3> buyColor;
+        float opacity;
+        std::array<float, 3> sellColor;
+        std::uint32_t scale;  // 0 area, 1 log
+        float minRadiusCssPx;
+        float maxRadiusCssPx;
+        float lowAmount;
+        float highAmount;
+        std::array<float, 3> cursorColor;
+        float padding;  // uniform structs are sized in 16-byte steps
+    };
+
+    /** The shader's View uniform (TradesPass.wgsl). */
+    struct Uniforms
+    {
+        std::uint32_t startHigh;
+        std::uint32_t startLow;
+        float lengthUs;
+        float priceLow;
+        float priceSpan;
+        float plotWidthPx;
+        float plotHeightPx;
+        float pixelRatio;
+        GpuMarkers markers;
+    };
+
+    /** How `theme` and `sizing` reach the shader, the radii's bounds from Core/Plot/Sizes.hpp. */
+    static GpuMarkers toGpuMarkers(const Type::Theme& theme, const Core::Plot::MarkerSizing& sizing);
+
     /** The Context and Stats must outlive the pass. */
     TradesPass(const Context& context, Resource::Stats& stats, WGPUTextureFormat format);
 
@@ -79,5 +112,9 @@ private:
     std::optional<std::size_t> mHighlight;
     float mPixelRatio = 1.0f;
 };
+
+// The sizes WGSL's layout rules give Markers and View in TradesPass.wgsl, which these must match field for field.
+static_assert(sizeof(TradesPass::GpuMarkers) == 64);
+static_assert(sizeof(TradesPass::Uniforms) == 96);
 
 }  // namespace Gpu::Market

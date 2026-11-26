@@ -12,9 +12,10 @@ namespace Viewer {
 
 namespace {
 
+using Core::DayUs;
+using Core::HourUs;
+
 constexpr std::int64_t DayStartUs = 1'575'158'400'000'000;
-constexpr std::int64_t DayUs = 86'400'000'000;
-constexpr std::int64_t HourUs = 3'600'000'000;
 constexpr std::uint64_t SyntheticSeed = 1;
 
 constexpr double TelemetryGpuTimingProbability = 1.0 / 30.0;

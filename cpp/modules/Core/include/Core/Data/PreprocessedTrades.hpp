@@ -20,6 +20,9 @@ namespace Core::Data {
 class PreprocessedTrades
 {
 public:
+    /** Trades per leaf of the price tree: getPriceRange() reads at most twice this, less 2, one by one. */
+    static constexpr std::size_t PriceTreeBlockSize = 16;
+
     /** The memory each part holds, room to grow included. */
     struct Bytes
     {
@@ -106,8 +109,7 @@ private:
         [[nodiscard]] std::size_t getBytes() const { return mNodes.capacity() * sizeof(ValueRange); }
 
     private:
-        // Trades per leaf: at most twice this, less 2, are read one by one.
-        static constexpr std::size_t BlockSize = 16;
+        static constexpr std::size_t BlockSize = PriceTreeBlockSize;
 
         std::size_t mSize = 0;  // trades
         std::size_t mBlocks = 0;

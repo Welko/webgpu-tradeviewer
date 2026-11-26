@@ -11,22 +11,16 @@ namespace Core::Plot::Axis {
 
 namespace {
 
-constexpr std::int64_t Millisecond = 1'000;
-constexpr std::int64_t Second = 1'000 * Millisecond;
-constexpr std::int64_t Minute = 60 * Second;
-constexpr std::int64_t Hour = 60 * Minute;
-constexpr std::int64_t Day = 24 * Hour;
-
 /** Round time steps, in microseconds; each unit's own round numbers. */
 // clang-format off: one row per unit.
 constexpr std::array<std::int64_t, 36> TimeSteps{
     1, 2, 5, 10, 20, 50, 100, 200, 500,
-    Millisecond, 2 * Millisecond, 5 * Millisecond, 10 * Millisecond, 20 * Millisecond, 50 * Millisecond,
-    100 * Millisecond, 200 * Millisecond, 500 * Millisecond,
-    Second, 2 * Second, 5 * Second, 10 * Second, 15 * Second, 30 * Second,
-    Minute, 2 * Minute, 5 * Minute, 10 * Minute, 15 * Minute, 30 * Minute,
-    Hour, 2 * Hour, 3 * Hour, 6 * Hour, 12 * Hour,
-    Day,
+    MillisecondUs, 2 * MillisecondUs, 5 * MillisecondUs, 10 * MillisecondUs, 20 * MillisecondUs, 50 * MillisecondUs,
+    100 * MillisecondUs, 200 * MillisecondUs, 500 * MillisecondUs,
+    SecondUs, 2 * SecondUs, 5 * SecondUs, 10 * SecondUs, 15 * SecondUs, 30 * SecondUs,
+    MinuteUs, 2 * MinuteUs, 5 * MinuteUs, 10 * MinuteUs, 15 * MinuteUs, 30 * MinuteUs,
+    HourUs, 2 * HourUs, 3 * HourUs, 6 * HourUs, 12 * HourUs,
+    DayUs,
 };
 // clang-format on
 
@@ -34,19 +28,19 @@ std::string formatTime(std::int64_t timeUs, std::int64_t stepUs)
 {
     using namespace std::chrono;
     const sys_time<microseconds> time{ microseconds(timeUs) };
-    if (stepUs >= Day || timeUs % Day == 0)
+    if (stepUs >= DayUs || timeUs % DayUs == 0)
     {
         return std::format("{:%F}", floor<days>(time));
     }
-    if (stepUs >= Minute)
+    if (stepUs >= MinuteUs)
     {
         return std::format("{:%H:%M}", floor<minutes>(time));
     }
-    if (stepUs >= Second)
+    if (stepUs >= SecondUs)
     {
         return std::format("{:%T}", floor<seconds>(time));
     }
-    if (stepUs >= Millisecond)
+    if (stepUs >= MillisecondUs)
     {
         return std::format("{:%T}", floor<milliseconds>(time));
     }
@@ -63,7 +57,7 @@ std::int64_t getTimeStep(std::int64_t wanted)
             return step;
         }
     }
-    return (wanted + Day - 1) / Day * Day;
+    return (wanted + DayUs - 1) / DayUs * DayUs;
 }
 
 /** 1, 2, 5 or 10: the smallest of them at least `mantissa`, which is between 1 and 10. */

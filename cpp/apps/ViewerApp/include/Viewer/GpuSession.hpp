@@ -22,6 +22,10 @@ namespace Viewer {
 class GpuSession
 {
 public:
+    /** Restarts allowed within RestartWindowMs: one more and the session stops restarting the GPU. */
+    static constexpr std::size_t MaxRestarts = 3;
+    static constexpr double RestartWindowMs = 60'000.0;
+
     /** Gives an engine what it should show. Fails if the engine can't hold it. */
     using SetUpCallback = std::function<std::expected<void, std::string>(Gpu::Market::Engine&)>;
 
@@ -36,7 +40,7 @@ public:
 
     /**
      * If the GPU was lost, creates a new engine, unless that keeps happening:
-     * after 3 losses in a minute it stops, with a failure in getHealth().
+     * after MaxRestarts restarts within RestartWindowMs, the next loss stops it, with a failure in getHealth().
      * Call outside the engine's own calls, such as every update().
      */
     void restartIfLost(double nowMs);

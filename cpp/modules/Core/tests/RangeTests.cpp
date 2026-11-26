@@ -6,11 +6,11 @@
 
 namespace {
 
+using Core::DayUs;
+using Core::HourUs;
 using Core::TimeRange;
 
 constexpr std::int64_t NoonUs = 1'575'201'600'000'000;  // 2019-12-01 12:00 UTC
-constexpr std::int64_t HourUs = 3'600'000'000;
-constexpr std::int64_t DayUs = 86'400'000'000;
 
 }  // namespace
 

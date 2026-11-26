@@ -1,3 +1,5 @@
+#include "DeviceTesting.hpp"
+
 #include "Gpu/Context.hpp"
 #include "Gpu/GrowableBuffer.hpp"
 #include "Gpu/Resource.hpp"
@@ -9,24 +11,7 @@
 #include <optional>
 #include <span>
 
-namespace {
-
-/** A context on any GPU, or none, with a failed check. */
-std::optional<Gpu::Context> createContext()
-{
-    std::optional<Gpu::Context> context;
-    Gpu::Handle instance(wgpuCreateInstance(nullptr));
-    Gpu::Context::create(std::move(instance), nullptr, Gpu::Type::PowerPreference::Default, [&](Gpu::Context::Result result) {
-        CHECK_MESSAGE(result, (result ? "" : result.error()));
-        if (result)
-        {
-            context = std::move(*result);
-        }
-    });
-    return context;
-}
-
-}  // namespace
+using DeviceTesting::createContext;
 
 TEST_CASE("A growable buffer refuses to grow past the largest buffer the device takes, and keeps what it has")
 {

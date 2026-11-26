@@ -26,6 +26,8 @@ namespace Gpu {
 class Profiler : public std::enable_shared_from_this<Profiler>
 {
 public:
+    static constexpr std::uint32_t MaxPasses = 64;  // timed in a frame; more are drawn, untimed
+    static constexpr std::size_t NumSlots = 3;  // frames timed at once
     // Shared by render and compute passes.
     using TimestampWrites = WGPUPassTimestampWrites;
 
@@ -45,7 +47,7 @@ public:
     static Type::FrameStats::Gpu toGpuTimes(const std::vector<std::string>& passNames, std::span<const std::uint64_t> timestamps,
                                             double nanosecondsPerTick);
 
-    /** Starts timing a frame on the GPU, or, if not `timed`, records `untimed` as why it has no times. */
+    /** Starts timing a frame on the GPU or, given `untimed`, records it as why the frame has no GPU times. */
     void beginFrame(std::optional<Type::FrameStats::UntimedReason> untimed);
 
     [[nodiscard]] const TimestampWrites* measurePass(std::string_view name);
@@ -90,8 +92,6 @@ public:
     };
 
 private:
-    static constexpr std::size_t NumSlots = 3;  // frames timed at once
-
     /** Where one timed frame's timestamps are read back to the CPU. */
     struct Slot
     {
@@ -117,11 +117,7 @@ private:
     std::expected<CurrentFrame, Type::FrameStats::UntimedReason> mCurrentFrame;
     TimesCallback mOnTimes;
     double mNanosecondsPerTick;
-
-    struct Dropped
-    {
-        std::vector<std::string> passes{};  // TODO: Report this
-    } mDropped;
+    bool mWarnedTooManyPasses = false;
 
     Profiler(const Context& context, TimesCallback onTimes);
 };

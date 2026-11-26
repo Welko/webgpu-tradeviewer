@@ -9,9 +9,8 @@
 
 namespace {
 
+using Core::DayUs;
 using TestTrades::NoonUs;
-
-constexpr std::int64_t DayUs = 86'400'000'000;
 
 // A plot 1000 × 450 pixels.
 constexpr Viewer::Layout Plot{

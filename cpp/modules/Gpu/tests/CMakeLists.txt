@@ -21,9 +21,11 @@ if(NOT EMSCRIPTEN)
         EngineProfilingTests.cpp
         EngineTesting.cpp
         GrowableBufferTests.cpp
+        MarkerRadiusTests.cpp
         ProfilerTests.cpp
     )
-    target_include_directories(GpuDeviceTests PRIVATE ../src/include)
+    # The embedded shaders too, for MarkerRadiusTests.
+    target_include_directories(GpuDeviceTests PRIVATE ../src/include "${CMAKE_CURRENT_BINARY_DIR}/../shaders")
     target_link_libraries(GpuDeviceTests PRIVATE Gpu Core webgpu)
     target_copy_webgpu_binaries(GpuDeviceTests)
 endif()

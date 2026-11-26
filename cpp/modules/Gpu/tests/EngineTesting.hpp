@@ -38,9 +38,6 @@ void recordStats(Engine& engine, std::vector<FrameStats>& reported);
 /** Pumps events until `count` frames have been reported. False, with a failed check, if that takes 5 s. */
 bool waitForStats(Engine& engine, const std::vector<FrameStats>& reported, std::size_t count);
 
-/** Whether every pixel is the engine's background, (0.07, 0.08, 0.10) in 8-bit RGBA. */
-bool isBackground(const Pixels& pixels);
-
 struct Rgba
 {
     int red;
@@ -48,6 +45,12 @@ struct Rgba
     int blue;
     int alpha;
 };
+
+/** The default theme's background, opaque, as a pixel reads back. */
+Rgba getDefaultBackground();
+
+/** Whether every pixel is the default background. */
+bool isBackground(const Pixels& pixels);
 
 /** The pixel at column `x` and row `y`, counting rows from the top. */
 Rgba pixelAt(const Pixels& pixels, std::uint32_t widthPx, std::uint32_t xPx, std::uint32_t yPx);

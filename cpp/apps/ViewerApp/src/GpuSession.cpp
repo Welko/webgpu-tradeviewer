@@ -9,13 +9,6 @@
 
 namespace Viewer {
 
-namespace {
-
-constexpr std::size_t MaxRestartsPerWindow = 3;
-constexpr double RestartWindowMs = 60'000.0;
-
-}  // namespace
-
 GpuSession::GpuSession(std::unique_ptr<Gpu::Market::Engine> engine, Gpu::Market::Engine::Params params, SetUpCallback onSetUp) noexcept
     : mEngine(std::move(engine)),
       mParams(params),
@@ -34,10 +27,10 @@ void GpuSession::restartIfLost(double nowMs)
     // The old engine goes first: a window or canvas takes one surface at a time.
     mEngine.reset();
     std::erase_if(mRestartTimesMs, [&](double timeMs) { return nowMs - timeMs >= RestartWindowMs; });
-    if (mRestartTimesMs.size() >= MaxRestartsPerWindow)
+    if (mRestartTimesMs.size() >= MaxRestarts)
     {
-        const std::string reason =
-            std::format("The GPU was lost {} times in a minute, so the viewer stopped restarting it", mRestartTimesMs.size() + 1);
+        const std::string reason = std::format("The GPU was lost {} times in {:g} seconds, so the viewer stopped restarting it",
+                                               mRestartTimesMs.size() + 1, RestartWindowMs / 1000.0);
         Core::Log::error("{}", reason);
         mGpu = Failed{ .reason = reason };
         return;

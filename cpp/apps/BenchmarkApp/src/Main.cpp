@@ -13,6 +13,7 @@
 // The table goes to a file because log messages go to stdout.
 
 #include "Viewer/App.hpp"
+#include "Viewer/Benchmark.hpp"
 
 #include "Core/Data/TradeFile.hpp"
 #include "Core/Log.hpp"
@@ -39,11 +40,11 @@
 
 namespace {
 
-// Task 3's viewport, at a pixel ratio of 1.
-constexpr std::uint32_t WidthPx = 1600;
-constexpr std::uint32_t HeightPx = 900;
-constexpr int WarmUpFrames = 10;
-constexpr int MeasuredFrames = 60;
+// Shared with the web benchmark.
+constexpr std::uint32_t WidthPx = Viewer::Benchmark.widthPx;
+constexpr std::uint32_t HeightPx = Viewer::Benchmark.heightPx;
+constexpr int WarmUpFrames = static_cast<int>(Viewer::Benchmark.warmUpRuns);
+constexpr int MeasuredFrames = static_cast<int>(Viewer::Benchmark.measuredRuns);
 
 /** A view to measure, and how to get there. */
 struct Case

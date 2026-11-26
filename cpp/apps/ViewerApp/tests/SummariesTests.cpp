@@ -13,6 +13,11 @@ namespace {
 
 using TestTrades::NoonUs;
 
+constexpr double Threshold = Viewer::Summaries::DefaultThreshold;
+
+// Twice the threshold per column across 20 columns, and the threshold itself across 40.
+constexpr auto CrowdedTrades = static_cast<std::size_t>(40 * Threshold);
+
 /** A plot `widthPx` physical pixels wide, at `pixelRatio`. */
 Viewer::Layout makeLayout(std::uint32_t widthPx, float pixelRatio = 1.0f)
 {
@@ -37,10 +42,10 @@ Viewer::View makeView(const Core::Data::PreprocessedTrades& data)
 
 }  // namespace
 
-TEST_CASE("Past 32 trades per CSS px column on average, columns summarize the view")
+TEST_CASE("Past the threshold of trades per CSS px column on average, columns summarize the view")
 {
-    // 960 trades are 32 per column across 30 columns, and 33.1 across 29.
-    const auto data = makeTrades(960);
+    // The threshold per column across 30 columns, and past it across 29.
+    const auto data = makeTrades(static_cast<std::size_t>(30 * Threshold));
     const auto view = makeView(data);
     Viewer::Summaries summaries;
 
@@ -65,7 +70,7 @@ TEST_CASE("Past 32 trades per CSS px column on average, columns summarize the vi
 
 TEST_CASE("Columns are a CSS px wide, so a pixel ratio of 2 halves how many there are")
 {
-    const auto data = makeTrades(1000);
+    const auto data = makeTrades(CrowdedTrades);
     const auto view = makeView(data);
     Viewer::Summaries summaries;
 
@@ -75,14 +80,13 @@ TEST_CASE("Columns are a CSS px wide, so a pixel ratio of 2 halves how many ther
 
 TEST_CASE("update says whether there are new columns, or columns no longer")
 {
-    const auto data = makeTrades(1000);
+    const auto data = makeTrades(CrowdedTrades);
     const auto view = makeView(data);
     Viewer::Summaries summaries;
 
     CHECK(summaries.update(data, view, makeLayout(20)));
     CHECK(summaries.update(data, view, makeLayout(20)));
 
-    // 1000 trades are fewer than 32 per column across 40.
     CHECK(summaries.update(data, view, makeLayout(40)));
     CHECK(summaries.getColumnCount() == 0);
     CHECK(summaries.getColumns().empty());
@@ -91,7 +95,7 @@ TEST_CASE("update says whether there are new columns, or columns no longer")
 
 TEST_CASE("Summaries can be turned off, and their threshold moved")
 {
-    const auto data = makeTrades(1000);
+    const auto data = makeTrades(CrowdedTrades);
     const auto view = makeView(data);
     const auto layout = makeLayout(20);
     Viewer::Summaries summaries;
@@ -100,18 +104,17 @@ TEST_CASE("Summaries can be turned off, and their threshold moved")
     CHECK_FALSE(summaries.update(data, view, layout));
     CHECK(summaries.getColumnCount() == 0);
 
-    // 50 trades per column.
     summaries.setAllowed(true);
-    summaries.setThreshold(50.0);
+    summaries.setThreshold(2 * Threshold);
     CHECK_FALSE(summaries.update(data, view, layout));
-    summaries.setThreshold(49.0);
+    summaries.setThreshold((2 * Threshold) - 1);
     CHECK(summaries.update(data, view, layout));
     CHECK(summaries.getColumnCount() == 20);
 }
 
 TEST_CASE("Without room for a plot, there are no columns")
 {
-    const auto data = makeTrades(1000);
+    const auto data = makeTrades(CrowdedTrades);
     const auto view = makeView(data);
     Viewer::Summaries summaries;
 
@@ -121,7 +124,7 @@ TEST_CASE("Without room for a plot, there are no columns")
 
 TEST_CASE("Summaries count the memory their columns hold")
 {
-    const auto data = makeTrades(1000);
+    const auto data = makeTrades(CrowdedTrades);
     const auto view = makeView(data);
     Viewer::Summaries summaries;
     CHECK(summaries.getBytes() == 0);

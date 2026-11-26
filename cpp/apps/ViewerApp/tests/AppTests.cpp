@@ -43,7 +43,7 @@ std::unique_ptr<Viewer::App> createApp(std::optional<std::size_t> maxTrades = st
 
 }  // namespace
 
-TEST_CASE("A view with more than 32 trades per pixel column on average shows column summaries")
+TEST_CASE("A view with more trades per pixel column on average than the threshold shows column summaries")
 {
     const auto app = createApp();
     if (!app)
@@ -51,7 +51,7 @@ TEST_CASE("A view with more than 32 trades per pixel column on average shows col
         return;
     }
     // The hour holds about 17,900 synthetic trades: 45 per column.
-    CHECK(app->getView().getStats().count > 32 * WidthPx);
+    CHECK(static_cast<double>(app->getView().getStats().count) > Viewer::Summaries::DefaultThreshold * WidthPx);
     CHECK(app->getSummaries().getColumnCount() == WidthPx);
 
     // Every trade in view is in exactly one column.
@@ -64,7 +64,7 @@ TEST_CASE("A view with more than 32 trades per pixel column on average shows col
 
     // A minute holds about 300.
     app->zoomAt(WidthPx / 2.0, 1.0 / 60.0);
-    CHECK(app->getView().getStats().count < 32 * WidthPx);
+    CHECK(static_cast<double>(app->getView().getStats().count) < Viewer::Summaries::DefaultThreshold * WidthPx);
     CHECK(app->getSummaries().getColumnCount() == 0);
     CHECK(app->getSummaries().getColumns().empty());
 }
@@ -134,8 +134,9 @@ TEST_CASE("Each trade takes about 47 bytes of memory, and 20 on the GPU")
     const auto memory = app->getMemoryStats();
     CHECK(memory.tradesBytes == 25 * count);
     CHECK(memory.totalsBytes == 20 * (count + 1));  // one more, for none
-    // 32 per block of 16 trades: 2 per trade.
-    CHECK(memory.priceTreeBytes == 32 * ((count + 15) / 16));
+    // Two price ranges per block of trades.
+    constexpr std::size_t Block = Core::Data::PreprocessedTrades::PriceTreeBlockSize;
+    CHECK(memory.priceTreeBytes == 2 * sizeof(Core::ValueRange) * ((count + Block - 1) / Block));
     CHECK(memory.gpuBytes >= 20 * count);
     // The trades are nearly all of it.
     CHECK(memory.gpuBytes < 20 * count + (1u << 20));

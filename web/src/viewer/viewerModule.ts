@@ -1,6 +1,12 @@
-import createViewerModule, { type MainModule, type TimeRange, type TradeStats, type Viewer } from '../wasm/ViewerApp.js';
+import createViewerModule, {
+  type BenchmarkSettings,
+  type MainModule,
+  type TimeRange,
+  type TradeStats,
+  type Viewer,
+} from '../wasm/ViewerApp.js';
 
-export type { MainModule, TimeRange, TradeStats, Viewer };
+export type { BenchmarkSettings, MainModule, TimeRange, TradeStats, Viewer };
 
 /** A tick on an axis: where along it (0 at the left or bottom, 1 at the other end), and its label. */
 export interface AxisTick {

@@ -11,8 +11,7 @@ namespace Gpu {
 
 namespace {
 
-constexpr std::uint32_t MaxNumPasses = 8;
-constexpr std::uint32_t MaxNumTimestamps = 2 * MaxNumPasses;
+constexpr std::uint32_t MaxNumTimestamps = 2 * Profiler::MaxPasses;
 
 using UntimedReason = Type::FrameStats::UntimedReason;
 
@@ -129,9 +128,13 @@ const Profiler::TimestampWrites* Profiler::measurePass(std::string_view name)
         return nullptr;
     }
 
-    if (mCurrentFrame->slot->passNames.size() >= MaxNumPasses)
+    if (mCurrentFrame->slot->passNames.size() >= MaxPasses)
     {
-        mDropped.passes.emplace_back(name);
+        // Only a new pass can get here: raise MaxPasses. Warned once, not every frame.
+        if (!std::exchange(mWarnedTooManyPasses, true))
+        {
+            Core::Log::warn("GPU profiling times at most {} passes a frame, so \"{}\" isn't timed", MaxPasses, name);
+        }
         return nullptr;
     }
 
@@ -151,12 +154,6 @@ const Profiler::TimestampWrites* Profiler::measurePass(std::string_view name)
 
 void Profiler::endPasses(WGPUCommandEncoder encoder)
 {
-    if (!mDropped.passes.empty())
-    {
-        // TODO: Warn or something (throttle)
-        mDropped.passes.clear();
-    }
-
     if (!mCurrentFrame || mCurrentFrame->slot->passNames.empty())
     {
         return;

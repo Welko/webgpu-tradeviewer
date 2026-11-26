@@ -2,6 +2,7 @@
 
 #include "Core/Data/Trades.hpp"
 #include "Core/Log.hpp"
+#include "Core/Plot/Sizes.hpp"
 #include "Gpu/Market/Type.hpp"
 
 #include <algorithm>
@@ -14,9 +15,10 @@ namespace Viewer {
 
 namespace {
 
+using Core::HourUs;
+using Core::MinuteUs;
+
 constexpr std::int64_t DayStartUs = 1'575'158'400'000'000;  // 2019-12-01 UTC
-constexpr std::int64_t MinuteUs = 60'000'000;
-constexpr std::int64_t HourUs = 60 * MinuteUs;
 
 using Rgb = std::array<std::uint8_t, 3>;
 
@@ -219,9 +221,10 @@ constexpr std::uint32_t ColorHeightPx = 200;
 constexpr std::uint32_t BuyXPx = 90;
 constexpr std::uint32_t SellXPx = 270;
 constexpr std::uint32_t MarkersYPx = 90;
-// The ring is 2 pixels wide, 1.5 pixels outside the marker's 16: fully
-// covered 18.5 pixels from the center.
-constexpr std::uint32_t RingYPx = MarkersYPx - 19;
+// The row whose pixel centers lie in the middle of the ring, which is fully
+// covered there, around the largest marker.
+constexpr float RingMiddlePx = Core::Plot::MarkerMaxRadiusCssPx + Core::Plot::RingGapCssPx + (Core::Plot::RingWidthCssPx / 2.0f);
+constexpr auto RingYPx = static_cast<std::uint32_t>(static_cast<float>(MarkersYPx) - RingMiddlePx - 0.5f);
 
 /** `patches`, then the color scenes' margins. */
 std::vector<Scene::Patch> withMargins(std::vector<Scene::Patch> patches)

@@ -8,7 +8,8 @@
 
 namespace {
 
-constexpr std::int64_t HourUs = 3'600'000'000;
+using Core::HourUs;
+
 constexpr std::int64_t StartUs = 1'575'158'400'000'000;  // 2019-12-01 00:00 UTC
 
 }  // namespace

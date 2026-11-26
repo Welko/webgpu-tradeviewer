@@ -31,6 +31,11 @@ inline constexpr float MarkerMaxRadiusCssPx = 16.0f;
 inline constexpr double MarkerFitLowShare = 0.01;
 inline constexpr double MarkerFitHighShare = 0.999;
 
+// The ring around the highlighted trade: a gap outside its marker, then the
+// ring this wide.
+inline constexpr float RingGapCssPx = 1.5f;
+inline constexpr float RingWidthCssPx = 2.0f;
+
 // Column summaries' bars, drawn instead of markers in crowded views, are at
 // least this tall, so a column of one price still shows.
 inline constexpr float ColumnMinHeightCssPx = 2.0f;
