@@ -25,3 +25,6 @@ tools/node_modules/
 
 # Local design notes, never committed
 design/
+
+# Benchmark results (tools/benchmark-against-baseline.sh)
+benchmark/

@@ -400,6 +400,13 @@ Failing when things get faster too makes a gain part of the baseline, so losing 
 
 **Times are compared on the same machine.** CI's runners differ: one run got a machine about twice as fast as the run before, and every time dropped by 30–60%, those of code that hadn't changed included. So the baseline keeps no times. CI builds `BenchmarkApp` at the baseline's commit too (`check-regressions.mjs baseline-commit native` names it; about 1.5 minutes, in a `git worktree`) and runs both commits three times, taking turns to go first, so neither gains from going first (a warm cache) or loses alone to a busy moment. Each number's median is compared. The trade file is read once before, so no run reads it cold. The web job does the same with the baseline's site (`baseline-commit web`), served beside this commit's on a port of its own; until the baseline has a row for the web, it runs this commit alone and compares no times. The `benchmark-native` and `benchmark-web` artifacts keep every run of both commits, and their medians. `benchmark.json` names the GPU and CPU, which the run's page shows. A row accepted from a local run with uncommitted changes (`-dirty`) can't be built, so times are compared with the last row before it that can.
 
+`tools/benchmark-against-baseline.sh` does all of this, and CI runs it too, so it works the same locally: it benchmarks the working tree, uncommitted changes included, against the baseline's commit, built once in `cpp/build/baseline/<commit>` and reused after. It writes both sides' runs and medians to `benchmark/`, and `--check` checks them as CI does. Times only compare between runs on the same machine, which this is:
+
+```bash
+tools/benchmark-against-baseline.sh native data/binance_trades_2019-12-01_BTCUSDT.csv.gz --check
+tools/benchmark-against-baseline.sh web data/binance_trades_2019-12-01_BTCUSDT.csv.gz --check
+```
+
 The 1 ms floor is 6% of a 60 Hz frame. Below it, CI's shared runners can't tell a change from noise: between two runs of the same code, sub-millisecond CPU times jumped by up to half a millisecond, doubling some, while the long ones moved by 1%. Such changes still show in the table; they just don't fail.
 
 A benchmark can mark a number too unsteady to fail a build on as `flaky`, as a browser's GPU times would be. Such numbers are shown on the run's page, marked "recorded only", and never checked.

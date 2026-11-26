@@ -127,43 +127,16 @@ jobs:
           ctest --test-dir build/native-release --output-on-failure --no-tests=error
 
       # CI's machines differ by up to twice in speed, so times are compared
-      # with the baseline's commit measured on this one: BenchmarkApp, built
-      # at the commit of the last accepted row (see tools/check-regressions.mjs).
-      - name: Build the baseline's commit
-        run: |
-          commit=$(node tools/check-regressions.mjs baseline-commit native)
-          git worktree add --detach "$RUNNER_TEMP/baseline" "$commit"
-          cd "$RUNNER_TEMP/baseline/cpp"
-          cmake --preset native-release
-          cmake --build --preset native-release --target BenchmarkApp -j "$(nproc)"
-
-      # Frame times at four zoom levels, and the whole day without summaries,
-      # from the profiler: the CPU phases and each GPU pass. Three runs of
-      # this commit and three of the baseline's, taking turns to go first, so
-      # neither gains from going first or loses to a busy moment; each
-      # number's median goes in benchmark.json. The file is read once first,
-      # so no run reads it cold. The first run's table goes on the run's page.
+      # with the baseline's commit measured on this one: BenchmarkApp at the
+      # commit of the last accepted row, built in a git worktree, and this
+      # commit's, three runs each, taking turns to go first (see
+      # tools/benchmark-against-baseline.sh, which runs the same locally).
+      # The first run's table goes on the run's page.
       - name: Benchmark this commit and the baseline's
         env:
           TRADES: ${{ runner.temp }}/BTCUSDT-trades-2019-12-01.csv
         run: |
-          mkdir -p benchmark/runs benchmark/baseline/runs
-          cat "$TRADES" > /dev/null
-          baseline_commit=$(git -C "$RUNNER_TEMP/baseline" rev-parse HEAD)
-          this=0
-          other=0
-          for side in baseline this this baseline baseline this; do
-            if [ "$side" = this ]; then
-              this=$((this + 1))
-              cpp/build/native-release/apps/BenchmarkApp/BenchmarkApp "benchmark/runs/$this.md" "$TRADES" --commit "$GITHUB_SHA"
-            else
-              other=$((other + 1))
-              "$RUNNER_TEMP/baseline/cpp/build/native-release/apps/BenchmarkApp/BenchmarkApp" "benchmark/baseline/runs/$other.md" \
-                "$TRADES" --commit "$baseline_commit"
-            fi
-          done
-          node tools/check-regressions.mjs median benchmark/benchmark.json benchmark/runs/*.json
-          node tools/check-regressions.mjs median benchmark/baseline/benchmark.json benchmark/baseline/runs/*.json
+          tools/benchmark-against-baseline.sh native "$TRADES"
           { echo "### Frame times on lavapipe (a CPU Vulkan driver), this commit's first run"; cat benchmark/runs/1.md; } >> "$GITHUB_STEP_SUMMARY"
 
       # Both commits' runs and medians: benchmark.json is what accept takes.
@@ -305,67 +278,17 @@ jobs:
             https://data.binance.vision/data/spot/daily/trades/BTCUSDT/BTCUSDT-trades-2019-12-01.zip
           unzip -q -d "$RUNNER_TEMP" "$RUNNER_TEMP/trades.zip"
 
-      # As natively, times are compared with the baseline's commit measured on
-      # this machine: its site, built in a git worktree. Until the baseline
-      # has a row for the web, there's no commit to build, and times aren't
-      # compared.
-      - name: Build the baseline's commit
-        id: web-baseline
-        run: |
-          if ! commit=$(node tools/check-regressions.mjs baseline-commit web); then
-            echo "No web row in the baseline yet: times won't be compared"
-            exit 0
-          fi
-          git worktree add --detach "$RUNNER_TEMP/baseline" "$commit"
-          cd "$RUNNER_TEMP/baseline/web"
-          npm ci
-          source ~/emsdk/emsdk_env.sh
-          npm run build
-          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
       # Memory, reading the trades and the views BenchmarkApp measures
       # natively, in Chromium, without drawing (benchmark.html, run by
-      # web/scripts/benchmark.mjs): three runs of each commit's site, served
-      # on ports of their own, taking turns to go first; each number's median
-      # goes in benchmark.json. The file is read
-      # once first, so no run reads it cold. Without a baseline, three runs of
-      # this commit alone.
+      # web/scripts/benchmark.mjs), against the baseline's site as natively,
+      # each served on a port of its own. Until the baseline has a row for
+      # the web, this commit runs alone and no times are compared.
       - name: Benchmark this commit and the baseline's
-        working-directory: web
         env:
           TRADES: ${{ runner.temp }}/BTCUSDT-trades-2019-12-01.csv
-          BASELINE_COMMIT: ${{ steps.web-baseline.outputs.commit }}
         run: |
-          mkdir -p ../benchmark/runs ../benchmark/baseline/runs
-          npx vite preview --port 4173 --strictPort &
-          ports=4173
-          sides="this this this"
-          if [ -n "$BASELINE_COMMIT" ]; then
-            (cd "$RUNNER_TEMP/baseline/web" && npx vite preview --port 4174 --strictPort) &
-            ports="4173 4174"
-            sides="baseline this this baseline baseline this"
-          fi
-          for port in $ports; do
-            for _ in $(seq 100); do curl -fs "http://localhost:$port/benchmark.html" > /dev/null && break; sleep 0.2; done
-          done
-          cat "$TRADES" > /dev/null
-          this=0
-          other=0
-          for side in $sides; do
-            if [ "$side" = this ]; then
-              this=$((this + 1))
-              node scripts/benchmark.mjs "../benchmark/runs/$this.md" "$TRADES" --url http://localhost:4173 --commit "$GITHUB_SHA"
-            else
-              other=$((other + 1))
-              node scripts/benchmark.mjs "../benchmark/baseline/runs/$other.md" "$TRADES" --url http://localhost:4174 \
-                --commit "$BASELINE_COMMIT"
-            fi
-          done
-          node ../tools/check-regressions.mjs median ../benchmark/benchmark.json ../benchmark/runs/*.json
-          if [ -n "$BASELINE_COMMIT" ]; then
-            node ../tools/check-regressions.mjs median ../benchmark/baseline/benchmark.json ../benchmark/baseline/runs/*.json
-          fi
-          { echo "### View updates in Chromium (wasm), this commit's first run"; cat ../benchmark/runs/1.md; } >> "$GITHUB_STEP_SUMMARY"
+          tools/benchmark-against-baseline.sh web "$TRADES"
+          { echo "### View updates in Chromium (wasm), this commit's first run"; cat benchmark/runs/1.md; } >> "$GITHUB_STEP_SUMMARY"
 
       # Both commits' runs and medians: benchmark.json is what accept takes.
       - uses: actions/upload-artifact@v7
@@ -379,10 +302,9 @@ jobs:
       - name: Check memory and times against the baseline
         env:
           ARTIFACT_URL: ${{ steps.benchmark-artifact.outputs.artifact-url }}
-          BASELINE_COMMIT: ${{ steps.web-baseline.outputs.commit }}
         run: |
           baseline=()
-          if [ -n "$BASELINE_COMMIT" ]; then
+          if [ -f benchmark/baseline/benchmark.json ]; then
             baseline=(--baseline benchmark/baseline/benchmark.json)
           fi
           if node tools/check-regressions.mjs check benchmark/benchmark.json "${baseline[@]}" \
